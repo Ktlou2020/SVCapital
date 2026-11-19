@@ -168,9 +168,31 @@ console.log('\nthe picture rides on the link, not on an attachment');
      sentence, no code and no link — which is the only part that carries the
      referral at all. */
   const core = strip(CORE);
+  /* SCOPED TO THE REFERRAL SHARE, not to the whole file.
+  
+     This used to assert that navigator.share and canShare appeared NOWHERE
+     in portal-core.js. That was right about the referral and wrong as a
+     rule: the share sheet is the only way a phone app can hand over a
+     document at all — a browser download writes nothing in a WebView — so
+     svcDeliverFile uses it to deliver certificates and statements. Banning
+     the API outright would have forced that back to a download that does
+     nothing, which is the bug it was built to fix.
+  
+     What must stay true is the narrow thing: the REFERRAL share attaches no
+     file, because WhatsApp keeps the attachment and throws the message away
+     with the code and the link in it. Asserted against that function. */
+  const at    = core.indexOf('async function shareReferral');
+  const share = at < 0 ? '' : core.slice(at, core.indexOf('\n}', at));
+  ok('the referral share was found', share.length > 200,
+     'a slice that missed it would assert nothing while passing');
   ok('nothing is attached as a file',
-     !/navigator\.share\s*\(/.test(core) && !/canShare/.test(core),
+     !/navigator\.share\s*\(/.test(share) && !/canShare/.test(share),
      'WhatsApp keeps the attachment and throws the message away');
+  /* And the helper that DOES share files must not be reachable from it. */
+  ok('and it does not route through the document deliverer either',
+     !/svcDeliverFile/.test(share),
+     'that one attaches a file on purpose, which is right for a certificate '
+     + 'and wrong for a referral');
 
   /* Which makes the Open Graph card the only thing putting the image in the
      conversation — so it is not a nicety any more, it is the mechanism. */

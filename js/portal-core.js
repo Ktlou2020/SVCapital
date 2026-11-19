@@ -458,6 +458,78 @@ function _poolEndMs(dateStr) {
    around this looks like when it is done a site at a time. Normalised here
    instead, at the point of comparison. The stored values are untouched: nothing
    re-labels a pool, and history keeps whatever it was written with. */
+/* ═══════════════════════════════════════════════════════════
+   Handing a document to the person who asked for it.
+
+   REPORTED: "it says the document has been downloaded but when I check in
+   Files I do not see it."
+
+   It had not been. Every document in the app went out through jsPDF's
+   doc.save() or an <a download> click — a blob URL and a synthetic click,
+   which is how a BROWSER downloads a file. A native WebView has no download
+   manager: on iOS WKWebView the click does nothing at all, on Android it
+   needs a DownloadListener that Capacitor does not wire up for blob URLs.
+   Nothing is written, nothing throws, and the success toast fired anyway.
+   Eleven places did this — certificates, the IT3b, receipts, statements,
+   the CSV exports, the POPIA data export.
+
+   THE APP ALREADY HAD THE ANSWER IN ONE PLACE. The statement PDF in
+   mobile/src/js/portal.js reaches the share sheet with navigator.share(),
+   which WKWebView does support for files, and falls back to the download
+   for the web. That is why statements worked and certificates did not. The
+   rule is lifted out here so every document uses it rather than one.
+
+   AND IT REPORTS WHAT HAPPENED. The toast used to say "downloaded"
+   whatever the outcome. The caller is told 'shared', 'downloaded' or
+   'cancelled' and says the true thing — a person who dismisses the share
+   sheet has not saved anything and should not be told they have.
+   ═══════════════════════════════════════════════════════════ */
+async function svcDeliverFile(blob, fileName, title) {
+  const name = String(fileName || 'document');
+  /* The share sheet, where there is one. canShare({files}) is the only
+     honest test: Safari exposes navigator.share without file support, so
+     checking for share alone hands it a file it will refuse. */
+  try {
+    const file = new File([blob], name, { type: blob.type || 'application/octet-stream' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: title || name });
+      return 'shared';
+    }
+  } catch (err) {
+    /* Dismissing the sheet rejects with AbortError. That is a decision, not
+       a failure, and it must not fall through to a download the person did
+       not ask for — on a phone that writes a file they just declined. */
+    if (err && (err.name === 'AbortError' || /abort|cancel/i.test(err.message || ''))) return 'cancelled';
+    /* Anything else: fall through and try the download. */
+  }
+
+  const url = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } finally {
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) {} }, 15000);
+  }
+  /* In a native WebView this click does nothing. Saying so is better than
+     claiming a file that is not there, and the share path above is what
+     the app actually takes. */
+  return (typeof window !== 'undefined' && window.__SVC_NATIVE__) ? 'unavailable' : 'downloaded';
+}
+
+/* The sentence to show for each outcome, so eleven call sites cannot
+   disagree about what just happened. */
+function svcDeliverToast(outcome, noun) {
+  const what = noun || 'Document';
+  if (outcome === 'shared')    { Toast.success(`${what} ready — choose where to save it.`); return; }
+  if (outcome === 'downloaded'){ Toast.success(`${what} downloaded!`); return; }
+  if (outcome === 'cancelled') return;            // they closed the sheet; say nothing
+  Toast.error(`${what} could not be saved on this device. Open the portal in a browser to download it.`);
+}
+
 function svcCanonProductType(t) {
   const ALIASES = { delivery_bikes: 'delivery_bike' };
   const k = String(t == null ? '' : t).trim().toLowerCase();
@@ -8627,8 +8699,10 @@ function downloadTaxCertPDF(htmlContent) {
   div.innerHTML = htmlContent;
   const doc = new lib({ unit: 'mm', format: 'a4' });
   doc.html(div, {
-    callback: d => {
-      d.save('SVC-IT3b-' + new Date().getFullYear() + '.pdf');
+    callback: async d => {
+      svcDeliverToast(await svcDeliverFile(
+        d.output('blob'), 'SVC-IT3b-' + new Date().getFullYear() + '.pdf',
+        'Tax certificate'), 'Tax certificate');
       document.body.removeChild(div);
       SVC.track('svc_pdf_downloaded', { doc_type: 'tax_certificate_it3b' });
     },
@@ -8830,14 +8904,9 @@ async function downloadMyData() {
     };
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `SV_Capital_My_Data_${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    svcDeliverToast(await svcDeliverFile(
+      blob, `SV_Capital_My_Data_${new Date().toISOString().slice(0, 10)}.json`,
+      'Your data'), 'Your data');
     Toast.success('Your data has been downloaded.');
   } catch (e) {
     Toast.error('Failed to export data. Please try again.');
@@ -9472,13 +9541,18 @@ function _viewKycDoc(docId) {
     overlay.remove();
     if (blobUrl) setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
   };
-  const _download = () => {
-    const a = document.createElement('a');
-    a.href = blobUrl || rawData;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const _download = async () => {
+    /* A stored document arrives as a data: URL or a blob URL; the share
+       sheet needs the bytes, so it is fetched back out of whichever one
+       this is. Both are same-origin or inline, so the fetch is local. */
+    try {
+      const res  = await fetch(blobUrl || rawData);
+      const blob = await res.blob();
+      svcDeliverToast(await svcDeliverFile(blob, fileName, 'Document'), 'Document');
+    } catch (err) {
+      console.error('[document download]', err);
+      Toast.error('Could not open that document.');
+    }
   };
 
   overlay.querySelector('#_kycCloseBtn').addEventListener('click', _cleanup);
@@ -9854,8 +9928,9 @@ function generateInvestmentCertificate(invId) {
 
   const doc = new lib({ unit: 'mm', format: 'a4' });
   doc.html(div, {
-    callback: d => {
-      d.save(`SVC-CERT-${invId.slice(-8)}.pdf`);
+    callback: async d => {
+      svcDeliverToast(await svcDeliverFile(
+        d.output('blob'), `SVC-CERT-${invId.slice(-8)}.pdf`, 'Certificate'), 'Certificate');
       document.body.removeChild(div);
       SVC.track('svc_pdf_downloaded', { doc_type: 'investment_certificate', investment_id: invId });
     },
@@ -9973,7 +10048,7 @@ function _pdfInfoRow(doc, label, value, y, labelX = 14, valueX = 75) {
 }
 
 /* downloadCertificate(investmentId) */
-function downloadCertificate(investmentId) {
+async function downloadCertificate(investmentId) {
   try {
   const inv = PORTAL.investments.find(i => String(i.id) === String(investmentId));
   if (!inv) { Toast.error('Investment not found — please refresh and try again.'); return; }
@@ -10099,8 +10174,8 @@ function downloadCertificate(investmentId) {
   doc.text('IMPORTANT NOTICE: This investment is not a regulated financial product under the Financial Sector Conduct Authority (FSCA) and is not covered by the Financial Advisory and Intermediary Services Act (FAIS) or the Collective Investment Schemes Control Act (CISCA). This investment is managed solely by SV Capital (Pty) Ltd. Investors should be aware that their capital is at risk and there is no guarantee of returns. Past performance is not indicative of future results.', leftX + 4, y, { maxWidth: W - 36 });
 
   _pdfFooter(doc);
-  doc.save(`SVC-Certificate-${inv.id}.pdf`);
-  Toast.success('Certificate downloaded!');
+  svcDeliverToast(await svcDeliverFile(doc.output('blob'), `SVC-Certificate-${inv.id}.pdf`,
+                                      'Certificate'), 'Certificate');
   } catch (err) {
     console.error('[downloadCertificate]', err);
     Toast.error('Could not generate certificate: ' + (err.message || 'unknown error'));
@@ -10108,7 +10183,7 @@ function downloadCertificate(investmentId) {
 }
 
 /* downloadReceipt(transactionId) */
-function downloadReceipt(transactionId) {
+async function downloadReceipt(transactionId) {
   const txn = PORTAL.transactions.find(t => t.id === transactionId);
   if (!txn) { Toast.error('Transaction not found'); return; }
   const investor = PORTAL.investor;
@@ -10176,12 +10251,12 @@ function downloadReceipt(transactionId) {
   doc.text('Thank you for investing with SV Capital', W / 2, y + 10, { align: 'center' });
 
   _pdfFooter(doc);
-  doc.save(`SVC-Receipt-${txn.id}.pdf`);
-  Toast.success('Receipt downloaded!');
+  svcDeliverToast(await svcDeliverFile(doc.output('blob'), `SVC-Receipt-${txn.id}.pdf`,
+                                      'Receipt'), 'Receipt');
 }
 
 /* downloadSaStatement() — sub-account statement (matches main investor statement structure) */
-function downloadSaStatement(saId, saName) {
+async function downloadSaStatement(saId, saName) {
   const sa           = (PORTAL.subAccounts || []).find(a => a.id === saId) || { id: saId, name: saName, wallet_balance: 0 };
   const investments  = (PORTAL.investments  || []).filter(i => i.sub_account_id === saId);
   const transactions = (PORTAL.transactions || []).filter(t => t.sub_account_id === saId);
@@ -10476,15 +10551,14 @@ function downloadSaStatement(saId, saName) {
 
   const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
   const url  = URL.createObjectURL(blob);
-  const win  = window.open(url, '_blank');
-  if (!win) {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `SVC-Statement-${(saName || 'Account').replace(/[^a-zA-Z0-9_-]/g, '-')}-${now.toISOString().slice(0, 10)}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    Toast.success('Statement downloaded — open in a browser to save as PDF.');
+  /* window.open on a blob is a no-op in the app's WebView — no new tab,
+     no error. The share sheet is the route a phone actually has, and the
+     browser keeps the tab it has always had. */
+  if (window.__SVC_NATIVE__) {
+    svcDeliverToast(await svcDeliverFile(blob, `SVC-Statement-${(saName || 'Account').replace(/[^a-zA-Z0-9_-]/g, '-')}-${now.toISOString().slice(0, 10)}.html`, 'Statement'), 'Statement');
+  } else {
+    const win = window.open(url, '_blank');
+    if (!win) svcDeliverToast(await svcDeliverFile(blob, `SVC-Statement-${(saName || 'Account').replace(/[^a-zA-Z0-9_-]/g, '-')}-${now.toISOString().slice(0, 10)}.html`, 'Statement'), 'Statement');
   }
   setTimeout(() => URL.revokeObjectURL(url), 120000);
 }
@@ -11421,7 +11495,7 @@ function updateWealthProjection() {
   setEl('wpTotal',  'R '  + total.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 }
 
-function exportAnalyticsCSV() {
+async function exportAnalyticsCSV() {
   const rows = [['Pool', 'Invested (R)', 'Return (% p.a.)', 'Rate Basis', 'Start', 'End', 'Days', 'Status']];
   PORTAL.investments.forEach(i => {
     const pool = (PORTAL.pools || []).find(p => p.id === i.pool_id) || {};
@@ -11447,11 +11521,10 @@ function exportAnalyticsCSV() {
     ]);
   });
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-  a.download = `SVC-Analytics-${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
-  Toast.success('Analytics exported!');
+  svcDeliverToast(await svcDeliverFile(
+    new Blob([csv], { type: 'text/csv' }),
+    `SVC-Analytics-${new Date().toISOString().slice(0,10)}.csv`,
+    'Analytics export'), 'Analytics export');
 }
 
 function openPortalCmd() {
