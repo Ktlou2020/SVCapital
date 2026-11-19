@@ -60,6 +60,35 @@
                 <data android:scheme="https" android:host="svcapital.co.za" />
                 <data android:scheme="https" android:host="www.svcapital.co.za" />
             </intent-filter>
+
+            <!-- App link: the platform host, CLIENT PATHS ONLY.
+                 This is where every link the app itself writes lives — the
+                 invitation email and SMS, notification links, password
+                 resets, /get-app — so without this filter an invited member
+                 tapping their invitation still lands in a browser, which is
+                 the one thing the invitation was trying to avoid.
+
+                 It is a SEPARATE filter from the two above on purpose. Within
+                 one filter Android combines every host with every path, so
+                 adding these prefixes to the filter above would have silently
+                 restricted the apex and www to them as well.
+
+                 The prefixes are deliberate and staff paths are deliberately
+                 absent: /admin and /team must keep opening in a browser,
+                 where staff tools are used, rather than being pulled into the
+                 app. Adding a prefix here changes where a link opens for
+                 everyone, so add one only for a path a client is sent to. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="platform.svcapital.co.za" />
+                <data android:pathPrefix="/portal" />
+                <data android:pathPrefix="/get-app" />
+                <data android:pathPrefix="/signup" />
+                <data android:pathPrefix="/login" />
+                <data android:pathPrefix="/reset-password" />
+            </intent-filter>
         </activity>
 
         <meta-data

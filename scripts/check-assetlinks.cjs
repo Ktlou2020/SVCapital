@@ -121,6 +121,43 @@ let hosts = [];
      + 'however correct the file published at www is');
   ok('and verification is still asked for',
      /autoVerify="true"/.test(filter), filter.slice(0, 160));
+
+  /* The marketing filter must stay unrestricted. Android combines every host
+     with every path INSIDE one filter, so a pathPrefix added here would
+     quietly narrow the apex and www to that prefix too. */
+  ok('and the marketing filter is not narrowed by a path',
+     !/pathPrefix/.test(filter),
+     'a pathPrefix in this filter applies to the apex and www as well, and '
+     + 'every link outside it goes back to opening the browser');
+
+  /* ── The platform host, where the app's own links live ────────────── */
+  const pAt = code.indexOf('android:host="platform.svcapital.co.za"');
+  const pFrom = code.lastIndexOf('<intent-filter', pAt);
+  const pFilter = pAt < 0 ? '' : code.slice(pFrom, code.indexOf('</intent-filter>', pAt));
+  ok('THE PLATFORM HOST IS CLAIMED TOO',
+     pAt > 0,
+     'the invitation email and SMS, notification links and /get-app are all '
+     + 'on platform.svcapital.co.za — unclaimed, an invited member tapping '
+     + 'their invitation lands in a browser');
+  ok('in a filter of its own, not merged into the marketing one',
+     pFrom !== from,
+     'one filter crosses every host with every path, so merging them would '
+     + 'restrict the apex and www to the client prefixes');
+  ok('and it asks for verification', /autoVerify="true"/.test(pFilter), pFilter.slice(0, 120));
+
+  const prefixes = [...pFilter.matchAll(/android:pathPrefix="([^"]+)"/g)].map(m => m[1]);
+  ok('IT IS RESTRICTED TO PATHS, not the whole host',
+     prefixes.length > 0,
+     'an unrestricted claim pulls the staff admin console into the app');
+  for (const want of ['/portal', '/get-app', '/signup', '/reset-password'])
+    ok(`a client is sent to ${want}, so it opens in the app`,
+       prefixes.includes(want), prefixes.join(', '));
+  /* The point of restricting it at all. */
+  for (const staff of ['/admin', '/team'])
+    ok(`AND ${staff} IS LEFT TO THE BROWSER`,
+       !prefixes.some(p => p === staff || staff.startsWith(p)),
+       `${prefixes.join(', ')} — a prefix matching ${staff} pulls staff tools `
+       + 'into the app, which is not what the app is for');
 }
 
 /* ── The publishing ──────────────────────────────────────────────────── */
