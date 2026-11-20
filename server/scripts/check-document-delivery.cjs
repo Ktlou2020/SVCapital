@@ -49,6 +49,11 @@ function load(env) {
     Toast: { success(m) { ctx._toast = ['success', m]; }, error(m) { ctx._toast = ['error', m]; } },
     URL: { createObjectURL: () => 'blob:x', revokeObjectURL() {} },
     File: class { constructor(parts, name, o) { this.name = name; this.type = (o || {}).type; } },
+    /* Filesystem.writeFile wants base64 with no data: prefix, so the helper
+       reads the blob through a FileReader. */
+    FileReader: class {
+      readAsDataURL(b) { this.result = 'data:' + (b.type || '') + ';base64,UERGQllURVM='; setTimeout(() => this.onloadend(), 0); }
+    },
     setTimeout: fn => fn,
     document: {
       _clicks: 0,
@@ -176,6 +181,94 @@ console.log('\nand every document a client can ask for goes through it');
 }
 
 /* ── The surface that was already right ──────────────────────────────── */
+console.log('\nand in the app it goes through the native bridge, which is the only route there');
+{
+  /* THE BUG THIS IS FOR. Android's System WebView does not implement the
+     Web Share API at all, so canShare is never true, and an <a download>
+     click has no download manager to reach. Both web routes are dead ends
+     in the app — every certificate came back "could not be saved on this
+     device", which was honest and still left the client with nothing. */
+  const wrote = [], shared = [];
+  const ctx = load({
+    navigator: {},                                  // exactly what Android's WebView gives
+    __SVC_NATIVE__: true,
+    Capacitor: { Plugins: {
+      Filesystem: { writeFile: async o => { wrote.push(o); return { uri: 'file:///cache/' + o.path }; } },
+      Share:      { share: async o => { shared.push(o); } },
+    } },
+  });
+  const out = await ctx.deliver(blob, 'SVC-Certificate-7.pdf', 'Certificate');
+  ok('IT SHARES, ON A WEBVIEW THAT OFFERS NO WEB SHARE AT ALL',
+     out === 'shared', String(out)
+     + ' — navigator is empty here, which is what Android actually provides');
+  ok('the file is written first', wrote.length === 1 && wrote[0].path === 'SVC-Certificate-7.pdf',
+     JSON.stringify(wrote));
+  ok('as base64 with the data: prefix stripped',
+     wrote[0] && wrote[0].data === 'UERGQllURVM=',
+     String(wrote[0] && wrote[0].data) + ' — writeFile rejects a data: URL');
+  ok('into a directory the share sheet can read it from',
+     wrote[0] && wrote[0].directory === 'CACHE', String(wrote[0] && wrote[0].directory));
+  ok('and what is shared is the file that was written',
+     shared.length === 1 && shared[0].url === 'file:///cache/SVC-Certificate-7.pdf',
+     JSON.stringify(shared));
+  ok('and no download was attempted', ctx.document._clicks === 0, String(ctx.document._clicks));
+}
+
+console.log('\nand the bridge is tested by being there, not by guessing the platform');
+{
+  /* An older build has no Filesystem plugin. Guessing from __SVC_NATIVE__
+     would call a plugin that is not there and throw. */
+  const ctx = load({
+    navigator: {}, __SVC_NATIVE__: true,
+    Capacitor: { Plugins: { Share: { share: async () => {} } } },   // Filesystem missing
+  });
+  const out = await ctx.deliver(blob, 'x.pdf', 'Doc');
+  ok('a half-present bridge is not used', out === 'unavailable', String(out));
+  ok('and it says so rather than throwing', ctx.document._clicks === 1, String(ctx.document._clicks));
+}
+
+console.log('\nand closing the native share sheet is still a decision');
+{
+  const ctx = load({
+    navigator: {}, __SVC_NATIVE__: true,
+    Capacitor: { Plugins: {
+      Filesystem: { writeFile: async () => ({ uri: 'file:///cache/x.pdf' }) },
+      /* Capacitor words this differently from WKWebView: no AbortError, just
+         a message naming the cancel. Both have to read as cancelled. */
+      Share: { share: async () => { throw new Error('Share canceled'); } },
+    } },
+  });
+  const out = await ctx.deliver(blob, 'x.pdf', 'Doc');
+  ok('IT READS AS CANCELLED, not as a failure', out === 'cancelled', String(out));
+  ok('and nothing is downloaded behind their back', ctx.document._clicks === 0, String(ctx.document._clicks));
+  ctx.say(out, 'Certificate');
+  ok('and it says nothing', ctx._toast === undefined, JSON.stringify(ctx._toast));
+}
+
+console.log('\nand a browser is untouched by any of it');
+{
+  const ctx = load({ navigator: {} });            // no Capacitor at all
+  const out = await ctx.deliver(blob, 'SVC-Receipt-2.pdf', 'Receipt');
+  ok('the web still downloads', out === 'downloaded', String(out));
+  ok('and really clicked', ctx.document._clicks === 1, String(ctx.document._clicks));
+}
+
+console.log('\nand the plugins the bridge needs are actually in the app');
+{
+  /* The code above is correct and inert without these: Capacitor.Plugins
+     only carries what cap sync installed, so a missing dependency puts every
+     document straight back on "could not be saved on this device". */
+  const mob = JSON.parse(read('mobile/package.json'));
+  const dep = Object.assign({}, mob.dependencies, mob.devDependencies);
+  for (const name of ['@capacitor/filesystem', '@capacitor/share'])
+    ok(`${name} is a dependency`, !!dep[name],
+       'without it the plugin is absent at runtime and the app is back to '
+       + 'having no way to hand over a file');
+  ok('and both match the Capacitor 6 the app is built on',
+     /\b6\./.test(dep['@capacitor/filesystem'] || '') && /\b6\./.test(dep['@capacitor/share'] || ''),
+     `${dep['@capacitor/filesystem']} / ${dep['@capacitor/share']}`);
+}
+
 console.log('\nand the document viewer that already shared keeps doing so');
 {
   ok('investor-documents tries canShare with files first',

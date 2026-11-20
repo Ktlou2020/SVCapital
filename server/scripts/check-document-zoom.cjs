@@ -124,5 +124,38 @@ console.log('\nthe arithmetic puts a real statement on a real phone');
      ctx.fitScale(120, 1100) === 0.35, String(ctx.fitScale(120, 1100)));
 }
 
+console.log('\nand the controls are somewhere a thumb can actually reach');
+{
+  /* REPORTED: "I am unable to save the statements because the option is too
+     high up and can't be clicked." native.js puts the WebView edge-to-edge,
+     so an overlay at inset:0 starts behind the clock and the signal bars —
+     and this bar is 32px tall, so all of it was under them. SRC is comment
+     stripped, which matters here: the comment above the fix names both
+     halves of the formula it is about to assert. */
+  const bar = SRC.slice(SRC.indexOf("'<div style=\"background:#1f2937"),
+                        SRC.indexOf('svc-doc-body'));
+  ok('the overlay toolbar was found', bar.length > 100 && /svc-doc-close/.test(bar),
+     'a slice that missed it would assert nothing while passing');
+  ok('THE TOOLBAR IS PUSHED BELOW THE STATUS BAR',
+     /padding:calc\(8px \+ max\(env\(safe-area-inset-top/.test(bar),
+     'at inset:0 the whole row sits under the status bar and cannot be tapped');
+  ok('and it keeps the fallback for devices where env() reports 0',
+     /var\(--native-sb-h/.test(bar),
+     'env(safe-area-inset-top) is 0 on some Capacitor/Android builds even with '
+     + 'the WebView behind the status bar — which is why native.js probes it');
+  ok('the body clears the gesture bar at the bottom too',
+     /padding:10px 10px calc\(10px \+ env\(safe-area-inset-bottom/.test(SRC),
+     'the last line of a statement sat under the home indicator');
+
+  /* The fallback is only a fallback if something still sets it. */
+  const NATIVE = strip(read('js/native.js'));
+  ok('and native.js still sets --native-sb-h',
+     /setProperty\(\s*'--native-sb-h'/.test(NATIVE),
+     'the var half of the formula is dead without it');
+  ok('which is needed because the WebView really is edge-to-edge',
+     /setOverlaysWebView\(\{ overlay: true \}\)/.test(NATIVE),
+     'js/native.js — this is what puts the page behind the status bar');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

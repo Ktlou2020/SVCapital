@@ -132,7 +132,20 @@
          the screen before the document started: the title takes whatever is
          left and truncates, rather than holding a width the controls then
          have to wrap around. */
-      '<div style="background:#1f2937;color:#fff;padding:8px 10px;display:flex;' +
+      /* UNDER THE STATUS BAR, reported as "the option is too high up and
+         can't be clicked". native.js sets the WebView edge-to-edge
+         (setOverlaysWebView overlay:true — Android 15 enforces it anyway),
+         so inset:0 starts behind the clock and the signal bars, and the top
+         of this row — which is all of it, the row is 32px tall — was simply
+         not touchable. The app's own chrome has compensated for this all
+         along; this overlay is drawn outside it and never did.
+
+         Same formula the app chrome uses, and it needs both halves:
+         env(safe-area-inset-top) is 0 on some Capacitor/Android builds even
+         while the WebView really is behind the status bar, which is why
+         native.js probes it and sets --native-sb-h as the fallback. */
+      '<div style="background:#1f2937;color:#fff;display:flex;' +
+           'padding:calc(8px + max(env(safe-area-inset-top, 0px), var(--native-sb-h, 0px))) 10px 8px;' +
            'align-items:center;gap:6px;flex-wrap:nowrap">' +
         '<span style="font-size:13px;font-weight:700;flex:1 1 auto;min-width:0;' +
               'overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Document</span>' +
@@ -154,7 +167,10 @@
         '<button id="svc-doc-close" aria-label="Close" style="border:none;flex:0 0 auto;width:32px;height:32px;' +
           'border-radius:6px;font-size:17px;font-weight:700;background:rgba(255,255,255,0.14);color:#fff;cursor:pointer">\u00d7</button>' +
       '</div>' +
-      '<div id="svc-doc-body" style="flex:1;overflow:auto;padding:10px"></div>';
+      /* And the bottom, for a phone with gesture navigation: the last line
+         of a statement sat under the home indicator. */
+      '<div id="svc-doc-body" style="flex:1;overflow:auto;' +
+           'padding:10px 10px calc(10px + env(safe-area-inset-bottom, 0px))"></div>';
     document.body.appendChild(ov);
     /* Full size here, not scaled. The inline preview is scaled so a client can
        see the shape of the document on a phone; this is the one they read and

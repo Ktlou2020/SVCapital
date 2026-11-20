@@ -486,6 +486,42 @@ function _poolEndMs(dateStr) {
    ═══════════════════════════════════════════════════════════ */
 async function svcDeliverFile(blob, fileName, title) {
   const name = String(fileName || 'document');
+
+  /* THE PACKAGED APP FIRST, because neither web route below exists there.
+   *
+   * Android's System WebView does not implement the Web Share API AT ALL —
+   * navigator.share is simply absent, so canShare is never true — and an
+   * <a download> click has no download manager to reach. Both routes are
+   * dead ends inside the app. That is why every document came back
+   * "could not be saved on this device": the message was honest, and the
+   * app still had no way to hand a file over.
+   *
+   * The native bridge is that way. Write the file, then give it to the
+   * system share sheet, which is where "Save to Files" lives. Tested by the
+   * PLUGINS BEING THERE rather than by a platform guess — the same lesson
+   * as canShare: ask whether the thing you are about to use works, not
+   * whether you think you are somewhere it should. */
+  const _plug = (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.Plugins) || null;
+  if (_plug && _plug.Filesystem && _plug.Share) {
+    try {
+      const written = await _plug.Filesystem.writeFile({
+        path: name,
+        data: await _svcBlobToBase64(blob),
+        /* CACHE, not Documents. The share sheet copies the file wherever
+           the person chooses, so it does not need to survive here, and the
+           cache directory is the one Capacitor's FileProvider serves. */
+        directory: 'CACHE',
+        recursive: true,
+      });
+      await _plug.Share.share({ title: title || name, url: (written && written.uri) || '' });
+      return 'shared';
+    } catch (err) {
+      if (_svcIsAbort(err)) return 'cancelled';
+      /* Anything else: fall through. iOS's WKWebView DOES implement Web
+         Share, so the route below is a real second chance there. */
+    }
+  }
+
   /* The share sheet, where there is one. canShare({files}) is the only
      honest test: Safari exposes navigator.share without file support, so
      checking for share alone hands it a file it will refuse. */
@@ -499,7 +535,7 @@ async function svcDeliverFile(blob, fileName, title) {
     /* Dismissing the sheet rejects with AbortError. That is a decision, not
        a failure, and it must not fall through to a download the person did
        not ask for — on a phone that writes a file they just declined. */
-    if (err && (err.name === 'AbortError' || /abort|cancel/i.test(err.message || ''))) return 'cancelled';
+    if (_svcIsAbort(err)) return 'cancelled';
     /* Anything else: fall through and try the download. */
   }
 
@@ -518,6 +554,28 @@ async function svcDeliverFile(blob, fileName, title) {
      claiming a file that is not there, and the share path above is what
      the app actually takes. */
   return (typeof window !== 'undefined' && window.__SVC_NATIVE__) ? 'unavailable' : 'downloaded';
+}
+
+/* One answer to "did they close it?", because the native bridge and the web
+   share sheet word a cancellation differently: WKWebView rejects with
+   AbortError, Capacitor's Share rejects with a message naming the cancel. */
+function _svcIsAbort(err) {
+  if (!err) return false;
+  return err.name === 'AbortError' || /abort|cancel/i.test(String(err.message || ''));
+}
+
+/* Filesystem.writeFile takes base64 with no data: prefix. */
+function _svcBlobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onloadend = () => {
+      const s = String(r.result || '');
+      const comma = s.indexOf(',');
+      resolve(comma < 0 ? s : s.slice(comma + 1));
+    };
+    r.onerror = () => reject(r.error || new Error('could not read the document'));
+    r.readAsDataURL(blob);
+  });
 }
 
 /* The sentence to show for each outcome, so eleven call sites cannot
