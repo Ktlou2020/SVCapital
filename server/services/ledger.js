@@ -36,15 +36,34 @@
    TYPE and reads the amount through Math.abs — a refund written as a
    negative fee would be counted as a second charge, and the client would
    be billed twice for the thing we were apologising for. */
+/* `transfer_in` and `transfer_out` were in NEITHER list, which meant
+   cashMovement returned 0 for both and every wallet transfer between a
+   client's main account and one of their sub-accounts was invisible to any
+   balance derived from the ledger. The route has been writing these two rows
+   since sub-account transfers shipped, and a sub-account's own statement
+   showed the transfer that funded it and then a running balance that had not
+   moved — which is exactly the case the comment above describes as "a type
+   nobody has classified", and exactly what the statement's own footer warns
+   about when the ledger will not reconcile to the wallet.
+
+   Classifying them fixes the sub-account statement in both directions. It
+   does NOT fully fix the PARENT's statement, which includes its
+   sub-accounts' rows (see accountStatement: an investor statement has always
+   carried them, and narrowing that would alter documents clients already
+   hold). There a transfer out and the matching transfer in now net to zero
+   against an anchor that moved by the full amount — the same size of
+   discrepancy as before, in the same direction, so nothing regresses and the
+   sub-account case becomes right. The parent-scope question is a separate
+   decision about what an investor statement is FOR, and is left alone. */
 const CASH_CREDIT_TYPES = ['deposit', 'payout', 'interest', 'gift_received', 'referral_bonus', 'matured_funds',
-                           'stokvel_contribution_received', 'fee_reversal'];
+                           'stokvel_contribution_received', 'fee_reversal', 'transfer_in'];
 /* `reversal` is money LEAVING because a card payment was taken back — a
    dispute the client won, or a refund. It is a debit like any other, and it
    has to be in this list: without it a reversed deposit stays counted as
    money the platform holds, and every balance derived from the ledger is
    overstated by exactly the amount somebody took back. */
 const CASH_DEBIT_TYPES  = ['withdrawal', 'investment', 'reinvestment', 'fee', 'platform_fee', 'gift_sent',
-                           'stokvel_contribution', 'reversal'];
+                           'stokvel_contribution', 'reversal', 'transfer_out'];
 
 /* The transaction types that are INVESTMENT INCOME — what a client earned, as
    opposed to what moved.

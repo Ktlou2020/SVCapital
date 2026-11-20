@@ -2441,6 +2441,83 @@ function setupInvestorFilters() {
   if (saved && (saved.q || saved.st || saved.ky || saved.pv || saved.lo || saved.so)) filter();
 }
 
+/* Closing a minor's account.
+ *
+ * MINORS ONLY, and the panel is simply absent for anything else rather than
+ * being shown disabled: a group, trust or business account is held by its
+ * members or is a separate legal person, and sweeping its balance to the
+ * parent account holder would be moving somebody else's money. The server
+ * refuses those as well — this is the signpost, not the lock.
+ *
+ * It names the amount and where it is going BEFORE the confirm, because
+ * "are you sure" over an unnamed figure is not a decision anybody can make.
+ */
+function _saCloseAmount(sa) {
+  return Math.round((parseFloat(sa && sa.wallet_balance) || 0) * 100) / 100;
+}
+
+function _saClosePanel(sa, parentName, activeInv) {
+  if (String(sa.account_type || '').toLowerCase() !== 'minor') return '';
+  if (String(sa.status || '') === 'closed') {
+    return `
+    <div style="margin-top:14px;background:rgba(148,163,184,0.1);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+      <div style="font-weight:700;font-size:0.82rem;margin-bottom:2px"><i class="fa-solid fa-lock" style="margin-right:6px;color:var(--text-muted)"></i>Account closed</div>
+      <div style="font-size:0.75rem;color:var(--text-muted)">Any balance was returned to ${_esc(parentName)}.</div>
+    </div>`;
+  }
+  const amt = _saCloseAmount(sa);
+  const blocked = activeInv > 0;
+  return `
+    <div style="margin-top:14px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:12px 14px">
+      <div style="font-weight:700;font-size:0.82rem;margin-bottom:4px"><i class="fa-solid fa-circle-xmark" style="margin-right:6px;color:#ef4444"></i>Close this account</div>
+      <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px">
+        ${blocked
+          ? `This account still holds ${activeInv} active investment${activeInv === 1 ? '' : 's'}. Mature or withdraw them first — the wallet balance is only the uninvested part.`
+          : amt > 0
+            ? `The wallet balance of <strong>${Utils.rand(amt)}</strong> will be returned to <strong>${_esc(parentName)}</strong>, who opened the account. This cannot be undone.`
+            : `The wallet is empty, so nothing will be transferred. This cannot be undone.`}
+      </div>
+      <button class="btn btn--sm" style="background:#ef4444;color:#fff${blocked ? ';opacity:0.45;cursor:not-allowed' : ''}"
+              ${blocked ? 'disabled' : `onclick='closeSubAccount(${_esc(JSON.stringify(sa.id))})'`}>
+        <i class="fa-solid fa-circle-xmark" style="margin-right:6px"></i>Close account${amt > 0 && !blocked ? ` and return ${Utils.rand(amt)}` : ''}
+      </button>
+    </div>`;
+}
+
+async function closeSubAccount(saId) {
+  const sa = (STATE.subAccounts || []).find(s => s.id === saId);
+  if (!sa) return;
+  const amt = _saCloseAmount(sa);
+  const parent = (STATE.investors || []).find(i => i.id === sa.parent_investor_id) || {};
+  const parentName = `${parent.first_name || ''} ${parent.last_name || ''}`.trim() || sa.parent_investor_id || 'the parent account holder';
+  const confirmed = await Confirm.ask('Close this minor account?', {
+    body: `Account: ${sa.name}\n`
+        + (amt > 0
+            ? `Wallet balance: ${Utils.rand(amt)}\nReturned to: ${parentName}\n\n`
+              + 'The balance is transferred to the parent wallet and the account is closed.'
+            : 'Wallet balance: R 0,00\n\nNothing will be transferred. The account is closed.')
+        + '\n\nThis cannot be undone.',
+    confirmLabel: amt > 0 ? `Close and return ${Utils.rand(amt)}` : 'Close account',
+    danger: true,
+  });
+  if (!confirmed) return;
+  try {
+    const out = await API._fetch('POST', `sub-accounts/${saId}/close`, {});
+    /* The local copy is updated from what the SERVER says was swept, not
+       from what the panel showed: the two differ if anything landed in the
+       account between the page loading and the click. */
+    sa.status = 'closed';
+    sa.wallet_balance = Math.max(0, _saCloseAmount(sa) - (Number(out && out.swept) || 0));
+    Toast.success(Number(out && out.swept) > 0
+      ? `Account closed — ${Utils.rand(out.swept)} returned to the parent wallet.`
+      : 'Account closed.');
+    Modal.close('subAccountModal');
+    if (typeof loadData === 'function') loadData();
+  } catch (err) {
+    Toast.error((err && err.message) || 'Could not close the account.');
+  }
+}
+
 function viewSubAccount(saId) {
   const sa = (STATE.subAccounts || []).find(s => s.id === saId);
   if (!sa) return;
@@ -2554,6 +2631,7 @@ function viewSubAccount(saId) {
       <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px">${_esc(parent.email||'')} · ${_esc(parent.id||'')}</div>
       <button class="btn btn--primary btn--sm" onclick="Modal.close('subAccountModal');viewInvestor('${sa.parent_investor_id}')"><i class="fa-solid fa-arrow-up-right-from-square" style="margin-right:6px"></i>View Parent Account</button>
     </div>
+    ${_saClosePanel(sa, parentName, activeInv)}
 
     <div style="margin-top:14px">
       <div style="font-size:0.78rem;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:6px">
@@ -9727,7 +9805,7 @@ function renderTxnTable() {
     return;
   }
 
-  const typeColors = { deposit: 'green', withdrawal: 'red', investment: 'blue', reinvestment: 'purple', return: 'gold', payout: 'green', matured_funds: 'green', fee: 'orange', referral_bonus: 'purple' };
+  const typeColors = { deposit: 'green', withdrawal: 'red', investment: 'blue', reinvestment: 'purple', return: 'gold', payout: 'green', matured_funds: 'green', fee: 'orange', referral_bonus: 'purple', transfer_in: 'green', transfer_out: 'red' };
 
   body.innerHTML = page.map(t => {
     const isPendingDeposit = t.type === 'deposit' && t.status === 'pending';

@@ -975,7 +975,7 @@ function _openAccountStatementWindow(data) {
     '.txn-debit{color:#b91c1c;font-weight:700;text-align:right;white-space:nowrap}',
     '.txn-bal{font-weight:700;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}',
     '.txn-type{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;display:inline-block;padding:2px 6px;border-radius:3px;white-space:nowrap}',
-    '.tt-deposit,.tt-matured_funds,.tt-return,.tt-payout,.tt-referral_bonus{background:#dcfce7;color:#166534}',
+    '.tt-deposit,.tt-matured_funds,.tt-return,.tt-payout,.tt-referral_bonus,.tt-transfer_in{background:#dcfce7;color:#166534}',
     '.tt-investment,.tt-reinvestment{background:#ede9fe;color:#4c1d95}',
     '.tt-withdrawal{background:#fee2e2;color:#991b1b}',
     '.tt-fee{background:#fef3c7;color:#92400e}',
@@ -1113,6 +1113,7 @@ function _openAccountStatementWindow(data) {
         platform_fee: 'Platform Fee', referral_bonus: 'Referral Bonus',
         interest: 'Interest', gift_sent: 'Gift Sent', gift_received: 'Gift Received',
         adjustment: 'Adjustment',
+        transfer_in: 'Transfer In', transfer_out: 'Transfer Out',
       };
       const r2 = n => Math.round((n || 0) * 100) / 100;
       const money = n => 'R ' + Math.abs(n).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

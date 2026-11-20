@@ -801,8 +801,12 @@ function _isIncomeTxn(t) {
 }
 
 function _stmtDirection(t) {
-  const CREDIT = ['deposit', 'return', 'payout', 'referral_bonus', 'gift_received', 'reward', 'interest', 'refund'];
-  const DEBIT  = ['withdrawal', 'investment', 'reinvestment', 'platform_fee', 'fee', 'gift_sent'];
+  /* transfer_in/out move between a client's main wallet and one of their
+     sub-accounts. Absent from both lists they fell through to the amount
+     sign below, and amounts are stored positive — so a transfer OUT drew
+     itself as a credit. */
+  const CREDIT = ['deposit', 'return', 'payout', 'referral_bonus', 'gift_received', 'reward', 'interest', 'refund', 'transfer_in'];
+  const DEBIT  = ['withdrawal', 'investment', 'reinvestment', 'platform_fee', 'fee', 'gift_sent', 'transfer_out'];
   const type = String(t && t.type || '');
   if (CREDIT.includes(type)) return 'credit';
   if (DEBIT.includes(type))  return 'debit';
@@ -819,6 +823,7 @@ function _stmtLabel(t) {
     fee: 'Fee', platform_fee: 'Platform Fee', referral_bonus: 'Referral Bonus',
     gift_sent: 'Gift Sent', gift_received: 'Gift Received', reward: 'XP Reward',
     adjustment: 'Adjustment', interest: 'Interest', refund: 'Refund',
+    transfer_in: 'Transfer In', transfer_out: 'Transfer Out',
   };
   const type = String(t && t.type || '');
   return LABELS[type] || type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—';
