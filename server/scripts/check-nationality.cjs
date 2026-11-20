@@ -187,9 +187,14 @@ const natOf = async id =>
 
       for (const f of ['signup.html', path.join('mobile', 'www', 'signup.html')]) {
         const form = fs.readFileSync(path.join(ROOT, f), 'utf8');
+        /* The condition moved from the tab to the DOCUMENT. Nationality is
+           asked on the passport path; an SA ID holder's 13 digits already
+           answer it and the server defaults them. It is no longer tied to
+           where they live — a South African abroad gives an SA ID and a
+           foreign country. */
         ok(`${f} sends it`,
-           /nationality:\s+isSA \? undefined : \(v\('nationality'\) \|\| undefined\)/.test(form),
-           'the form has always required it of international clients and then dropped it into notes');
+           /nationality:\s+hasSaId \? undefined : \(v\('nationality'\) \|\| undefined\)/.test(form),
+           'the form has always required it of passport holders and then dropped it into notes');
       }
     }
 

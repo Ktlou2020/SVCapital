@@ -84,11 +84,23 @@ for (const rel of PAGES) {
        step1.includes(`id="${id}"`) ? 'still on step 1' : 'not on step 3 either');
   }
 
-  /* The toggle switches the identity groups AND the address block and phone
-     hint, which are still on step 1. It has to stay where the things it
-     governs mostly are, and it reaches the moved groups by id regardless. */
-  ok('the citizenship toggle stays on step 1',
-     step1.includes('id="btnCitizenSA"') && step1.includes('id="btnCitizenIntl"'));
+  /* THE CITIZENSHIP TOGGLE IS GONE. It answered two questions with one tab
+     — which document you hold, and where you live — and got both wrong at
+     the edges. They are separate controls now, and both sit on step 2 with
+     the identity fields they govern, so step 1 stays the low bar it was
+     deliberately reduced to: name, email, phone. */
+  ok('step 1 is still contact only',
+     !step1.includes('id="btnCitizenSA"') && !step1.includes('id="btnDocSaId"')
+     && !step1.includes('id="countryResidence"'),
+     'step 1 was losing 86% of everyone who opened the page; it does not '
+     + 'get new fields back');
+  ok('the identity document choice is on step 2',
+     step2.includes('id="btnDocSaId"') && step2.includes('id="btnDocPassport"'),
+     'it belongs beside the fields it switches');
+  ok('and so is country of residence',
+     step2.includes('id="countryResidence"'),
+     'it decides residency, so it is asked of everybody — and it sits above '
+     + 'the document choice it used to be hidden behind');
   ok('and the groups it toggles are still addressable by id',
      s.includes('id="saIdGroup"') && s.includes('id="passportGroup"'));
 

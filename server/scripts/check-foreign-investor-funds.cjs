@@ -38,6 +38,30 @@ const ok = (name, cond, detail) => {
 
 const F = require(path.join(ROOT, 'server', 'services', 'foreignInvestor.js'));
 
+/* Is <div id="inner"> nested inside <div id="outer">?
+ *
+ * A proximity regex cannot answer this — "within 6000 characters of" is
+ * true of a block that sits well after the one it is being compared to,
+ * which is how the first version of this passed while asserting nothing.
+ * So the div depth is actually counted. */
+function insideBlock(html, outerId, innerId) {
+  const open = html.indexOf(`id="${outerId}"`);
+  const inner = html.indexOf(`id="${innerId}"`);
+  if (open < 0 || inner < 0) return false;
+  const start = html.lastIndexOf('<div', open);
+  let depth = 0, end = html.length;
+  const re = /<div\b|<\/div>/g;
+  re.lastIndex = start;
+  let m;
+  while ((m = re.exec(html))) {
+    depth += m[0] === '</div>' ? -1 : 1;
+    if (depth === 0) { end = m.index; break; }
+  }
+  return inner > start && inner < end;
+}
+
+
+
 /* ── Who the process applies to ──────────────────────────────────────── */
 console.log('\nresidency decides, not nationality');
 {
@@ -305,44 +329,70 @@ console.log('\nand the terms of use say all of it');
 }
 
 /* ── Getting in at all ───────────────────────────────────────────────── */
-console.log('\nand an international client can actually register');
+console.log('\nand there is ONE form, with residency and the document asked separately');
 {
   const SIGNUP = strip(read('signup.html'));
-  const at   = SIGNUP.indexOf('function toggleCitizenship');
-  /* Ends at the branch's own `return;`, not at a // marker — strip() takes
-     those out, indexOf returned -1, and the slice ran on into the South
-     African branch, which DOES set the dial code to +27. The assertion
-     below then failed against code it was never looking at. */
-  const _from = SIGNUP.indexOf('if (!isSA) {', at);
-  const intl  = SIGNUP.slice(_from, SIGNUP.indexOf('return;', _from));
-  ok('the international branch was found', intl.length > 200,
-     'a slice that missed it would assert nothing while passing');
-  ok('and the slice is code, not its comment',
-     !/INTERNATIONAL REGISTRATION IS OPEN/.test(intl), intl.slice(0, 120));
+  const RAW    = read('signup.html');
 
-  ok('THE FORM IS SHOWN, NOT THE WAITLIST',
-     /waitlistPanel\.style\.display = 'none'/.test(intl)
-     && /formSteps\.style\.display = ''/.test(intl),
-     'it showed a waitlist panel and hid the form, so a foreign client could '
-     + 'leave an email address and nothing else');
-  ok('the passport block is shown', /passportGroup'\)\.style\.display\s*=\s*''/.test(intl), intl.slice(0, 400));
-  ok('and the SA ID block is hidden', /saIdGroup'\)\.style\.display\s*=\s*'none'/.test(intl));
-  ok('the region replaces the province',
-     /intlRegionGroup'\)\.style\.display\s*=\s*''/.test(intl)
-     && /saProvinceGroup'\)\.style\.display\s*=\s*'none'/.test(intl));
-  ok('THE DIAL CODE IS NOT FORCED TO +27',
-     !/phoneDialCode'\)\.value = '\+27'/.test(intl),
-     'the one thing that must not happen is the page quietly putting them '
-     + 'back on the South African path');
+  /* THE SPLIT THIS REPLACED. A tab said "South African / SA Resident" or
+     "International Client" and switched the identity document, the address
+     block and the residency recorded against the account, all at once —
+     so a South African living in London was filed as a resident because
+     they hold an SA ID, with no declaration and no BOP coding, and a
+     foreign national living here was pointed at an ID field they may not
+     have. */
+  ok('THE CITIZENSHIP TABS ARE GONE',
+     !/id="btnCitizenSA"/.test(RAW) && !/id="btnCitizenIntl"/.test(RAW),
+     'one control cannot answer two different questions without being wrong '
+     + 'at the edges');
+  ok('and nothing still calls the old toggle',
+     !/toggleCitizenship/.test(SIGNUP), 'signup.html');
 
-  /* The US declaration is only asked if its markup is on screen, and it
-     lives inside the passport block. */
-  const RAW = read('signup.html');
-  const pg  = RAW.slice(RAW.indexOf('id="passportGroup"'), RAW.indexOf('id="password"'));
-  ok('and the US declaration is inside the block that gets shown',
-     /name="usPerson"/.test(pg),
-     'outside it, an international client is never asked the one question '
-     + 'that can refuse them');
+  ok('COUNTRY OF RESIDENCE IS ASKED OF EVERYBODY',
+     /id="countryResidence"/.test(RAW)
+     && !insideBlock(RAW, 'passportGroup', 'countryResidence'),
+     'inside the passport block it was only asked of people who said they '
+     + 'were international, and assumed for everybody else');
+  ok('and the identity document is its own question',
+     /id="btnDocSaId"/.test(RAW) && /id="btnDocPassport"/.test(RAW), 'signup.html');
+  ok('which decides the fields and nothing else',
+     /function setIdDocument/.test(SIGNUP)
+     && /saIdGroup/.test(SIGNUP) && /passportGroup/.test(SIGNUP), 'signup.html');
+  ok('while the country decides residency and the address block',
+     /function onCountryChange/.test(SIGNUP)
+     && /saProvinceGroup/.test(SIGNUP) && /intlRegionGroup/.test(SIGNUP), 'signup.html');
+
+  /* The bug the merge exists to fix. */
+  const sub = SIGNUP.slice(SIGNUP.indexOf('const country    = v(\'countryResidence\')'),
+                           SIGNUP.indexOf('usPerson:'));
+  ok('the submitted country is ANSWERED, NEVER ASSUMED',
+     !/countryOfResidence: isSA \? 'South Africa'/.test(SIGNUP)
+     && /countryOfResidence: country/.test(SIGNUP),
+     'it was hardcoded to South Africa on the SA tab, which is how a South '
+     + 'African abroad was recorded as a resident');
+  ok('and the ID comes from the DOCUMENT, not from the country',
+     /hasSaId \? v\('idNumber'\) : v\('passportNumber'\)/.test(SIGNUP),
+     'an expat holds a 13-digit ID and lives abroad — those are not the '
+     + 'same answer');
+  ok('and the address block comes from the COUNTRY, not from the document',
+     /livesInSA \? v\('province'\)/.test(SIGNUP), 'signup.html');
+
+  ok('THE US QUESTION IS ASKED OF EVERYBODY',
+     /usPerson:\s+usPersonValue\(\)/.test(SIGNUP)
+     && !/usPerson:\s+isSA \? undefined/.test(SIGNUP),
+     'the rule has no residency qualifier, and asking only non-residents '
+     + 'left a US citizen living in Cape Town never asked at all');
+  ok('and it is outside the passport block, so it is on screen either way',
+     !insideBlock(RAW, 'passportGroup', 'usPersonGroup'),
+     'inside it, the question only exists for people who chose a passport');
+
+  /* And the waitlist it replaced is gone cleanly — markup, handler and the
+     listener that would throw at boot without it. */
+  ok('the waitlist panel is gone', !/intlWaitlistPanel/.test(RAW));
+  ok('and nothing is left binding to it',
+     !/btnWaitlistSubmit/.test(SIGNUP) && !/submitIntlWaitlist/.test(SIGNUP),
+     'a listener that binds to a removed element throws at boot and takes '
+     + 'the rest of the page\'s JavaScript with it');
 }
 
 console.log('\nand the FICA consent is one an international client can truthfully tick');
@@ -439,6 +489,48 @@ const db = new Pool({
          + 'person on the platform, which is the thing the rule avoids');
     }
 
+    console.log('\nand a US person living IN South Africa is refused just the same');
+    {
+      /* The rule has no residency qualifier. While the question was asked
+         only of non-residents, this person was never asked at all — they
+         picked the South African tab and walked straight through. */
+      const before = (await db.query(`SELECT COUNT(*)::int AS n FROM investors`)).rows[0].n;
+      const res = await signup({ countryOfResidence: 'South Africa', usPerson: true });
+      ok('THE REGISTRATION IS REFUSED', res.status === 403,
+         `${res.status} ${JSON.stringify(res.body).slice(0, 140)}`
+         + ' — "we strictly do not accept investments from US citizens or US '
+         + 'persons" says nothing about where they live');
+      const after = (await db.query(`SELECT COUNT(*)::int AS n FROM investors`)).rows[0].n;
+      ok('and nothing was written', after === before, `${before} → ${after}`);
+    }
+
+    console.log('\nand a South African who lives abroad is a NON-RESIDENT');
+    {
+      /* The case the merged form exists for. They hold a 13-digit ID and
+         would have picked the South African tab, which hardcoded their
+         country and skipped the question. */
+      const email = `ff-expat-${Date.now()}@example.test`;
+      const res = await signup({ email, idNumber: '8001015009087',
+                                 nationality: 'South African',
+                                 countryOfResidence: 'United Kingdom', usPerson: false });
+      ok('the registration succeeds', res.status === 200 || res.status === 201,
+         `${res.status} ${JSON.stringify(res.body).slice(0, 140)}`);
+      const { rows: [inv] } = await db.query(
+        `SELECT i.residency_status, i.country_of_residence, i.us_person, i.nationality
+           FROM investors i JOIN users u ON u.investor_id = i.id
+          WHERE lower(u.email) = lower($1)`, [email]);
+      ok('THEY ARE MARKED A NON-RESIDENT', inv && inv.residency_status === 'non_resident',
+         inv && String(inv.residency_status)
+         + ' — residency is where they live, not which passport they hold');
+      ok('with the country they actually gave',
+         inv && inv.country_of_residence === 'United Kingdom',
+         inv && String(inv.country_of_residence));
+      ok('their nationality is still South African',
+         inv && inv.nationality === 'South African', inv && String(inv.nationality));
+      ok('and their declaration is on file',
+         inv && inv.us_person === false, inv && String(inv.us_person));
+    }
+
     console.log('\nand a non-resident who does not answer is refused too');
     {
       const res = await signup({ countryOfResidence: 'Germany' });
@@ -471,20 +563,52 @@ const db = new Pool({
       }
     }
 
-    console.log('\nand a South African is not asked at all');
+    console.log('\nand a South African is asked the same question');
     {
+      /* THIS USED TO ASSERT THE OPPOSITE — that a South African was not
+         asked and no declaration was recorded. That was the behaviour while
+         the question lived inside the international branch, and it is the
+         hole the merged form closes: the rule has no residency qualifier. */
+      const unanswered = await signup({ countryOfResidence: 'South Africa' });
+      ok('A SOUTH AFRICAN WHO DOES NOT ANSWER IS REFUSED', unanswered.status === 400,
+         `${unanswered.status} ${JSON.stringify(unanswered.body).slice(0, 140)}`);
+
       const email = `ff-sa-${Date.now()}@example.test`;
-      const res = await signup({ email, countryOfResidence: 'South Africa' });
-      ok('the registration succeeds with no declaration',
+      const res = await signup({ email, countryOfResidence: 'South Africa', usPerson: false });
+      ok('and one who answers is accepted',
          res.status === 200 || res.status === 201, `${res.status}`);
       const { rows: [inv] } = await db.query(
-        `SELECT residency_status, us_person FROM investors i
+        `SELECT residency_status, us_person, country_of_residence FROM investors i
            JOIN users u ON u.investor_id = i.id WHERE lower(u.email) = lower($1)`, [email]);
-      ok('and they are marked resident', inv && inv.residency_status === 'resident',
+      ok('they are marked resident', inv && inv.residency_status === 'resident',
          inv && String(inv.residency_status));
-      ok('with no declaration recorded', inv && inv.us_person === null,
+      ok('with the country they gave, not one assumed for them',
+         inv && inv.country_of_residence === 'South Africa',
+         inv && String(inv.country_of_residence));
+      ok('AND THEIR DECLARATION IS RECORDED TOO',
+         inv && inv.us_person === false, inv && String(inv.us_person)
+         + ' — a US citizen living in Cape Town is refused like any other, '
+         + 'so the answer has to be kept for everybody who gives one');
+    }
+
+    console.log('\nbut a caller too old to ask is not locked out');
+    {
+      /* The installed app cannot ask the question and cannot update until
+         the next release. Requiring the answer from it would stop every
+         sign-up from an existing phone — a far bigger hole than the one it
+         closes. countryOfResidence is the tell: a build that asks the US
+         question always sends one, and no build before it sends either.
+         TEMPORARY, and it goes when 5.3 is out. */
+      const email = `ff-old-${Date.now()}@example.test`;
+      const res = await signup({ email });     // neither field, as an old page sends
+      ok('an old client can still register', res.status === 200 || res.status === 201,
+         `${res.status} ${JSON.stringify(res.body).slice(0, 140)}`);
+      const { rows: [inv] } = await db.query(
+        `SELECT us_person FROM investors i JOIN users u ON u.investor_id = i.id
+          WHERE lower(u.email) = lower($1)`, [email]);
+      ok('and no declaration is invented for them', inv && inv.us_person === null,
          inv && String(inv.us_person)
-         + ' — "was never asked" and "declared they are not" are different facts');
+         + ' — "was never asked" must not be recorded as "declared they are not"');
     }
 
     console.log('\nand an inflow cannot be coded as something it was not');

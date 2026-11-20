@@ -336,16 +336,32 @@ router.post('/register', registerLimiter, async (req, res) => {
      * Only asked of a non-resident, and a non-resident who does not answer
      * is refused too. A missing answer is not a no: the declaration IS the
      * control, and an account opened without one has nothing behind it. */
-    const _nonResident = countryOfResidence && !FOREIGN.countryIsSA(countryOfResidence);
-    const _usAnswer    = FOREIGN.usPersonAnswer(usPerson);
-    if (_nonResident) {
-      if (_usAnswer === true) {
-        return res.status(403).json({ error: FOREIGN.US_PERSON_DECLINE });
-      }
-      if (_usAnswer !== false) {
-        return res.status(400).json({
-          error: 'Please answer the US citizen and US person question before continuing.' });
-      }
+    const _usAnswer = FOREIGN.usPersonAnswer(usPerson);
+
+    /* A YES IS REFUSED WHOEVER SENT IT. The process says "we strictly do not
+       accept investments from US citizens or US persons" with no residency
+       qualifier, so a US citizen living in Cape Town is refused exactly like
+       one living in Boston. The first version of this only asked
+       non-residents, which left that person never asked at all. */
+    if (_usAnswer === true) {
+      return res.status(403).json({ error: FOREIGN.US_PERSON_DECLINE });
+    }
+
+    /* AND AN UNANSWERED QUESTION IS REFUSED — but only from a caller that is
+       new enough to have been able to ask it.
+     *
+     * countryOfResidence is the tell: every build of the signup page that
+     * asks the US question also sends a country, and no build before it
+     * sends either. Requiring the answer unconditionally would therefore
+     * lock out everybody still on the installed app, who cannot ask and
+     * cannot update until the next release — a far bigger hole than the one
+     * it closes. They keep the behaviour they had; a yes is still refused
+     * above if their page somehow sends one.
+     *
+     * This fallback is temporary and should go once 5.3 is out. */
+    if (countryOfResidence && _usAnswer !== false) {
+      return res.status(400).json({
+        error: 'Please answer the US citizen and US person question before continuing.' });
     }
 
     if (password.length < 10)
