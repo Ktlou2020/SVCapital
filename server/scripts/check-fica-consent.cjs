@@ -92,8 +92,17 @@ console.log('\nthe wording exists once per page, not twice');
      sentence back the moment somebody switched citizenship — silently, and
      on the sentence a compliance record points at. */
   for (const [name, html] of Object.entries(PAGES)) {
-    const sentences = (html.match(/I confirm that I am a South African citizen/g) || []).length;
+    /* Anchored on the CURRENT opening sentence. It used to read "I confirm
+       that I am a South African citizen or permanent resident, and I consent
+       to…"; that claim left when international sign-up opened, because a
+       foreign client would have had to tick it untruthfully to proceed. The
+       rule being asserted has not changed — the sentence exists once, in the
+       markup, and not a second time as a literal. */
+    const sentences = (html.match(/I consent to SV Capital and its verification partners/g) || []).length;
     ok(`${name} carries the sentence once`, sentences === 1, `found ${sentences}`);
+    ok(`${name} no longer asks a foreign client to claim SA citizenship`,
+       !/I confirm that I am a South African citizen/.test(html),
+       'a false declaration as a condition of signing up is worse than none');
     ok(`${name} restores it from what it loaded with`,
        /_FICA_CONSENT_DEFAULT/.test(html),
        'the restore has to point at the markup, not at a second copy of it');

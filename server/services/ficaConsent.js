@@ -26,8 +26,23 @@
  * wording on both signup pages, and refuses version '1.0' for this list.
  */
 
-/* Bumped from '1.0' when the four checks below were first named. */
-const VERSION = '2.0';
+/* Bumped from '1.0' when the four checks below were first named, and from
+   '2.0' when the opening sentence stopped claiming South African
+   citizenship.
+
+   It had read "I confirm that I am a South African citizen or permanent
+   resident, and I consent to…". That was true of everybody who could reach
+   the form, because international registration was closed. Opening it made
+   the sentence a thing a foreign client would have to tick to proceed and
+   could not truthfully tick — a false declaration as a condition of signing
+   up, which is worse than no declaration at all.
+
+   The claim is not lost, it has moved to where it belongs: an SA client
+   gives a 13-digit ID number, an international client gives a passport, a
+   nationality and a country of residence, and a non-resident signs a
+   declaration of their own. None of that belongs in a consent to be
+   screened. */
+const VERSION = '2.1';
 
 /* The checks themselves, worded as the person reads them. The check script
  * asserts each of these appears verbatim on both signup pages, so this list

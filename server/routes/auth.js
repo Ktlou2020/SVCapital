@@ -362,12 +362,32 @@ router.post('/register', registerLimiter, async (req, res) => {
     if (existing.rows.length > 0)
       return res.status(409).json({ error: 'An account with this email already exists.' });
 
-    // Check duplicate ID number
+    /* Check for a duplicate identity document.
+     *
+     * THIS ONLY EVER LOOKED FOR DIGITS. It stripped every non-digit from the
+     * number and compared that, which is right for a 13-digit SA ID and
+     * useless for a passport: "A12345678" was looked up as "12345678" while
+     * the row INSERTED below keeps the raw value, so a passport could never
+     * match an existing one and the same passport could open any number of
+     * accounts. That did not matter while international registration was
+     * closed. It matters now.
+     *
+     * Both forms are compared, and the passport one case-insensitively and
+     * ignoring spaces, because a passport is typed by hand and the field's
+     * uppercase styling is CSS — it does not change the value sent. */
     if (idNumber) {
-      const idClean = String(idNumber).replace(/\D/g, '').slice(0, 13);
-      const dupId = await pool.query('SELECT 1 FROM investors WHERE id_number = $1 LIMIT 1', [idClean]);
+      const idDigits = String(idNumber).replace(/\D/g, '').slice(0, 13);
+      const idRaw    = String(idNumber).trim();
+      const dupId = await pool.query(
+        `SELECT 1 FROM investors
+          WHERE id_number = $1
+             OR UPPER(REPLACE(COALESCE(id_number, ''), ' ', '')) = UPPER(REPLACE($2, ' ', ''))
+          LIMIT 1`,
+        [idDigits, idRaw]);
       if (dupId.rows.length > 0)
-        return res.status(409).json({ error: 'An account with this ID number already exists. Please log in or reset your password.' });
+        return res.status(409).json({
+          error: 'An account with this ID or passport number already exists. '
+               + 'Please log in or reset your password.' });
     }
 
     const hash = await bcrypt.hash(password, 12);

@@ -304,6 +304,80 @@ console.log('\nand the terms of use say all of it');
      'recording 1.0 while showing the 1.1 text makes the consent record wrong');
 }
 
+/* ── Getting in at all ───────────────────────────────────────────────── */
+console.log('\nand an international client can actually register');
+{
+  const SIGNUP = strip(read('signup.html'));
+  const at   = SIGNUP.indexOf('function toggleCitizenship');
+  /* Ends at the branch's own `return;`, not at a // marker — strip() takes
+     those out, indexOf returned -1, and the slice ran on into the South
+     African branch, which DOES set the dial code to +27. The assertion
+     below then failed against code it was never looking at. */
+  const _from = SIGNUP.indexOf('if (!isSA) {', at);
+  const intl  = SIGNUP.slice(_from, SIGNUP.indexOf('return;', _from));
+  ok('the international branch was found', intl.length > 200,
+     'a slice that missed it would assert nothing while passing');
+  ok('and the slice is code, not its comment',
+     !/INTERNATIONAL REGISTRATION IS OPEN/.test(intl), intl.slice(0, 120));
+
+  ok('THE FORM IS SHOWN, NOT THE WAITLIST',
+     /waitlistPanel\.style\.display = 'none'/.test(intl)
+     && /formSteps\.style\.display = ''/.test(intl),
+     'it showed a waitlist panel and hid the form, so a foreign client could '
+     + 'leave an email address and nothing else');
+  ok('the passport block is shown', /passportGroup'\)\.style\.display\s*=\s*''/.test(intl), intl.slice(0, 400));
+  ok('and the SA ID block is hidden', /saIdGroup'\)\.style\.display\s*=\s*'none'/.test(intl));
+  ok('the region replaces the province',
+     /intlRegionGroup'\)\.style\.display\s*=\s*''/.test(intl)
+     && /saProvinceGroup'\)\.style\.display\s*=\s*'none'/.test(intl));
+  ok('THE DIAL CODE IS NOT FORCED TO +27',
+     !/phoneDialCode'\)\.value = '\+27'/.test(intl),
+     'the one thing that must not happen is the page quietly putting them '
+     + 'back on the South African path');
+
+  /* The US declaration is only asked if its markup is on screen, and it
+     lives inside the passport block. */
+  const RAW = read('signup.html');
+  const pg  = RAW.slice(RAW.indexOf('id="passportGroup"'), RAW.indexOf('id="password"'));
+  ok('and the US declaration is inside the block that gets shown',
+     /name="usPerson"/.test(pg),
+     'outside it, an international client is never asked the one question '
+     + 'that can refuse them');
+}
+
+console.log('\nand the FICA consent is one an international client can truthfully tick');
+{
+  const CONSENT = require(path.join(ROOT, 'server', 'services', 'ficaConsent.js'));
+  for (const f of ['signup.html', 'mobile/www/signup.html']) {
+    const t = read(f);
+    ok(`${f.split('/')[0]}: IT NO LONGER CLAIMS SOUTH AFRICAN CITIZENSHIP`,
+       !/I confirm that I am a South African citizen or permanent resident/.test(t),
+       'opening international registration made that a false declaration a '
+       + 'foreign client has to tick to proceed, which is worse than none');
+    ok(`${f.split('/')[0]}: and still consents to the checks`,
+       /carrying out the FICA checks required/.test(t), f);
+  }
+  ok('and the version moved with the wording',
+     CONSENT.VERSION !== '2.0' && CONSENT.VERSION !== '1.0', CONSENT.VERSION
+     + ' — a changed sentence under an unchanged version makes the register '
+     + 'read as though everyone agreed to the same thing');
+}
+
+console.log('\nand the same passport cannot open two accounts');
+{
+  const AUTH = strip(read('server/routes/auth.js'));
+  const at  = AUTH.indexOf('if (idNumber) {');
+  const blk = AUTH.slice(at, AUTH.indexOf('const hash = await bcrypt', at));
+  ok('the duplicate check was found', at > 0 && blk.length > 80);
+  ok('IT NO LONGER COMPARES DIGITS ALONE',
+     /UPPER\(REPLACE/.test(blk),
+     'it stripped every non-digit, so "A12345678" was looked up as "12345678" '
+     + 'while the row stored the raw value — a passport could never match an '
+     + 'existing one');
+  ok('and the message names a passport too',
+     /ID or passport number already exists/.test(blk), blk.slice(-200));
+}
+
 if (!process.env.DATABASE_URL) {
   console.log('\n  SKIP  the rest needs DATABASE_URL');
   console.log(`\n${pass} passed, ${fail} failed`);

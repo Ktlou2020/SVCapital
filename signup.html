@@ -1177,7 +1177,10 @@
       </div>
       <div class="intl-info-banner" id="infoStripIntl" style="display:none">
         <i class="fa-solid fa-earth-africa"></i>
-        <span>International clients are welcome. We accept passport-based KYC verification for non-SA residents. Your documents will be reviewed by our compliance team within 1–3 business days.</span>
+        <span>International clients are welcome. We verify passports by hand, so your
+          documents are reviewed by our compliance team within 1&ndash;3 business days.
+          Investments are made in <strong>South African rands</strong>, and we are not able
+          to accept US citizens or US persons.</span>
       </div>
 
       <div class="form-grid">
@@ -1466,7 +1469,7 @@
       <label class="checkbox-group">
         <input type="checkbox" id="ficaConsentCheck" />
         <div class="checkbox-label">
-          <span id="ficaConsentText">I confirm that I am a South African citizen or permanent resident, and I consent to SV Capital and its verification partners carrying out the FICA checks required before my account can be used:</span>
+          <span id="ficaConsentText">I consent to SV Capital and its verification partners carrying out the FICA checks required before my account can be used:</span>
           <ul class="consent-list">
             <li>identity and photo verification</li>
             <li>bank account verification</li>
@@ -2176,11 +2179,49 @@ function toggleCitizenship(type) {
   const step1         = document.getElementById('step1');
 
   if (!isSA) {
-    // International users see the waitlist panel only — registration not yet available
-    if (waitlistPanel) waitlistPanel.style.display = 'block';
-    if (formSteps) formSteps.style.display = 'none';
-    if (step1) step1.style.display = 'none';
+    /* INTERNATIONAL REGISTRATION IS OPEN.
+     *
+     * This used to show a waitlist panel and hide the form entirely, so a
+     * foreign client could leave an email address and nothing else. The
+     * waitlist markup is kept and still works — it is how somebody in a
+     * country we cannot serve yet is captured — but it is no longer where
+     * every international visitor lands.
+     *
+     * Everything the foreign path needs is here and the server agrees with
+     * it: a passport instead of an SA ID, nationality and country of
+     * residence as real columns, the US person declaration, a region
+     * instead of a province, and the dial code left alone so they can pick
+     * their own. */
+    if (waitlistPanel) waitlistPanel.style.display = 'none';
+    if (formSteps) formSteps.style.display = '';
+    if (step1) step1.style.display = 'block';
+
+    document.getElementById('infoStripSA').style.display     = 'none';
+    document.getElementById('infoStripIntl').style.display   = '';
+    document.getElementById('saIdGroup').style.display       = 'none';
+    document.getElementById('passportGroup').style.display   = '';
+    document.getElementById('saProvinceGroup').style.display = 'none';
+    document.getElementById('intlRegionGroup').style.display = '';
+
+    /* The dial code is NOT forced. +27 would be wrong for almost every
+       international client, and the one thing that must not happen is the
+       page quietly putting them back on the South African path. */
+    const dial = document.getElementById('phoneDialCode');
+    if (dial && dial.value === '+27') dial.selectedIndex = Math.min(1, dial.options.length - 1);
+    const ph2 = document.getElementById('phone');
+    if (ph2) ph2.placeholder = '1234 5678';
+    const hint2 = document.getElementById('phoneHint');
+    if (hint2) hint2.textContent = 'Enter your local number without the country code';
+
+    /* An SA ID validation box left over from the other path would be
+       reporting on a field that is no longer on screen. */
+    const idVal2 = document.getElementById('idValidation');
+    if (idVal2) { idVal2.style.display = 'none'; idVal2.innerHTML = ''; }
+    const idHint2 = document.getElementById('idHint');
+    if (idHint2) idHint2.style.display = 'none';
+
     hideError();
+    persistDraft();
     return;
   }
 
