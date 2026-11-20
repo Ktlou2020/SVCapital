@@ -118,9 +118,24 @@ console.log('\nand the console offers the filing items the server will accept');
        + 'in one place and wrong in the other is a tick recorded against nothing');
   ok('and it uses the server\'s outflow code verbatim',
      ADMIN.includes('510/02'), F.bopLabel(F.BOP_OUTFLOW));
-  ok('the panel is for non-residents only',
+  ok('the panel knows who is a non-resident',
      /function _isNonResidentInvestor/.test(ADMIN)
      && /_isNonResidentInvestor\(inv\)/.test(ADMIN));
+  /* THE BUG THIS CATCHES, which shipped once. The panel returned nothing
+     for a resident, so the only control that could make somebody a
+     non-resident was hidden behind their already being one — staff could
+     never mark the first one. */
+  ok('AND A RESIDENT STILL GETS THE CONTROL THAT MARKS THEM',
+     /Mark as non-resident/.test(ADMIN),
+     'hidden from residents, the control can only be used on people who do '
+     + 'not need it');
+  ok('the panel does not bail out for a resident',
+     !/_isNonResidentInvestor\(inv\)\) return '';/.test(ADMIN),
+     'an early return here is exactly how the control disappeared');
+  ok('and the control opens the editor',
+     /Mark as non-resident[\s\S]{0,40}?<\/button>/.test(ADMIN)
+     || /editForeignFunds\([\s\S]{0,220}?Mark as non-resident/.test(ADMIN),
+     'a button that opens nothing is a label');
   ok('and only money in and out can carry a BOP category',
      /\['deposit', 'withdrawal'\]\.includes\(t\.type\)/.test(ADMIN),
      'an internal transfer or a fee never crosses a border and has no '
@@ -181,6 +196,112 @@ console.log('\nand the signup form asks before it can be submitted');
      /us === true/.test(SIGNUP) && /showUsPersonBlock\(\)/.test(SIGNUP), 'signup.html');
   ok('country of residence is sent as a field, not buried in a note',
      /countryOfResidence:/.test(SIGNUP), 'signup.html');
+}
+
+/* ── The declaration ─────────────────────────────────────────────────── */
+console.log('\nand the declaration says what the process requires a signature for');
+{
+  const text = F.NON_RESIDENT_DECLARATION_CLAUSES.join(' ').toLowerCase();
+  ok('THE US CLAUSE IS FIRST, because it is the one that can refuse somebody',
+     /us citizen/.test(F.NON_RESIDENT_DECLARATION_CLAUSES[0].toLowerCase()),
+     F.NON_RESIDENT_DECLARATION_CLAUSES[0]);
+  for (const [what, re] of [
+    ['green card',          /green card/],
+    ['rands only',          /rands \(zar\) only/],
+    ['the FX costs are theirs', /all foreign exchange costs/],
+    ['the rate risk is theirs', /exchange rate risk is mine/],
+    ['their own account',   /own bank account or card/],
+    ['the reference',       /account number as the reference/],
+    ['and telling us if it changes', /stops being true/],
+  ]) ok(`it covers ${what}`, re.test(text), what);
+
+  ok('it is versioned', !!F.NON_RESIDENT_DECLARATION_VERSION,
+     'a declaration matched against wording nobody can produce is not evidence');
+  ok('and an unsigned non-resident owes one',
+     F.needsDeclaration({ residency_status: 'non_resident' }, []), 'true expected');
+  ok('a resident never does',
+     !F.needsDeclaration({ residency_status: 'resident' }, []), 'false expected');
+  ok('a current signature settles it',
+     !F.needsDeclaration({ residency_status: 'non_resident' },
+       [{ document_type: F.NON_RESIDENT_DECLARATION_TYPE,
+          document_version: F.NON_RESIDENT_DECLARATION_VERSION }]));
+  ok('AND AN OLD ONE DOES NOT',
+     F.needsDeclaration({ residency_status: 'non_resident' },
+       [{ document_type: F.NON_RESIDENT_DECLARATION_TYPE, document_version: '0.9' }]),
+     'the version is the whole reason the wording can change');
+
+  /* It has to reach them. */
+  const CORE = strip(read('js/portal-core.js'));
+  ok('the portal asks for it at boot',
+     /async function svcCheckNonResidentDeclaration/.test(CORE)
+     && /foreign-funds\/my-declaration/.test(CORE), 'js/portal-core.js');
+  ok('THE WORDING COMES FROM THE SERVER, not from the portal',
+     !CORE.includes(F.NON_RESIDENT_DECLARATION_CLAUSES[0]),
+     'a client must not be shown one version while another is recorded '
+     + 'against their name');
+  for (const f of ['portal/js/portal.js', 'mobile/src/js/portal.js'])
+    ok(`${f.split('/')[0]} calls it on sign-in`,
+       /svcCheckNonResidentDeclaration\(\)/.test(read(f)), f);
+}
+
+/* ── FICA ────────────────────────────────────────────────────────────── */
+console.log('\nand a non-resident is never checked by the automated FICA');
+{
+  ok('the rule says so', !F.automatedFicaAllowed({ residency_status: 'non_resident' })
+     && F.automatedFicaAllowed({ residency_status: 'resident' }));
+  ok('and says why, in terms somebody can act on',
+     /Home Affairs/.test(F.MANUAL_FICA_REASON) && /manually/.test(F.MANUAL_FICA_REASON),
+     F.MANUAL_FICA_REASON);
+
+  /* The refusal is in the RUNNER, not only in the queries that feed it. */
+  const SVC = strip(read('server/services/ficaService.js'));
+  const at  = SVC.indexOf('async function runFicaCheck');
+  const head = SVC.slice(at, at + 1800);
+  ok('runFicaCheck refuses before it does any work',
+     /automatedFicaAllowed\(investor\)/.test(head),
+     'the sweep, the console button and the on-deposit trigger all arrive '
+     + 'here — a predicate repeated in their four SELECTs is three places to '
+     + 'forget it');
+  ok('and the refusal is recorded rather than silent',
+     /fica_auto_status = 'manual'/.test(head), head.slice(0, 200));
+  ok('AND IT DOES NOT STAMP last_auto_fica_check',
+     !/last_auto_fica_check\s*=/.test(head),
+     'stamping it would read as a check that ran and passed, and would push '
+     + 'the next one out by a year');
+
+  /* And the batches do not waste their slots on people it will refuse. */
+  const CRON = strip(read('server/jobs/ficaCron.js'));
+  const excl = (CRON.match(/residency_status, 'resident'\) <> 'non_resident'/g) || []).length;
+  ok('both cron batches exclude them', excl === 2, `${excl} of 2`);
+}
+
+/* ── The terms ───────────────────────────────────────────────────────── */
+console.log('\nand the terms of use say all of it');
+{
+  const TERMS = read('terms.html');
+  ok('there is a non-resident clause', /id="s27"/.test(TERMS) && /Non-resident/.test(TERMS));
+  ok('and it is in the contents', /href="#s27"/.test(TERMS),
+     'a clause nobody can navigate to is a clause nobody reads');
+  for (const [what, re] of [
+    ['US persons',        /do not accept investments from US citizens or US persons/],
+    ['residence not nationality', /where the Client <strong>resides<\/strong>, not by their nationality/],
+    ['rands only',        /South African rands \(ZAR\) only/],
+    ['the FX costs',      /all foreign exchange costs/],
+    ['the rate risk',     /exchange rate risk is the Client/],
+    ['own name only',     /in the Client&rsquo;s own\s*name/],
+    ['the reference',     /account number as its reference/],
+    ['exchange control',  /South African\s+Reserve Bank/],
+    ['manual verification', /verified <strong>manually/],
+  ]) ok(`the terms cover ${what}`, re.test(TERMS), what);
+  ok('and the page says it changed',
+     /Last updated: November 2026/.test(TERMS),
+     'a terms page that does not say it moved is not an updated one');
+
+  /* The version recorded against a client has to be the wording they read. */
+  const AUTH = strip(read('server/routes/auth.js'));
+  ok('A NEW REGISTRATION RECORDS 1.1',
+     /type: 'terms_of_service', flag: termsAccepted, version: '1\.1'/.test(AUTH),
+     'recording 1.0 while showing the 1.1 text makes the consent record wrong');
 }
 
 if (!process.env.DATABASE_URL) {
@@ -345,6 +466,86 @@ const db = new Pool({
       ok('with nothing left behind', rows[0].n === 0, String(rows[0].n));
     }
 
+    console.log('\nand marking a resident as a non-resident is what starts all of it');
+    {
+      await db.query(
+        `INSERT INTO investors (id, first_name, last_name, email, status, wallet_balance,
+                                residency_status, country_of_residence)
+         VALUES ('INV-FF-2','Sipho','Local','ff-2@example.test','active',0,
+                 'resident','South Africa')
+         ON CONFLICT (id) DO NOTHING`);
+      const client2 = jwt.sign({ id: 'u-2', role: 'investor', investorId: 'INV-FF-2' },
+                               process.env.JWT_SECRET, { expiresIn: '1h' });
+
+      const before = await call('GET', '/api/foreign-funds/my-declaration', null, client2);
+      ok('a resident owes no declaration', before.body.required === false,
+         JSON.stringify(before.body).slice(0, 120));
+
+      const made = await call('PATCH', '/api/foreign-funds/investors/INV-FF-2',
+                              { residencyStatus: 'non_resident',
+                                countryOfResidence: 'United Kingdom' }, staff);
+      ok('STAFF CAN MARK A RESIDENT AS A NON-RESIDENT', made.status === 200,
+         `${made.status} ${JSON.stringify(made.body)}`
+         + ' — this is the control the whole process hangs off');
+
+      const after = await call('GET', '/api/foreign-funds/my-declaration', null, client2);
+      ok('and the declaration becomes due immediately', after.body.required === true,
+         JSON.stringify(after.body).slice(0, 120));
+      ok('with the server\'s own wording, not the portal\'s',
+         Array.isArray(after.body.clauses) && after.body.clauses.length === F.NON_RESIDENT_DECLARATION_CLAUSES.length,
+         String(after.body.clauses && after.body.clauses.length));
+
+      /* A POST that does not agree must not be recorded as agreement. */
+      const empty = await call('POST', '/api/foreign-funds/my-declaration', {}, client2);
+      ok('A POST THAT DOES NOT AGREE IS REFUSED', empty.status === 400,
+         `${empty.status} — that is how a consent record ends up describing a `
+         + 'click nobody made');
+
+      const signed = await call('POST', '/api/foreign-funds/my-declaration',
+                                { agreed: true }, client2);
+      ok('agreeing is accepted', signed.status === 200, JSON.stringify(signed.body));
+
+      const settled = await call('GET', '/api/foreign-funds/my-declaration', null, client2);
+      ok('and it stops being asked for', settled.body.required === false,
+         JSON.stringify(settled.body).slice(0, 120));
+
+      /* A second tab, a refresh — neither may write a second row, or the
+         record stops saying when they agreed. */
+      await call('POST', '/api/foreign-funds/my-declaration', { agreed: true }, client2);
+      const { rows: [n] } = await db.query(
+        `SELECT COUNT(*)::int AS n FROM accepted_client_documents
+          WHERE investor_id = 'INV-FF-2' AND document_type = $1`,
+        [F.NON_RESIDENT_DECLARATION_TYPE]);
+      ok('SIGNING TWICE WRITES ONE ROW', n.n === 1, String(n.n));
+
+      const { rows: [row] } = await db.query(
+        `SELECT document_version, accepted_at FROM accepted_client_documents
+          WHERE investor_id = 'INV-FF-2' AND document_type = $1`,
+        [F.NON_RESIDENT_DECLARATION_TYPE]);
+      ok('stored with the version it was made against',
+         row.document_version === F.NON_RESIDENT_DECLARATION_VERSION,
+         String(row.document_version));
+      ok('and when', !!row.accepted_at, String(row.accepted_at));
+
+      /* And it lands in the table the console already reads, rather than a
+         second home for the same kind of record. */
+      const state = await call('GET', '/api/foreign-funds/investors/INV-FF-2/declaration',
+                               null, staff);
+      ok('the console can see it is signed', state.body.signed === true,
+         JSON.stringify(state.body).slice(0, 140));
+    }
+
+    console.log('\nand a resident cannot sign a declaration that is not theirs to make');
+    {
+      await db.query(
+        `UPDATE investors SET residency_status = 'resident' WHERE id = 'INV-FF-2'`);
+      const client2 = jwt.sign({ id: 'u-2', role: 'investor', investorId: 'INV-FF-2' },
+                               process.env.JWT_SECRET, { expiresIn: '1h' });
+      const res = await call('POST', '/api/foreign-funds/my-declaration',
+                             { agreed: true }, client2);
+      ok('it is refused', res.status === 400, `${res.status} ${JSON.stringify(res.body)}`);
+    }
+
     console.log('\nand a client cannot reach any of it');
     {
       const tok = jwt.sign({ id: 'u-c', role: 'investor', investorId: 'INV-FF-1' },
@@ -355,7 +556,7 @@ const db = new Pool({
     }
 
     await db.query(`DELETE FROM transactions WHERE id = 'TXN-FF-1'`);
-    await db.query(`DELETE FROM investors WHERE id = 'INV-FF-1'`);
+    await db.query(`DELETE FROM investors WHERE id IN ('INV-FF-1','INV-FF-2')`);
     await db.query(`DELETE FROM users WHERE email LIKE 'ff-%@example.test'`);
     await db.query(`DELETE FROM investors WHERE email LIKE 'ff-%@example.test'`);
   } finally {

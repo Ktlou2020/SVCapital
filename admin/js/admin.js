@@ -2895,7 +2895,28 @@ function _isNonResidentInvestor(inv) {
 }
 
 function _foreignFundsPanel(inv) {
-  if (!_isNonResidentInvestor(inv)) return '';
+  /* SHOWN FOR EVERY CLIENT, not only the ones already marked.
+     The first version of this returned nothing for a resident, which meant
+     the only control that could make somebody a non-resident was hidden
+     behind their already being one. Staff could never mark the first one. */
+  if (!_isNonResidentInvestor(inv)) {
+    return `
+    <div class="panel mb-12">
+      <div class="panel__header"><span class="panel__title">
+        <i class="fa-solid fa-globe" style="color:var(--text-muted);margin-right:6px"></i>Residency</span></div>
+      <div class="panel__body">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span class="badge badge--grey">Resident (South Africa)</span>
+          <span style="font-size:0.74rem;color:var(--text-muted);flex:1 1 180px;line-height:1.5">
+            Marking a client as a non-resident puts the Foreign Investor Funds process
+            behind their account: the declaration they must sign, SWIFT payment details,
+            BOP coding, and manual FICA.</span>
+          <button class="btn btn--secondary btn--sm" onclick='editForeignFunds(${_esc(JSON.stringify(inv.id))})'>
+            <i class="fa-solid fa-globe"></i> Mark as non-resident</button>
+        </div>
+      </div>
+    </div>`;
+  }
   const row = (label, value, mono) =>
     `<div class="info-row"><span class="info-row__label">${_esc(label)}</span>`
     + `<span class="info-row__value"${mono ? ' style="font-family:monospace"' : ''}>`
@@ -2929,6 +2950,13 @@ function _foreignFundsPanel(inv) {
             <span class="info-row__value"><span class="badge badge--purple">Non-resident</span></span></div>
           <div class="info-row"><span class="info-row__label">US Person</span>
             <span class="info-row__value">${usCell}</span></div>
+          <div class="info-row"><span class="info-row__label">Declaration</span>
+            <span class="info-row__value" id="ff-decl-state">
+              <span style="color:var(--text-muted);font-size:0.75rem">Checking…</span></span></div>
+          <div class="info-row"><span class="info-row__label">FICA</span>
+            <span class="info-row__value"><span class="badge badge--yellow">Manual review</span>
+              <span style="font-size:0.7rem;color:var(--text-muted);margin-left:6px">
+                the automated check reads Home Affairs, which holds SA ID numbers only</span></span></div>
         </div>
         <div style="font-size:0.74rem;font-weight:800;margin:12px 0 6px;color:var(--text-muted)">
           PAYOUT ACCOUNT (OUTSIDE SOUTH AFRICA)</div>
@@ -3009,6 +3037,31 @@ function _foreignFilingItems() {
     { key: 'signed_agreement',     label: 'Signed investment agreement' },
     { key: 'fica_documents',       label: 'FICA documents' },
   ];
+}
+
+/* Fills the Declaration line once the modal is on screen, rather than making
+   viewInvestor wait on a request it does not need to render. */
+async function _loadForeignDeclarationState(investorId) {
+  const cell = document.getElementById('ff-decl-state');
+  if (!cell) return;
+  try {
+    const d = await API._fetch('GET', `foreign-funds/investors/${investorId}/declaration`);
+    if (d.signed) {
+      cell.innerHTML = `<span class="badge badge--green">Signed</span>`
+        + `<span style="font-size:0.7rem;color:var(--text-muted);margin-left:6px">`
+        + `${_esc(Utils.date ? Utils.date(d.signedAt) : d.signedAt)} · v${_esc(d.version)}</span>`;
+    } else if (d.older && d.older.length) {
+      cell.innerHTML = `<span class="badge badge--yellow">Older version signed</span>`
+        + `<span style="font-size:0.7rem;color:var(--text-muted);margin-left:6px">`
+        + `v${_esc(d.older[0].version)} — will be asked again at sign-in</span>`;
+    } else {
+      cell.innerHTML = `<span class="badge badge--red">Outstanding</span>`
+        + `<span style="font-size:0.7rem;color:var(--text-muted);margin-left:6px">`
+        + `shown to the client at their next sign-in</span>`;
+    }
+  } catch (_) {
+    cell.innerHTML = '<span style="color:var(--text-muted);font-size:0.75rem">Could not load</span>';
+  }
 }
 
 async function openForeignFlow(txnId, isInflow) {
@@ -3780,6 +3833,7 @@ async function viewInvestor(id) {
   loadInvestorTimeline(inv, invsts, txns);
   _loadInvestorRewards(inv.id);
   _loadClientDocuments(inv.id);
+  if (_isNonResidentInvestor(inv)) _loadForeignDeclarationState(inv.id);
   _loadInvestorWatchlistBanner(inv.id);
 }
 

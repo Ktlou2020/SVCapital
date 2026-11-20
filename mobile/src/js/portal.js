@@ -752,6 +752,9 @@ document.addEventListener('DOMContentLoaded', async () => {
      data it needs has loaded. */
   if (typeof svcInitDeepLinks === 'function') svcInitDeepLinks();
   checkFirstDepositPrompt();
+  /* The non-resident declaration, if one is outstanding. Last, after the
+     investor has loaded, because whether it is owed depends on them. */
+  if (typeof svcCheckNonResidentDeclaration === 'function') svcCheckNonResidentDeclaration();
   _checkAutoStartTour();
   load2FAStatus();
   _startPolling();

@@ -45,6 +45,10 @@ async function runFicaSweep() {
       WHERE last_auto_fica_check IS NOT NULL
         AND last_auto_fica_check < NOW() - INTERVAL '1 year'
         AND COALESCE(status, '') <> 'suspended'
+        /* A non-resident is reviewed by hand. runFicaCheck refuses them
+           anyway — this keeps them out of the batch so the limited slots
+           go to clients the check can actually answer for. */
+        AND COALESCE(residency_status, 'resident') <> 'non_resident'
       ORDER BY last_auto_fica_check ASC
       LIMIT $1
     `, [BATCH_LIMIT]);
@@ -58,6 +62,7 @@ async function runFicaSweep() {
         FROM investors i
         WHERE i.last_auto_fica_check IS NULL
           AND COALESCE(i.status, '') <> 'suspended'
+          AND COALESCE(i.residency_status, 'resident') <> 'non_resident'
           AND EXISTS (
             SELECT 1 FROM transactions t
             WHERE t.investor_id = i.id

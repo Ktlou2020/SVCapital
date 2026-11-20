@@ -11,6 +11,82 @@ const { actorFromRequest } = require('../services/ledger');
 const FOREIGN = require('../services/foreignInvestor');
 const audit   = require('../services/audit');
 
+/* ── The client's own declaration ─────────────────────────────────────
+ *
+ * MOUNTED ABOVE THE STAFF GATE, deliberately. Everything else in this file
+ * is staff-only; these two are the client signing their own declaration, and
+ * a client is the only person who can. They are scoped to req.user's own
+ * investor id and take no id from the request, so there is no route here
+ * that lets one client sign for another.
+ */
+router.get('/my-declaration', requireAuth, async (req, res) => {
+  try {
+    const investorId = req.user && req.user.investorId;
+    if (!investorId) return res.status(403).json({ error: 'Not an investor account.' });
+
+    const { rows: [inv] } = await pool.query(
+      'SELECT id, residency_status, country_of_residence FROM investors WHERE id = $1', [investorId]);
+    if (!inv) return res.status(404).json({ error: 'Investor not found.' });
+
+    const { rows: signed } = await pool.query(
+      `SELECT document_type, document_version, accepted_at
+         FROM accepted_client_documents
+        WHERE investor_id = $1 AND document_type = $2`,
+      [investorId, FOREIGN.NON_RESIDENT_DECLARATION_TYPE]);
+
+    res.json({
+      required: FOREIGN.needsDeclaration(inv, signed),
+      signedAt: (signed.find(r => String(r.document_version) === FOREIGN.NON_RESIDENT_DECLARATION_VERSION) || {}).accepted_at || null,
+      version:  FOREIGN.NON_RESIDENT_DECLARATION_VERSION,
+      title:    FOREIGN.NON_RESIDENT_DECLARATION_TITLE,
+      intro:    FOREIGN.NON_RESIDENT_DECLARATION_INTRO,
+      clauses:  FOREIGN.NON_RESIDENT_DECLARATION_CLAUSES,
+    });
+  } catch (err) {
+    console.error('[foreign-funds my-declaration]', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+router.post('/my-declaration', requireAuth, async (req, res) => {
+  try {
+    const investorId = req.user && req.user.investorId;
+    if (!investorId) return res.status(403).json({ error: 'Not an investor account.' });
+
+    /* Agreement is required and is not defaulted. A POST that simply does not
+       mention it must not be recorded as a signature — that is how a consent
+       record ends up describing a click nobody made. */
+    if (req.body && req.body.agreed !== true) {
+      return res.status(400).json({ error: 'The declaration has to be agreed to.' });
+    }
+
+    const { rows: [inv] } = await pool.query(
+      'SELECT id, residency_status, country_of_residence FROM investors WHERE id = $1', [investorId]);
+    if (!inv) return res.status(404).json({ error: 'Investor not found.' });
+    if (!FOREIGN.isNonResident(inv)) {
+      return res.status(400).json({ error: 'This declaration is for non-resident investors.' });
+    }
+
+    /* Signing twice is not an error — a second tab, a refresh — but it must
+       not write a second row, or the record stops saying when they agreed. */
+    await pool.query(
+      `INSERT INTO accepted_client_documents
+         (investor_id, document_type, document_version, accepted_at, ip_address, user_agent)
+       SELECT $1, $2, $3, NOW(), $4, $5
+        WHERE NOT EXISTS (
+          SELECT 1 FROM accepted_client_documents
+           WHERE investor_id = $1 AND document_type = $2 AND document_version = $3)`,
+      [investorId, FOREIGN.NON_RESIDENT_DECLARATION_TYPE, FOREIGN.NON_RESIDENT_DECLARATION_VERSION,
+       (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim() || null,
+       req.headers['user-agent'] || null]);
+
+    res.json({ success: true, version: FOREIGN.NON_RESIDENT_DECLARATION_VERSION });
+  } catch (err) {
+    console.error('[foreign-funds sign declaration]', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 router.use(requireAuth, requireRole('admin', 'director'));
 
 /* The process as the console needs it, so the screen is not a second
@@ -170,6 +246,41 @@ router.put('/transactions/:id/files', async (req, res) => {
     res.status(500).json({ error: 'Internal server error.' });
   } finally {
     client.release();
+  }
+});
+
+/* Whether this client's declaration is on file, for the console. Separate
+   from the client's own endpoint above because that one is scoped to the
+   caller and takes no id — this one takes an id and is staff-gated. */
+router.get('/investors/:id/declaration', async (req, res) => {
+  try {
+    const id = String(req.params.id || '');
+    const { rows: [inv] } = await pool.query(
+      'SELECT id, residency_status, country_of_residence FROM investors WHERE id = $1', [id]);
+    if (!inv) return res.status(404).json({ error: 'Investor not found.' });
+
+    const { rows } = await pool.query(
+      `SELECT document_version, accepted_at FROM accepted_client_documents
+        WHERE investor_id = $1 AND document_type = $2
+        ORDER BY accepted_at DESC`,
+      [id, FOREIGN.NON_RESIDENT_DECLARATION_TYPE]);
+
+    const current = rows.find(r =>
+      String(r.document_version) === FOREIGN.NON_RESIDENT_DECLARATION_VERSION);
+    res.json({
+      required: FOREIGN.isNonResident(inv),
+      signed:   !!current,
+      signedAt: current ? current.accepted_at : null,
+      version:  FOREIGN.NON_RESIDENT_DECLARATION_VERSION,
+      /* An older version still counts as "they signed something", and the
+         console says which — it is the difference between a client who has
+         never been asked and one whose wording has moved on. */
+      older: rows.filter(r => String(r.document_version) !== FOREIGN.NON_RESIDENT_DECLARATION_VERSION)
+                 .map(r => ({ version: r.document_version, acceptedAt: r.accepted_at })),
+    });
+  } catch (err) {
+    console.error('[foreign-funds declaration state]', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 

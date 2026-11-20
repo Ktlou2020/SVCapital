@@ -2439,6 +2439,82 @@ function svcIsNonResident(inv) {
   return !['south africa', 'south african', 'za', 'rsa'].includes(c);
 }
 
+/* ── The non-resident declaration ─────────────────────────────────────
+ *
+ * Staff marking a client as a non-resident is what puts this in front of
+ * them: the server decides whether one is owed, and the portal asks on the
+ * next load after that. The WORDING COMES FROM THE SERVER rather than being
+ * written here — it is a signed declaration, and a client must not be shown
+ * one version while another is recorded against their name.
+ *
+ * It is modal and has no close button, because it is a condition of holding
+ * the account rather than a notice. Everything behind it still renders, so
+ * nothing is hidden from them; they simply cannot carry on past it without
+ * answering. Declining leaves it outstanding and says who to talk to — a
+ * client who can no longer declare these things has something to tell us,
+ * and the right next step is a conversation, not a locked screen.
+ */
+async function svcCheckNonResidentDeclaration() {
+  let d;
+  try {
+    d = await API._fetch('GET', 'foreign-funds/my-declaration');
+  } catch (_) { return; }               // offline, or not an investor — ask again next load
+  if (!d || !d.required) return;
+  svcShowNonResidentDeclaration(d);
+}
+
+function svcShowNonResidentDeclaration(d) {
+  const prev = document.getElementById('svc-nrd');
+  if (prev) prev.remove();
+
+  const ov = document.createElement('div');
+  ov.id = 'svc-nrd';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99997;background:rgba(6,10,15,0.82);'
+                   + 'display:flex;align-items:flex-end;justify-content:center;'
+                   + 'padding:0;backdrop-filter:blur(3px)';
+  ov.innerHTML =
+    '<div style="background:#fff;border-radius:18px 18px 0 0;width:100%;max-width:520px;'
+         + 'max-height:92vh;overflow:auto;padding:22px 20px '
+         + 'calc(20px + env(safe-area-inset-bottom, 0px))">'
+      + '<div style="font-weight:800;font-size:1.05rem;margin-bottom:4px">'
+        + _esc(d.title || 'Declaration') + '</div>'
+      + `<div style="font-size:0.82rem;color:#4b5563;line-height:1.55;margin-bottom:14px">`
+        + _esc(d.intro || '') + '</div>'
+      + '<ol style="margin:0 0 16px;padding-left:20px;font-size:0.82rem;line-height:1.6;color:#111">'
+        + (d.clauses || []).map(c => `<li style="margin-bottom:9px">${_esc(c)}</li>`).join('')
+      + '</ol>'
+      + `<div style="font-size:0.7rem;color:#6b7280;margin-bottom:14px">`
+        + 'Version ' + _esc(d.version || '') + ' · the date and wording you agree to are '
+        + 'recorded on your profile.</div>'
+      + '<button id="svc-nrd-agree" class="btn btn--primary" style="width:100%;margin-bottom:8px">'
+        + 'I confirm all of the above</button>'
+      + '<button id="svc-nrd-later" style="width:100%;background:none;border:none;'
+        + 'color:#6b7280;font-size:0.8rem;padding:9px;cursor:pointer">'
+        + 'I cannot confirm this</button>'
+    + '</div>';
+  document.body.appendChild(ov);
+
+  ov.querySelector('#svc-nrd-agree').onclick = async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Saving…';
+    try {
+      await API._fetch('POST', 'foreign-funds/my-declaration', { agreed: true });
+      ov.remove();
+      Toast.success('Thank you — your declaration is on file.');
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = 'I confirm all of the above';
+      Toast.error((err && err.message) || 'Could not save that. Please try again.');
+    }
+  };
+  ov.querySelector('#svc-nrd-later').onclick = () => {
+    ov.remove();
+    Toast.error('We will ask again next time you sign in. If any of this has '
+              + 'changed for you, please contact us so we can help.');
+  };
+}
+
 function renderForeignFundingPanel() {
   const host = document.getElementById('walletForeignPanel');
   if (!host) return;

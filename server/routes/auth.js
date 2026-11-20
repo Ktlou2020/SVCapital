@@ -462,7 +462,15 @@ router.post('/register', registerLimiter, async (req, res) => {
          have not changed. A single hardcoded version for the lot is how a
          widened consent gets filed as though it were the old narrow one. */
       const _acceptances = [
-        { type: 'terms_of_service', flag: termsAccepted, version: '1.0' },
+        /* 1.1 adds clause 27, non-resident (foreign) investors: no US
+           persons, rands only, the Client pays all FX costs and carries the
+           rate risk, own account only, exchange control reporting, manual
+           verification and payout. The version moves because the wording a
+           client accepts has to be the wording recorded against them.
+           Clients who accepted 1.0 are not re-prompted: clause 27 applies
+           only to non-residents, and a non-resident signs the separate
+           declaration that carries the same undertakings. */
+        { type: 'terms_of_service', flag: termsAccepted, version: '1.1' },
         { type: 'privacy_policy',   flag: termsAccepted, version: '1.0' },  // bundled in same checkbox
         { type: 'popia_notice',     flag: popiaAccepted, version: '1.0' },
         { type: 'fica_consent',     flag: ficaConsent,   version: FICA_CONSENT.VERSION },

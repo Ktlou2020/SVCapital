@@ -4,6 +4,7 @@
 'use strict';
 
 const pool   = require('../db/pool');
+const FOREIGN = require('./foreignInvestor');
 const smile     = require('./smileIdentity');
 const stitch    = require('./stitch');
 const datanamix = require('./datanamix');
@@ -62,6 +63,30 @@ function ficaId() {
    ═══════════════════════════════════════════════════════════════════════ */
 async function runFicaCheck(investor, trigger) {
   const { id: investorId, first_name, last_name, id_number, notes, date_of_birth } = investor;
+
+  /* ── A NON-RESIDENT IS NOT CHECKED AUTOMATICALLY ───────────────────
+   * Refused here rather than filtered out of four queries — the nightly
+   * sweep, the console's "run due checks", the on-deposit trigger and
+   * whatever calls this next all arrive through this function, and a
+   * predicate repeated in four SELECTs is three places to forget it.
+   *
+   * It is not a policy preference. The automated path reads Home Affairs,
+   * which knows South African ID numbers and nothing else, so run against a
+   * passport holder living abroad it answers "not found" — which looks
+   * exactly like a real failure. A client whose documents are perfectly in
+   * order would get a FICA failure on their record and somebody would have
+   * to work out why. Their review is done by hand instead.
+   *
+   * The refusal is RECORDED, not silent: last_auto_fica_check is left alone
+   * so nothing reads this as a check that passed, and the reason goes on the
+   * investor where staff will see it. */
+  if (!FOREIGN.automatedFicaAllowed(investor)) {
+    console.log(`[FICA] ${investorId} is a non-resident — automated check skipped, manual review`);
+    await pool.query(
+      `UPDATE investors SET fica_auto_status = 'manual', updated_at = NOW() WHERE id = $1`,
+      [investorId]).catch(() => {});
+    return { skipped: true, manual: true, reason: FOREIGN.MANUAL_FICA_REASON };
+  }
 
   // Prefer doc_subtype from kyc_documents if available; fall back to legacy notes field
   let isPassport = (notes || '').includes('DocType: Passport');

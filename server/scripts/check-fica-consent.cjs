@@ -216,9 +216,17 @@ const db = new Pool({
     ok(`stamped ${CONSENT.VERSION}, the wording they were shown`,
        fica && fica.document_version === CONSENT.VERSION,
        fica && fica.document_version);
-    ok('while the unchanged documents stay on 1.0',
-       rowsGood.filter(r => r.document_type !== 'fica_consent')
-               .every(r => r.document_version === '1.0'),
+    /* EACH DOCUMENT CARRIES ITS OWN VERSION, which is the point of this
+       pair of assertions: the FICA consent moved to 2.0 when its wording
+       widened, and the terms moved to 1.1 when clause 27 was added for
+       non-resident investors. A single hardcoded version for the lot is how
+       a widened consent gets filed as though it were the old narrow one. */
+    const vOf = t => (rowsGood.find(r => r.document_type === t) || {}).document_version;
+    ok('the terms are stamped 1.1, the version that carries clause 27',
+       vOf('terms_of_service') === '1.1', String(vOf('terms_of_service')));
+    ok('and the documents that have not changed stay on 1.0',
+       ['privacy_policy', 'popia_notice', 'risk_disclaimer']
+         .every(t => vOf(t) === '1.0'),
        JSON.stringify(rowsGood));
 
     console.log('\na registration that declines');
