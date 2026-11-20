@@ -374,6 +374,20 @@
     .field-hint  { font-size: 0.69rem; color: var(--text-dim); margin-top: 2px; }
     .field-error { font-size: 0.69rem; color: var(--red);      margin-top: 2px; display: none; }
 
+    /* The US person declaration — two choices, each a target big enough for
+       a thumb, because this is answered on a phone as often as anywhere. */
+    .us-person-choice {
+      display: flex; align-items: center; gap: 9px; cursor: pointer;
+      padding: 11px 13px; border: 1px solid var(--border, #d7dce3);
+      border-radius: 9px; font-size: 0.82rem; line-height: 1.3;
+      background: #fff; transition: border-color .15s, background .15s;
+    }
+    .us-person-choice:hover { border-color: #eda5ff; }
+    .us-person-choice input { accent-color: #eda5ff; flex: 0 0 auto; margin: 0; }
+    .us-person-choice:has(input:checked) { border-color: #eda5ff; background: rgba(237,165,255,0.08); }
+    /* :has() is not everywhere yet, and the radio itself is always visible,
+       so an older browser loses the highlight and nothing else. */
+
     /* Password strength */
     .pw-strength { margin-top: 5px; }
     .pw-strength-bar { height: 4px; border-radius: 2px; background: #e5e7eb; overflow: hidden; margin-bottom: 4px; }
@@ -1377,6 +1391,47 @@
             </select>
           </div>
         </div>
+
+        <!-- The US person declaration.
+             Asked of every international applicant and required, because the
+             declaration IS the control: an account opened without one has
+             nothing behind it. Answering yes ends the signup — the server
+             refuses before anything is written, so there is no half-created
+             US person on the platform.
+
+             Deliberately NOT a tick box. A box you tick to confirm you are
+             not something is read as consent and clicked through; two
+             buttons make it a question that has to be answered. -->
+        <div class="form-group" id="usPersonGroup">
+          <label class="form-label">US citizen or US person? <span>*</span></label>
+          <div style="font-size:0.78rem;color:#6b7280;line-height:1.5;margin:4px 0 10px">
+            Are you a US citizen (including a dual citizen) or a US person for
+            tax purposes — a US resident, a green-card holder, or acting for a
+            US-registered entity?
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <label class="us-person-choice" style="flex:1 1 150px">
+              <input type="radio" name="usPerson" value="no" />
+              <span>No, I am neither</span>
+            </label>
+            <label class="us-person-choice" style="flex:1 1 150px">
+              <input type="radio" name="usPerson" value="yes" />
+              <span>Yes, I am one of these</span>
+            </label>
+          </div>
+          <div class="field-hint" id="usPersonHint">
+            We are not able to accept investments from US citizens or US persons.
+          </div>
+          <div id="usPersonBlock" style="display:none;margin-top:10px;padding:12px 14px;
+               background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.3);
+               border-radius:8px;font-size:0.8rem;line-height:1.55;color:#b91c1c">
+            <strong>We cannot open an account for you.</strong><br />
+            SV Capital does not accept investments from US citizens or US persons,
+            including dual citizens, US residents, green-card holders and
+            US-registered entities. Nothing you have entered will be saved.
+            If you believe this is a mistake, please contact us.
+          </div>
+        </div>
       </div>
 
       <div class="form-group">
@@ -2368,6 +2423,17 @@ function validateStep(n) {
         return showError('Your passport has expired — please use a valid, unexpired passport.', 'passportExpiry');
       if (!nat)     return showError('Please select your nationality.', 'nationality');
       if (!country) return showError('Please select your country of residence.', 'countryResidence');
+      /* THE DECLARATION IS THE CONTROL, so an unanswered question is refused
+         rather than read as a no. The server refuses it too — this is the
+         step that says so before four more screens of work. */
+      const us = usPersonValue();
+      if (us === null)
+        return showError('Please answer the US citizen and US person question.', 'usPersonGroup');
+      if (us === true) {
+        showUsPersonBlock();
+        return showError('We are not able to accept investments from US citizens or US persons.',
+                         'usPersonGroup');
+      }
     }
 
     const pw    = v('password'), pw2 = v('passwordConfirm'),
@@ -2412,6 +2478,38 @@ function validateStep(n) {
 }
 
 function v(id) { return document.getElementById(id)?.value?.trim() || ''; }
+
+/* The US person declaration.
+ *
+ * Three answers, not two: true is a refusal, false is the declaration, and
+ * NULL is "has not answered" — which is the one the validation has to catch,
+ * because a missing declaration is not a negative one. */
+function usPersonValue() {
+  const picked = document.querySelector('input[name="usPerson"]:checked');
+  if (!picked) return null;
+  return picked.value === 'yes';
+}
+
+function showUsPersonBlock() {
+  const block = document.getElementById('usPersonBlock');
+  const hint  = document.getElementById('usPersonHint');
+  if (block) block.style.display = '';
+  if (hint)  hint.style.display  = 'none';
+}
+
+function hideUsPersonBlock() {
+  const block = document.getElementById('usPersonBlock');
+  const hint  = document.getElementById('usPersonHint');
+  if (block) block.style.display = 'none';
+  if (hint)  hint.style.display  = '';
+}
+
+/* Answering yes says so straight away rather than at the end of the step.
+   Nothing is sent either way — the refusal happens before any request. */
+document.addEventListener('change', e => {
+  if (!e.target || e.target.name !== 'usPerson') return;
+  if (usPersonValue() === true) showUsPersonBlock(); else hideUsPersonBlock();
+});
 
 function showError(msg, field) {
   _FT.validationError(currentStep, msg, field);
@@ -2812,6 +2910,11 @@ async function _doSubmit(skippedFica) {
          now, and the nightly FICA sweep reads it. An SA client is not asked —
          a 13-digit SA ID number is the answer — and the server defaults them. */
       nationality:   isSA ? undefined : (v('nationality') || undefined),
+      /* Residency, not nationality, is what the Reserve Bank's reporting
+         turns on. The form has always required this of an international
+         client and sent it only inside the notes string. */
+      countryOfResidence: isSA ? 'South Africa' : (v('countryResidence') || undefined),
+      usPerson:           isSA ? undefined : usPersonValue(),
       streetAddress: v('streetAddress') || undefined,
       suburb:        v('suburb') || undefined,
       city:          v('city') || undefined,

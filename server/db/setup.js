@@ -148,6 +148,28 @@ CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
 CREATE INDEX IF NOT EXISTS idx_transactions_investor_id ON transactions(investor_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_reference ON transactions(reference);
 
+/* What is on file for one non-resident inflow.
+ *
+ * The process names four things to keep for every payment from abroad: the
+ * payment confirmation or card record, FNB's inward BOP record, the signed
+ * agreement and the FICA documents. They live in four different places and
+ * nothing said whether a given payment had all four — so this is the record
+ * that it was checked, by whom and when, per payment rather than per client.
+ *
+ * It is a TICK, not a file store. The documents themselves stay where they
+ * already are; what did not exist was anywhere to say "this inflow is
+ * complete", which is the thing an audit asks for.
+ */
+CREATE TABLE IF NOT EXISTS foreign_inflow_files (
+  transaction_id TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  item           TEXT NOT NULL,
+  noted_by       TEXT,
+  noted_email    TEXT,
+  noted_at       TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (transaction_id, item)
+);
+CREATE INDEX IF NOT EXISTS foreign_inflow_files_txn_idx ON foreign_inflow_files(transaction_id);
+
 /* The achieved return for ONE YEAR of a pool's life, posted by a director.
 
    Solar distributes on each anniversary of an investment, so a seven-year
@@ -3204,6 +3226,39 @@ async function autoSetup() {
           ALTER TABLE stokvel_withdrawal_requests DROP CONSTRAINT IF EXISTS stokvel_withdrawal_requests_amount_check;
           BEGIN ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_amount_chk CHECK (amount > 0 OR kind = 'mandate'); EXCEPTION WHEN duplicate_object THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* ── The foreign investor funds process ────────────────────────
+             Residency, not nationality, is what the Reserve Bank's reporting
+             turns on: a South African living in London is a non-resident and
+             a Kenyan living here is not. The form has always asked for a
+             country of residence and only ever kept it inside a notes
+             string, so there was nothing to filter, report or gate on. */
+          BEGIN ALTER TABLE investors ADD COLUMN country_of_residence TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investors ADD COLUMN residency_status TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* The US person declaration. false is the only value that can
+             exist for a live account — a true answer is refused at signup
+             before an account is created — but the column holds a boolean
+             rather than a flag because "declared they are not" and "was
+             never asked" are different facts, and only the first is
+             evidence. The wording agreed to is stored with it, as the FICA
+             consent stores its own version. */
+          BEGIN ALTER TABLE investors ADD COLUMN us_person BOOLEAN; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investors ADD COLUMN us_person_declared_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investors ADD COLUMN us_person_declaration_version TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* Where a non-resident is paid at maturity. The platform has only
+             ever held a local bank name and account number, which cannot
+             address a payment out of the country. */
+          BEGIN ALTER TABLE investors ADD COLUMN foreign_bank_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investors ADD COLUMN foreign_bank_country TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investors ADD COLUMN foreign_swift_bic TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investors ADD COLUMN foreign_iban TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investors ADD COLUMN foreign_account_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investors ADD COLUMN foreign_payout_currency TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* What a cross-border payment WAS, as reported to the Reserve
+             Bank. An investment coded as a loan, a gift or "other" is not a
+             filing error to tidy up later — it is a different transaction on
+             the record. */
+          BEGIN ALTER TABLE transactions ADD COLUMN bop_category TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE transactions ADD COLUMN payout_currency TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           /* When a minor's account was closed and its balance swept back to
              the parent. It lives HERE and not with the early ALTERs beside
              transactions.sub_account_id: that block runs before sub_accounts
@@ -5171,6 +5226,10 @@ async function autoSetup() {
          that comes back after somebody dismissed the idea of it is worse than
          no notice at all. */
       const NOTICES = [
+        { id: 'ANN-2026-FOREIGN-FUNDS', area: 'both', icon: 'fa-globe',
+          title: 'The Foreign Investor Funds Process is now built into the platform',
+          body: 'The process dated 17 November 2026 lived in a document, which meant every step of it depended on somebody remembering it. It is now in the platform, in six places. RESIDENCY IS A REAL FIELD. The signup form has always asked an international client for their country of residence and then kept it only inside a notes string, so there was nothing to filter or report on. It is a column now, and every registration is marked resident or non-resident. Residency, NOT nationality, is what the Reserve Bank’s reporting turns on — a South African living in London is a non-resident and a Kenyan living here is not — so staff can override the status on the client record and nothing reads the nationality field for this. THE US PERSON QUESTION IS ASKED AT SIGNUP and refused there. An international applicant must answer before an account is created, and answering yes ends the signup: nothing is saved, no account exists, so there is no half-onboarded US person in the console. An unanswered question is refused as well — a missing declaration is not a negative one, and the declaration is the control. For everyone who answers no, the answer is KEPT with the date and the wording it was made against, because a declaration you cannot produce is not evidence. A FOREIGN CLIENT GETS THE RIGHT PAYMENT DETAILS. A non-resident sees a second panel on the wallet screen with the SWIFT code and branch code alongside the account number, a line saying South Africa does not use IBAN and what to give a bank that asks for one, and the four rules in plain words: rands only, you pay all FX costs both ways, pay from your own account or card, and your account number is always the reference. A South African client sees none of it. CROSS-BORDER PAYMENTS ARE CODED AND FILED. On a non-resident’s record there is a Foreign Investor Funds panel listing every payment in and out, what each was reported as, and whether its file is complete. An inflow can only be coded "Investment by a non-resident individual" — it is a choice of one, not a text box, because an investment filed as a loan, a gift or "other" is a different transaction on the record and not a filing detail to correct later. The four things to keep for each inflow are ticked off there: payment confirmation or card record, FNB inward BOP record, signed agreement, FICA documents. A PAYOUT CARRIES ITS CURRENCY AND ITS CODE. A non-resident’s withdrawal records the currency the investor chose and goes out under 510/02 – Disinvestment by a non-resident individual – other, both on the transaction itself, so the instruction given to the bank can be reconstructed months later from the row rather than from an email. Their bank outside South Africa — SWIFT, IBAN where the country uses one, account number and currency — is captured on the client record. ONE THING THIS DOES NOT DO: international self-registration is still closed, so a foreign client reaching the signup page still sees the waitlist. The gate and everything behind it is built and will apply the moment that opens; until then it applies to accounts staff open.',
+          where: 'Console: Clients → open a non-resident → Foreign Investor Funds, under Bank Account. Client portal: Wallet → Paying from outside South Africa, shown to non-residents only. Audit trail: “investor.foreign_funds_updated” and “transaction.bop_coded”.' },
         { id: 'ANN-2026-SA-CLOSE-MINOR', area: 'admin', icon: 'fa-circle-xmark',
           title: 'A minor’s account can be closed, and its wallet balance goes back to the parent',
           body: 'THERE WAS NO WAY TO CLOSE ONE. A minor account opened by a parent stayed open for good, and if it still held money there was nothing to do with it short of editing a balance by hand — which writes no transaction and leaves nothing to show a client where their money went. OPEN THE ACCOUNT AND THERE IS NOW A CLOSE PANEL. It names the balance and the person it is going to BEFORE you confirm, and the confirmation repeats both, because “are you sure” over an unnamed figure is not a decision anybody can make. THE MONEY GOES TO WHOEVER OPENED THE ACCOUNT — the parent account holder — and nowhere else. That is not a choice the screen offers: any other destination would be a staff member deciding where a client’s money should land. Two transactions are written, a transfer out of the minor’s account and a transfer in to the parent’s wallet, so both statements show it and the audit trail records who closed the account. MINOR ACCOUNTS ONLY. There is no Close panel on a group, trust or business account, and the server refuses those as well, not just the button: a stokvel is held by its members under a mandate, and a trust or business is a separate legal person — sweeping any of them into the parent’s personal wallet would be moving somebody else’s money on one person’s say-so. IT REFUSES WHILE INVESTMENTS ARE LIVE, and says how many are in the way. The wallet balance is only the uninvested part; capital sitting in an open pool is not there to sweep, and an investment belonging to a closed account is a loose end nobody would find. Mature or withdraw them first. CLOSING IS ONE WAY and the panel says so. A second click on a stale page cannot pay the balance out twice — the account is locked while it is being closed and an already-closed account is refused.',

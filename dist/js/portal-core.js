@@ -2388,6 +2388,94 @@ function _refreshWalletUI(balance) {
   }
 }
 
+/* ── Paying in from outside South Africa ──────────────────────────────
+ *
+ * Source: the Foreign Investor Funds Process. These figures are the SERVER'S
+ * — server/services/foreignInvestor.js holds them, and
+ * check-foreign-investor-funds asserts this copy still agrees with it,
+ * because a bank account number that is right in one of two places is the
+ * failure this duplication invites. portal-core cannot require() the service,
+ * so the copy is held honest rather than avoided.
+ *
+ * Shown only to a non-resident. A South African client paying from a South
+ * African bank does not need a SWIFT code, and the four rules below are about
+ * money crossing a border.
+ */
+/* The figures, inside a function: portal-core may declare no top-level
+   state and no load-time statements, because it is loaded alongside scripts
+   that would redeclare a shared const. check-portal-split holds that, and it
+   caught these as consts on the first attempt. */
+function _svcForeignFunding() {
+  return {
+    bank: {
+      bank:          'First National Bank (FNB)',
+      accountName:   'SmartVest Financial Services',
+      accountNumber: '63058190794',
+      branchCode:    '250655',
+      swift:         'FIRNZAJJ',
+    },
+    rules: [
+      'Send rands (ZAR) only. Convert on your side — we cannot accept foreign currency, crypto or stablecoins.',
+      'You pay all foreign exchange costs, both in and out. Returns are calculated in rands, so the exchange rate risk is yours.',
+      'Pay from your own account or card. We cannot accept a payment from anybody else, and a third-party payment has to be sent back.',
+      'Use your account number as the payment reference, every time.',
+    ],
+    noIban: 'South Africa does not use IBAN. Give your bank the account number and the '
+          + 'SWIFT code, and the branch code if it asks for a sort code.',
+  };
+}
+
+/* residency_status is what staff set; country_of_residence is what the client
+   answered at signup. Neither being set reads as resident, because the
+   platform was South-African-only and guessing the other way would show every
+   existing client a panel about sending money from abroad. */
+function svcIsNonResident(inv) {
+  if (!inv) return false;
+  const st = String(inv.residency_status || '').trim().toLowerCase();
+  if (st === 'non_resident') return true;
+  if (st === 'resident')     return false;
+  const c = String(inv.country_of_residence || '').trim().toLowerCase();
+  if (!c) return false;
+  return !['south africa', 'south african', 'za', 'rsa'].includes(c);
+}
+
+function renderForeignFundingPanel() {
+  const host = document.getElementById('walletForeignPanel');
+  if (!host) return;
+  if (!svcIsNonResident(PORTAL.investor)) { host.style.display = 'none'; host.innerHTML = ''; return; }
+
+  const F   = _svcForeignFunding();
+  const B   = F.bank;
+  const ref = _esc(PORTAL.investor?.id || '');
+  const row = (label, value, mono) =>
+    `<div class="info-row"><span class="info-row__label">${_esc(label)}</span>`
+    + `<span class="info-row__value"${mono ? ' style="font-family:monospace"' : ''}>${_esc(value)}</span></div>`;
+
+  host.style.display = '';
+  host.innerHTML =
+    '<div class="panel__header"><span class="panel__title">'
+      + '<i class="fa-solid fa-globe" style="margin-right:7px;color:#eda5ff"></i>'
+      + 'Paying from outside South Africa</span></div>'
+    + '<div class="panel__body">'
+      + '<div class="info-list">'
+        + row('Bank', B.bank)
+        + row('Account Name', B.accountName)
+        + row('Account No.', B.accountNumber, true)
+        + row('Branch Code', B.branchCode, true)
+        + row('SWIFT / BIC', B.swift, true)
+        + `<div class="info-row"><span class="info-row__label">Reference</span>`
+          + `<span class="info-row__value text-gold">${ref}</span></div>`
+      + '</div>'
+      + `<div style="font-size:0.74rem;color:#6b7280;margin-top:10px;padding:9px 11px;`
+        + `background:#F0F2F5;border-radius:6px;line-height:1.5">`
+        + `<i class="fa-solid fa-circle-info" style="color:var(--blue)"></i> `
+        + _esc(F.noIban) + '</div>'
+      + '<ul style="margin:12px 0 0;padding-left:18px;font-size:0.76rem;line-height:1.6;color:#4b5563">'
+        + F.rules.map(r => `<li style="margin-bottom:5px">${_esc(r)}</li>`).join('')
+      + '</ul>'
+    + '</div>';
+}
+
 async function loadWallet() {
   if (!PORTAL.investor) await loadPortalData();
   document.getElementById('walletBalance').textContent = Utils.rand(PORTAL.investor?.wallet_balance || 0);
@@ -2397,6 +2485,7 @@ async function loadWallet() {
   // Set EFT reference to actual investor ID
   const eftRef = document.getElementById('walletEftRef');
   if (eftRef) eftRef.textContent = PORTAL.investor?.id || DEMO_INVESTOR_ID;
+  renderForeignFundingPanel();
 
   _loadAutoTopUpCard().catch(() => {});
   renderWalletReadinessPanel();

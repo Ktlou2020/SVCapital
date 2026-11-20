@@ -2777,6 +2777,321 @@ async function _saveInvProfile(btn) {
   }
 }
 
+/* ── The foreign investor funds process, in the client record ─────────
+ *
+ * Shown only for a non-resident, because every line of it is about money
+ * crossing a border. Residency is what the Reserve Bank's reporting turns
+ * on, NOT nationality — a South African living in London is a non-resident
+ * and a Kenyan living here is not — so this reads country of residence and
+ * the status staff can override, and never the nationality column.
+ */
+/* The edit form, built here rather than as another static block in
+   admin/index.html: it is one screen used from one place, and a dialog that
+   lives beside the code that opens it cannot drift from it. */
+function editForeignFunds(investorId) {
+  const inv = (STATE.investors || []).find(i => i.id === investorId);
+  if (!inv) return;
+  const prev = document.getElementById('svc-ff-modal');
+  if (prev) prev.remove();
+
+  const field = (id, label, value, placeholder, hint) => `
+    <div style="margin-bottom:10px">
+      <label class="form-label" for="${id}" style="font-size:0.74rem">${_esc(label)}</label>
+      <input class="form-input" id="${id}" value="${_esc(value || '')}"
+             placeholder="${_esc(placeholder || '')}" autocomplete="off" />
+      ${hint ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">${_esc(hint)}</div>` : ''}
+    </div>`;
+
+  const ov = document.createElement('div');
+  ov.id = 'svc-ff-modal';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.55);'
+                   + 'display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML = `
+    <div style="background:var(--bg-card,#fff);border-radius:14px;max-width:460px;width:100%;
+                max-height:88vh;overflow:auto;padding:20px 22px">
+      <div style="font-weight:800;font-size:1rem;margin-bottom:2px">Foreign investor funds</div>
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px">
+        ${_esc(`${inv.first_name || ''} ${inv.last_name || ''}`.trim())} · ${_esc(inv.id)}</div>
+
+      <div style="margin-bottom:10px">
+        <label class="form-label" for="ff-residency" style="font-size:0.74rem">Residency</label>
+        <select class="form-select" id="ff-residency">
+          <option value="resident">Resident (South Africa)</option>
+          <option value="non_resident">Non-resident</option>
+        </select>
+        <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">
+          Residency decides the reporting, not nationality.</div>
+      </div>
+      ${field('ff-country', 'Country of Residence', inv.country_of_residence, 'United Kingdom')}
+
+      <div style="font-size:0.74rem;font-weight:800;margin:14px 0 8px;color:var(--text-muted)">
+        PAYOUT ACCOUNT (OUTSIDE SOUTH AFRICA)</div>
+      ${field('ff-bank', 'Bank', inv.foreign_bank_name, 'Barclays')}
+      ${field('ff-bank-country', 'Bank Country', inv.foreign_bank_country, 'United Kingdom')}
+      ${field('ff-swift', 'SWIFT / BIC', inv.foreign_swift_bic, 'BARCGB22')}
+      ${field('ff-iban', 'IBAN', inv.foreign_iban, 'GB29 NWBK 6016 1331 9268 19',
+              'Where the country uses one. South Africa does not.')}
+      ${field('ff-account', 'Account Number', inv.foreign_account_number, '')}
+      ${field('ff-currency', 'Payout Currency', inv.foreign_payout_currency, 'GBP',
+              'Three letters. The investor chooses this; all conversion costs and bank charges come off the payout.')}
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn--secondary btn--sm"
+                onclick="document.getElementById('svc-ff-modal').remove()">Cancel</button>
+        <button class="btn btn--primary btn--sm" id="ff-save"
+                onclick='_saveForeignFunds(${_esc(JSON.stringify(inv.id))}, this)'>Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  document.getElementById('ff-residency').value =
+    _isNonResidentInvestor(inv) ? 'non_resident' : 'resident';
+}
+
+async function _saveForeignFunds(investorId, btn) {
+  const val = id => (document.getElementById(id)?.value || '').trim();
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+  try {
+    await API._fetch('PATCH', `foreign-funds/investors/${investorId}`, {
+      residencyStatus:       val('ff-residency'),
+      countryOfResidence:    val('ff-country'),
+      foreignBankName:       val('ff-bank'),
+      foreignBankCountry:    val('ff-bank-country'),
+      foreignSwiftBic:       val('ff-swift'),
+      foreignIban:           val('ff-iban'),
+      foreignAccountNumber:  val('ff-account'),
+      foreignPayoutCurrency: val('ff-currency'),
+    });
+    /* The local row is updated so the panel behind the dialog is right
+       without a full reload. */
+    const inv = (STATE.investors || []).find(i => i.id === investorId);
+    if (inv) Object.assign(inv, {
+      residency_status:        val('ff-residency'),
+      country_of_residence:    val('ff-country') || null,
+      foreign_bank_name:       val('ff-bank') || null,
+      foreign_bank_country:    val('ff-bank-country') || null,
+      foreign_swift_bic:       val('ff-swift') || null,
+      foreign_iban:            val('ff-iban') || null,
+      foreign_account_number:  val('ff-account') || null,
+      foreign_payout_currency: val('ff-currency').toUpperCase().slice(0, 3) || null,
+    });
+    Toast.success('Foreign funds details saved.');
+    document.getElementById('svc-ff-modal')?.remove();
+    viewInvestor(investorId);
+  } catch (err) {
+    Toast.error((err && err.message) || 'Could not save.');
+    btn.disabled = false; btn.innerHTML = orig;
+  }
+}
+
+function _isNonResidentInvestor(inv) {
+  if (!inv) return false;
+  const st = String(inv.residency_status || '').trim().toLowerCase();
+  if (st === 'non_resident') return true;
+  if (st === 'resident')     return false;
+  const c = String(inv.country_of_residence || '').trim().toLowerCase();
+  if (!c) return false;
+  return !['south africa', 'south african', 'za', 'rsa'].includes(c);
+}
+
+function _foreignFundsPanel(inv) {
+  if (!_isNonResidentInvestor(inv)) return '';
+  const row = (label, value, mono) =>
+    `<div class="info-row"><span class="info-row__label">${_esc(label)}</span>`
+    + `<span class="info-row__value"${mono ? ' style="font-family:monospace"' : ''}>`
+    + `${_esc(value || '—')}</span></div>`;
+
+  /* The declaration is evidence, so it shows WHEN it was made and against
+     which wording, not just a tick. "Never asked" and "declared they are
+     not" are different facts and the panel says which. */
+  const declared = inv.us_person === false;
+  const usCell = declared
+    ? `<span class="badge badge--green">Declared not a US person</span>`
+      + (inv.us_person_declared_at
+          ? `<span style="font-size:0.7rem;color:var(--text-muted);margin-left:6px">`
+            + `${_esc(Utils.date ? Utils.date(inv.us_person_declared_at) : inv.us_person_declared_at)}`
+            + (inv.us_person_declaration_version ? ` · v${_esc(inv.us_person_declaration_version)}` : '')
+            + `</span>` : '')
+    : inv.us_person === true
+      ? `<span class="badge badge--red">US person — must not be invested</span>`
+      : `<span class="badge badge--yellow">Not declared</span>`
+        + `<span style="font-size:0.7rem;color:var(--text-muted);margin-left:6px">`
+        + `opened before the declaration existed</span>`;
+
+  return `
+    <div class="panel mb-12">
+      <div class="panel__header"><span class="panel__title">
+        <i class="fa-solid fa-globe" style="color:#eda5ff;margin-right:6px"></i>Foreign Investor Funds</span></div>
+      <div class="panel__body">
+        <div class="info-list">
+          ${row('Country of Residence', inv.country_of_residence)}
+          <div class="info-row"><span class="info-row__label">Residency</span>
+            <span class="info-row__value"><span class="badge badge--purple">Non-resident</span></span></div>
+          <div class="info-row"><span class="info-row__label">US Person</span>
+            <span class="info-row__value">${usCell}</span></div>
+        </div>
+        <div style="font-size:0.74rem;font-weight:800;margin:12px 0 6px;color:var(--text-muted)">
+          PAYOUT ACCOUNT (OUTSIDE SOUTH AFRICA)</div>
+        <div class="info-list">
+          ${row('Bank', inv.foreign_bank_name)}
+          ${row('Country', inv.foreign_bank_country)}
+          ${row('SWIFT / BIC', inv.foreign_swift_bic, true)}
+          ${row('IBAN', inv.foreign_iban, true)}
+          ${row('Account No.', inv.foreign_account_number, true)}
+          ${row('Payout Currency', inv.foreign_payout_currency)}
+        </div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;line-height:1.5">
+          Paid out under <strong>510/02 – Disinvestment by a non-resident individual – other</strong>.
+          All conversion costs and bank charges are deducted from the payout.
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn--secondary btn--sm" onclick='editForeignFunds(${_esc(JSON.stringify(inv.id))})'>
+            <i class="fa-solid fa-pen-to-square"></i> Edit</button>
+        </div>
+        ${_foreignFlowsList(inv)}
+      </div>
+    </div>`;
+}
+
+/* The cross-border payments themselves, with how each was reported and
+   whether its file is complete.
+ *
+ * Only money IN and money OUT: an internal transfer, a fee or an investment
+ * placed from a wallet already here never crosses a border and has no BOP
+ * category to carry. Offering one on those rows is how an inflow category
+ * ends up on something that is not an inflow. */
+function _foreignFlowsList(inv) {
+  const rows = (STATE.transactions || [])
+    .filter(t => t.investor_id === inv.id && ['deposit', 'withdrawal'].includes(t.type))
+    .sort((a, b) => new Date(Utils.txnDate(b) || 0) - new Date(Utils.txnDate(a) || 0))
+    .slice(0, 12);
+  if (!rows.length) {
+    return `<div style="font-size:0.74rem;color:var(--text-muted);margin-top:12px">
+              No payments in or out yet.</div>`;
+  }
+  return `
+    <div style="font-size:0.74rem;font-weight:800;margin:14px 0 6px;color:var(--text-muted)">
+      CROSS-BORDER PAYMENTS</div>
+    <div style="border:1px solid var(--border);border-radius:9px;overflow:hidden">
+      ${rows.map(t => {
+        const coded = !!t.bop_category;
+        const isIn  = t.type === 'deposit';
+        return `
+        <div style="display:flex;align-items:center;gap:8px;padding:9px 11px;
+                    border-bottom:1px solid var(--border);flex-wrap:wrap">
+          <div style="flex:1 1 150px;min-width:0">
+            <div style="font-size:0.8rem;font-weight:700">
+              ${isIn ? 'In' : 'Out'} · ${_esc(Utils.rand(t.amount))}
+              ${t.payout_currency ? `<span style="font-size:0.7rem;color:var(--text-muted)"> (${_esc(t.payout_currency)})</span>` : ''}
+            </div>
+            <div style="font-size:0.68rem;color:var(--text-muted);overflow:hidden;
+                        text-overflow:ellipsis;white-space:nowrap">
+              ${_esc(Utils.date ? Utils.date(Utils.txnDate(t)) : '')} · ${_esc(t.reference || t.id)}</div>
+          </div>
+          <span class="badge ${coded ? 'badge--green' : 'badge--yellow'}" style="font-size:0.65rem">
+            ${coded ? _esc(t.bop_category) : 'Not coded'}</span>
+          <button class="btn btn--secondary btn--sm" style="padding:3px 9px;font-size:0.7rem"
+                  onclick='openForeignFlow(${_esc(JSON.stringify(t.id))}, ${isIn})'>
+            Code &amp; file</button>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+/* The four things the process says to keep for every payment from abroad.
+   Named here and on the server; the server refuses an item it does not
+   know, so a typo in one of these is a refusal rather than a tick recorded
+   against nothing. */
+function _foreignFilingItems() {
+  return [
+    { key: 'payment_confirmation', label: 'Payment confirmation or card record' },
+    { key: 'inward_bop_record',    label: 'FNB inward BOP record' },
+    { key: 'signed_agreement',     label: 'Signed investment agreement' },
+    { key: 'fica_documents',       label: 'FICA documents' },
+  ];
+}
+
+async function openForeignFlow(txnId, isInflow) {
+  const prev = document.getElementById('svc-flow-modal');
+  if (prev) prev.remove();
+  const txn = (STATE.transactions || []).find(t => t.id === txnId) || {};
+
+  let onFile = [];
+  try {
+    const got = await API._fetch('GET', `foreign-funds/transactions/${txnId}/files`);
+    onFile = (got.items || []).map(i => i.item);
+  } catch (_) { /* a first visit has nothing on file, which is not an error */ }
+
+  const INFLOW  = 'Investment by a non-resident individual';
+  const OUTFLOW = '510/02 – Disinvestment by a non-resident individual – other';
+  const current = txn.bop_category || '';
+
+  const ov = document.createElement('div');
+  ov.id = 'svc-flow-modal';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.55);'
+                   + 'display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML = `
+    <div style="background:var(--bg-card,#fff);border-radius:14px;max-width:440px;width:100%;
+                max-height:88vh;overflow:auto;padding:20px 22px">
+      <div style="font-weight:800;font-size:1rem;margin-bottom:2px">
+        ${isInflow ? 'Funds arrived' : 'Payout at maturity'}</div>
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px">
+        ${_esc(Utils.rand(txn.amount || 0))} · ${_esc(txn.reference || txnId)}</div>
+
+      <label class="form-label" style="font-size:0.74rem">Reported to the Reserve Bank as</label>
+      <select class="form-select" id="flow-bop">
+        <option value="">Not coded yet</option>
+        <option value="${isInflow ? 'inflow' : 'outflow'}">${_esc(isInflow ? INFLOW : OUTFLOW)}</option>
+      </select>
+      <div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px;line-height:1.5">
+        ${isInflow
+          ? 'An inflow is never coded as a loan, a gift or other — that is a different transaction on the record, not a filing detail.'
+          : 'All conversion costs and bank charges are deducted from the payout.'}
+      </div>
+
+      ${isInflow ? `
+      <div style="font-size:0.74rem;font-weight:800;margin:16px 0 7px;color:var(--text-muted)">ON FILE</div>
+      ${_foreignFilingItems().map(i => `
+        <label style="display:flex;align-items:center;gap:9px;padding:7px 0;font-size:0.8rem;cursor:pointer">
+          <input type="checkbox" class="flow-file" value="${i.key}" ${onFile.includes(i.key) ? 'checked' : ''} />
+          <span>${_esc(i.label)}</span>
+        </label>`).join('')}` : ''}
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn--secondary btn--sm"
+                onclick="document.getElementById('svc-flow-modal').remove()">Cancel</button>
+        <button class="btn btn--primary btn--sm"
+                onclick='_saveForeignFlow(${_esc(JSON.stringify(txnId))}, ${isInflow}, this)'>Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  if (current) document.getElementById('flow-bop').value = isInflow ? 'inflow' : 'outflow';
+}
+
+async function _saveForeignFlow(txnId, isInflow, btn) {
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+  try {
+    const category = document.getElementById('flow-bop').value;
+    const res = await API._fetch('PATCH', `foreign-funds/transactions/${txnId}/bop`, { category });
+    const txn = (STATE.transactions || []).find(t => t.id === txnId);
+    if (txn) txn.bop_category = res.bopCategory || null;
+
+    if (isInflow) {
+      const items = [...document.querySelectorAll('.flow-file:checked')].map(c => c.value);
+      const out = await API._fetch('PUT', `foreign-funds/transactions/${txnId}/files`, { items });
+      Toast.success(out.complete ? 'Coded, and the file is complete.' : 'Saved.');
+    } else {
+      Toast.success('Saved.');
+    }
+    document.getElementById('svc-flow-modal')?.remove();
+    if (txn && txn.investor_id) viewInvestor(txn.investor_id);
+  } catch (err) {
+    Toast.error((err && err.message) || 'Could not save.');
+    btn.disabled = false; btn.innerHTML = orig;
+  }
+}
+
 async function viewInvestor(id) {
   _currentInvestorId = id;
   const inv = STATE.investors.find(i => i.id === id);
@@ -2955,6 +3270,8 @@ async function viewInvestor(id) {
         </div>
       </div>
     </div>
+
+    ${_foreignFundsPanel(inv)}
 
     <!-- Everything the client has uploaded, in one place. Filled by
          _loadClientDocuments() rather than rendered here: the modal opens on

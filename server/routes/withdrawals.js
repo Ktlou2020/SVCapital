@@ -14,6 +14,7 @@ const emailService = require('../services/email');
 const smsService   = require('../services/sms');
 const audit        = require('../services/audit');
 const { recordTransaction, actorFromRequest } = require('../services/ledger');
+const FOREIGN      = require('../services/foreignInvestor');
 
 /* Lazy-load push service and SSE broadcast */
 let _broadcast = null;
@@ -35,7 +36,8 @@ router.post('/request', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'This endpoint is only available to investor accounts.' });
     }
 
-    const { amount, bank_account_number, bank_name, notes, sub_account_id } = req.body;
+    const { amount, bank_account_number, bank_name, notes, sub_account_id,
+            payout_currency } = req.body;
     const numAmount = parseFloat(amount);
     if (!amount || isNaN(numAmount) || numAmount <= 0) {
       return res.status(400).json({ error: 'amount must be a positive number.' });
@@ -179,7 +181,10 @@ router.post('/request', requireAuth, async (req, res) => {
            client who had committed their money until a date got the
            ordinary 48 hours instead, because an absent column reads as no
            date rather than as a missing one. */
-        'SELECT id, first_name, last_name, email, wallet_balance, fica_status, kyc_status, status, withdrawal_date FROM investors WHERE id = $1 FOR UPDATE',
+        'SELECT id, first_name, last_name, email, wallet_balance, fica_status, kyc_status, status, withdrawal_date, '
+        + 'residency_status, country_of_residence, foreign_bank_name, foreign_bank_country, '
+        + 'foreign_swift_bic, foreign_iban, foreign_account_number, foreign_payout_currency '
+        + 'FROM investors WHERE id = $1 FOR UPDATE',
         [investorId]
       );
       if (!row) {
@@ -202,9 +207,30 @@ router.post('/request', requireAuth, async (req, res) => {
       }
 
       const availableAt = await access.availableAt(client, investor);
+      /* ── Paying a non-resident ──────────────────────────────────────
+       * The process says the investor chooses the payout currency and the
+       * payment goes out under BOP 510/02. Both are recorded ON THE ROW,
+       * because the instruction given to the bank has to be reconstructable
+       * from the transaction months later — a currency agreed in an email is
+       * not a record of what was paid.
+       *
+       * The CODE is not a choice: a disinvestment by a non-resident is that
+       * category, and offering a box to type one in is how it becomes
+       * something else. Resident withdrawals carry neither field. */
+      const _foreign = FOREIGN.isNonResident(row);
+      const _payoutCurrency = _foreign
+        ? String(payout_currency || row.foreign_payout_currency || 'ZAR').trim().toUpperCase().slice(0, 3)
+        : null;
+
       await recordTransaction(client, {
         investorId, type: 'withdrawal', amount: numAmount, status: 'pending',
-        reference, description, notes: notes || null, availableAt,
+        reference,
+        description: _foreign
+          ? `${description} — ${_payoutCurrency}, ${FOREIGN.bopLabel(FOREIGN.BOP_OUTFLOW)}`
+          : description,
+        notes: notes || null, availableAt,
+        bopCategory: _foreign ? FOREIGN.bopLabel(FOREIGN.BOP_OUTFLOW) : null,
+        payoutCurrency: _payoutCurrency,
       }, actorFromRequest(req));
 
       await client.query(

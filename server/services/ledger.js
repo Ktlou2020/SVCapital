@@ -174,7 +174,14 @@ function systemActor(jobName) {
 const TX_COLUMNS = ['id', 'investor_id', 'sub_account_id', 'type', 'amount', 'status',
                     'reference', 'description', 'notes', 'investment_id', 'pool_id',
                     'transaction_date', 'referred_investor_id', 'available_at', 'gateway',
-                    'actor_kind', 'actor_id', 'actor_email', 'actor_role', 'actor_ip'];
+                    'actor_kind', 'actor_id', 'actor_email', 'actor_role', 'actor_ip',
+                    /* The foreign investor funds process. How a cross-border
+                       payment was reported, and the currency the investor
+                       chose to be paid in — both belong on the row, because
+                       the instruction given to the bank has to be
+                       reconstructable from the transaction months later. Null
+                       on every domestic row. */
+                    'bop_category', 'payout_currency'];
 
 /* db is a pool or a client already inside a transaction — the caller's
    choice, because most of these writes belong to a BEGIN/COMMIT that also
@@ -214,6 +221,8 @@ async function recordTransaction(db, tx, actor, opts = {}) {
     actor_email: actor.email || null,
     actor_role: actor.role || null,
     actor_ip: actor.ip ? String(actor.ip).slice(0, 80) : null,
+    bop_category:    tx.bopCategory ?? tx.bop_category ?? null,
+    payout_currency: tx.payoutCurrency ?? tx.payout_currency ?? null,
   };
 
   /* An id or a date the caller did not supply is filled by SQL rather than

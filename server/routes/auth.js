@@ -18,6 +18,7 @@ const rateLimit  = require('express-rate-limit');
 const pool       = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const FICA_CONSENT = require('../services/ficaConsent');
+const FOREIGN      = require('../services/foreignInvestor');
 const emailService = require('../services/email');
 const audit        = require('../services/audit');
 
@@ -301,6 +302,10 @@ router.post('/register', registerLimiter, async (req, res) => {
          for it by assuming the answer. */
       termsAccepted = false, ficaConsent = false, popiaAccepted = false,
       streetAddress, suburb, city, postalCode,
+      /* The foreign investor funds process. countryOfResidence decides
+         whether somebody is a non-resident — nationality does not, and the
+         form has always asked for both while storing only the first. */
+      countryOfResidence, usPerson,
     } = req.body;
     const firstName = stripHtml(req.body.firstName);
     const lastName  = stripHtml(req.body.lastName);
@@ -320,6 +325,27 @@ router.post('/register', registerLimiter, async (req, res) => {
     if (!ficaConsent) {
       return res.status(400).json({
         error: 'FICA consent is required before an account can be opened.' });
+    }
+
+    /* ── The US person gate ────────────────────────────────────────────
+     * Refused HERE, before anything is written, because the process says to
+     * decline and declining after the account exists leaves a US person's
+     * details on the platform — which is the thing the rule is avoiding.
+     * Nothing is stored: not the refusal, not the email.
+     *
+     * Only asked of a non-resident, and a non-resident who does not answer
+     * is refused too. A missing answer is not a no: the declaration IS the
+     * control, and an account opened without one has nothing behind it. */
+    const _nonResident = countryOfResidence && !FOREIGN.countryIsSA(countryOfResidence);
+    const _usAnswer    = FOREIGN.usPersonAnswer(usPerson);
+    if (_nonResident) {
+      if (_usAnswer === true) {
+        return res.status(403).json({ error: FOREIGN.US_PERSON_DECLINE });
+      }
+      if (_usAnswer !== false) {
+        return res.status(400).json({
+          error: 'Please answer the US citizen and US person question before continuing.' });
+      }
     }
 
     if (password.length < 10)
@@ -374,12 +400,15 @@ router.post('/register', registerLimiter, async (req, res) => {
               (id, first_name, last_name, email, phone, id_number, province, occupation,
                risk_profile, referred_by, notes, gender, heard_about_us,
                street_address, suburb, address, postal_code, nationality,
+               country_of_residence, residency_status,
+               us_person, us_person_declared_at, us_person_declaration_version,
                investor_type,
                kyc_status, status, wallet_balance, referral_code, date_joined)
             /* 'individual' is not a default here, it is a fact: this form
                signs up a natural person. An entity reaches the platform as a
                sub-account opened by one. */
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+                    $20, $21, $22, CASE WHEN $22::boolean IS NULL THEN NULL ELSE NOW() END, $23,
                     'individual', 'pending', 'active', 0, $19, NOW())
           `, [invId, firstName.trim(), lastName.trim(),
               email.toLowerCase().trim(), phone || null,
@@ -399,7 +428,18 @@ router.post('/register', registerLimiter, async (req, res) => {
                  An SA registration sends no nationality and gets the same
                  answer its ID number already gives. */
               stripHtml(nationality) || 'South African',
-              code]);
+              code,
+              /* $20–$23. Residency is recorded for EVERY registration, not
+                 only foreign ones: "resident, and here is the country they
+                 said" is a fact worth holding, and leaving it blank for South
+                 Africans would make the column mean "foreign" rather than
+                 "where they live". The US answer is only ever false here —
+                 true was refused above, before anything was written. */
+              stripHtml(countryOfResidence) || null,
+              (countryOfResidence && !FOREIGN.countryIsSA(countryOfResidence))
+                ? FOREIGN.NON_RESIDENT : FOREIGN.RESIDENT,
+              FOREIGN.usPersonAnswer(usPerson),
+              FOREIGN.usPersonAnswer(usPerson) === null ? null : FOREIGN.US_PERSON_VERSION]);
           break;
         } catch (insErr) {
           const clash = insErr.code === '23505' &&
