@@ -441,6 +441,48 @@ console.log('\nand the form offers every country, from one list');
      'otherwise the address block and the banner show whatever the markup '
      + 'happened to carry, not what the default country means');
 
+  /* A non-resident is visible without opening anything, and findable. */
+  ok('THE CLIENT HEADER CARRIES A NON-RESIDENT TAG',
+     /NON-RESIDENT\$\{inv\.country_of_residence/.test(read('admin/js/admin.js')),
+     'everything that follows from it — manual FICA, BOP coding, the '
+     + 'declaration — was invisible until somebody scrolled to a panel');
+  ok('and the clients list shows it on the row',
+     /Non-resident<\/span><\/div>` : ''\}/.test(read('admin/js/admin.js')),
+     'a tag you can only see after opening the client is not a tag');
+  ok('AND IT CAN BE FILTERED ON',
+     /id="investorResidencyFilter"/.test(read('admin/index.html')),
+     'admin/index.html');
+  ok('the filter reads residency the same way everything else does',
+     /matchRs[\s\S]{0,160}_isNonResidentInvestor\(inv\)/.test(strip(read('admin/js/admin.js'))),
+     'filtering on the column alone misses every client who registered '
+     + 'before the column existed');
+  ok('and the choice is remembered with the other filters',
+     /\{ q, st, ky, ty, pv, lo, rs, so \}/.test(read('admin/js/admin.js')),
+     'a filter that resets on every visit is one nobody uses twice');
+
+  /* The console offers the same list, and does not carry its own. */
+  const ADMIN2 = strip(read('admin/js/admin.js'));
+  ok('THE CONSOLE ASKS THE SERVER FOR THE COUNTRIES',
+     /foreign-funds\/reference/.test(ADMIN2) && /_foreignCountries/.test(ADMIN2),
+     'a console offering countries the form does not, or missing ones it '
+     + 'does, is two answers to where somebody lives');
+  ok('and does not keep a list of its own',
+     !/'Zimbabwe'[\s\S]{0,200}'Namibia'/.test(ADMIN2)
+     && (ADMIN2.match(/'United Kingdom'/g) || []).length < 3,
+     'a second copy is the thing this is avoiding');
+  ok('the country of residence is a dropdown, not a text box',
+     /countryField\('ff-country'/.test(ADMIN2),
+     'it was a free text field, so "UK", "U.K." and "United Kingdom" were '
+     + 'three different countries to anything reading the column');
+  ok('and so is the bank country',
+     /countryField\('ff-bank-country'/.test(ADMIN2), 'admin/js/admin.js');
+  ok('with a text box kept for when the list cannot be fetched',
+     /if \(!countries\) return field\(/.test(ADMIN2),
+     'an empty dropdown is worse than typing it by hand');
+  ok('and the endpoint really serves it',
+     /countries:\s+COUNTRIES\.NAMES/.test(strip(read('server/routes/foreignFunds.js'))),
+     'server/routes/foreignFunds.js');
+
   /* THE DRIFT THIS IS REALLY FOR. The FICA mapper used to be a hand-kept
      mirror of the old thirty, so a nationality added to the form and not to
      the map throws on a client whose documents are fine. */

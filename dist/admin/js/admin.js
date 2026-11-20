@@ -2219,6 +2219,7 @@ function renderInvestorsTable() {
       </td>
       <td style="overflow:hidden">
         ${typeBadge}
+        ${_isNonResidentInvestor(inv) ? `<div style="margin-top:3px"><span style="font-size:0.6rem;padding:1px 6px;border-radius:100px;background:rgba(56,189,248,0.16);color:#38bdf8;white-space:nowrap;font-weight:700" title="Non-resident${inv.country_of_residence ? ` — ${_esc(inv.country_of_residence)}` : ''}"><i class="fa-solid fa-globe" style="margin-right:3px"></i>Non-resident</span></div>` : ''}
         ${saKinds.length ? `<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:2px">${
           saKinds.map(k => `<span style="font-size:0.6rem;padding:1px 5px;border-radius:100px;background:rgba(237,165,255,0.14);color:#eda5ff;white-space:nowrap" title="Sub-account opened">${_esc(_subAccountKindLabel(k))}</span>`).join('')
         }</div>` : ''}
@@ -2335,6 +2336,7 @@ function setupInvestorFilters() {
   const typeF   = document.getElementById('investorTypeFilter');
   const provF   = document.getElementById('investorProvinceFilter');
   const loginF  = document.getElementById('investorLoginFilter');
+  const resF    = document.getElementById('investorResidencyFilter');
   const sortSel = document.getElementById('investorSortOrder');
 
   // Restore saved filter state
@@ -2346,6 +2348,7 @@ function setupInvestorFilters() {
     if (saved.ty && typeF) typeF.value = saved.ty;
     if (saved.pv) provF.value   = saved.pv;
     if (saved.lo && loginF) loginF.value = saved.lo;
+    if (saved.rs && resF) resF.value = saved.rs;
     if (saved.so && sortSel) sortSel.value = saved.so;
   }
 
@@ -2356,9 +2359,10 @@ function setupInvestorFilters() {
     const ty = typeF ? typeF.value : '';
     const pv = provF.value;
     const lo = loginF ? loginF.value : '';
+    const rs = resF ? resF.value : '';
     const so = sortSel ? sortSel.value : 'date_desc';
     const loginSet = STATE.investorLoginSet || new Set();
-    STATE.filters.investors = { q, st, ky, ty, pv, lo, so };
+    STATE.filters.investors = { q, st, ky, ty, pv, lo, rs, so };
     filteredInvestors = STATE.investors.filter(inv => {
       const name = `${inv.first_name||''} ${inv.last_name||''}`.toLowerCase();
       const matchQ  = !q  || name.includes(q)
@@ -2380,7 +2384,14 @@ function setupInvestorFilters() {
       const matchLo = !lo
         || (lo === 'no_login'  && !loginSet.has(inv.id))
         || (lo === 'has_login' &&  loginSet.has(inv.id));
-      return matchQ && matchSt && matchKy && matchTy && matchPv && matchLo;
+      /* Residency is read the same way everywhere: the status staff set
+         wins, and where it was never set the country of residence decides.
+         Filtering on the column alone would miss every client who registered
+         before the column existed. */
+      const matchRs = !rs
+        || (rs === 'non_resident' ?  _isNonResidentInvestor(inv)
+                                  : !_isNonResidentInvestor(inv));
+      return matchQ && matchSt && matchKy && matchTy && matchPv && matchLo && matchRs;
     });
 
     // Sort
@@ -2438,7 +2449,7 @@ function setupInvestorFilters() {
   if (sortSel) sortSel.addEventListener('change', filter);
 
   // Apply saved filters immediately if any
-  if (saved && (saved.q || saved.st || saved.ky || saved.pv || saved.lo || saved.so)) filter();
+  if (saved && (saved.q || saved.st || saved.ky || saved.pv || saved.lo || saved.rs || saved.so)) filter();
 }
 
 /* Closing a minor's account.
@@ -2788,11 +2799,47 @@ async function _saveInvProfile(btn) {
 /* The edit form, built here rather than as another static block in
    admin/index.html: it is one screen used from one place, and a dialog that
    lives beside the code that opens it cannot drift from it. */
-function editForeignFunds(investorId) {
+/* The country list, fetched once and kept.
+ *
+ * NOT a copy in this file. It is the same list the sign-up form is generated
+ * from — server/services/countries.js, through /api/foreign-funds/reference —
+ * because a console offering countries the form does not, or missing ones it
+ * does, is two answers to where somebody lives. If the request fails the
+ * field falls back to a plain text box rather than an empty dropdown: a
+ * staff member who cannot type the country at all is worse off than one
+ * typing it by hand. */
+let _foreignCountryList = null;
+async function _foreignCountries() {
+  if (_foreignCountryList) return _foreignCountryList;
+  try {
+    const ref = await API._fetch('GET', 'foreign-funds/reference');
+    if (Array.isArray(ref.countries) && ref.countries.length) _foreignCountryList = ref.countries;
+  } catch (_) { /* falls back below */ }
+  return _foreignCountryList;
+}
+
+async function editForeignFunds(investorId) {
   const inv = (STATE.investors || []).find(i => i.id === investorId);
   if (!inv) return;
   const prev = document.getElementById('svc-ff-modal');
   if (prev) prev.remove();
+
+  const countries = await _foreignCountries();
+
+  /* A select where the list is known, a text box where it is not. Either way
+     the id is the same, so the save below does not care which it got. */
+  const countryField = (id, label, value, hint) => {
+    if (!countries) return field(id, label, value, 'United Kingdom', hint);
+    const opts = ['<option value="">Select country</option>']
+      .concat(countries.map(c =>
+        `<option${c === value ? ' selected' : ''}>${_esc(c)}</option>`)).join('');
+    return `
+    <div style="margin-bottom:10px">
+      <label class="form-label" for="${id}" style="font-size:0.74rem">${_esc(label)}</label>
+      <select class="form-select" id="${id}">${opts}</select>
+      ${hint ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">${_esc(hint)}</div>` : ''}
+    </div>`;
+  };
 
   const field = (id, label, value, placeholder, hint) => `
     <div style="margin-bottom:10px">
@@ -2807,9 +2854,9 @@ function editForeignFunds(investorId) {
   ov.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.55);'
                    + 'display:flex;align-items:center;justify-content:center;padding:20px';
   ov.innerHTML = `
-    <div style="background:var(--bg-card,#fff);border-radius:14px;max-width:460px;width:100%;
-                max-height:88vh;overflow:auto;padding:20px 22px">
-      <div style="font-weight:800;font-size:1rem;margin-bottom:2px">Foreign investor funds</div>
+    <div style="background:var(--bg-card,#fff);color:var(--text,#111);border-radius:14px;
+                max-width:460px;width:100%;max-height:88vh;overflow:auto;padding:20px 22px">
+      <div style="font-weight:800;font-size:1.05rem;margin-bottom:3px;color:var(--text,#111)">Foreign investor funds</div>
       <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px">
         ${_esc(`${inv.first_name || ''} ${inv.last_name || ''}`.trim())} · ${_esc(inv.id)}</div>
 
@@ -2822,12 +2869,13 @@ function editForeignFunds(investorId) {
         <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">
           Residency decides the reporting, not nationality.</div>
       </div>
-      ${field('ff-country', 'Country of Residence', inv.country_of_residence, 'United Kingdom')}
+      ${countryField('ff-country', 'Country of Residence', inv.country_of_residence,
+                     'Where they live. This is what decides residency — not their nationality.')}
 
       <div style="font-size:0.74rem;font-weight:800;margin:14px 0 8px;color:var(--text-muted)">
         PAYOUT ACCOUNT (OUTSIDE SOUTH AFRICA)</div>
       ${field('ff-bank', 'Bank', inv.foreign_bank_name, 'Barclays')}
-      ${field('ff-bank-country', 'Bank Country', inv.foreign_bank_country, 'United Kingdom')}
+      ${countryField('ff-bank-country', 'Bank Country', inv.foreign_bank_country)}
       ${field('ff-swift', 'SWIFT / BIC', inv.foreign_swift_bic, 'BARCGB22')}
       ${field('ff-iban', 'IBAN', inv.foreign_iban, 'GB29 NWBK 6016 1331 9268 19',
               'Where the country uses one. South Africa does not.')}
@@ -3083,30 +3131,37 @@ async function openForeignFlow(txnId, isInflow) {
   ov.id = 'svc-flow-modal';
   ov.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.55);'
                    + 'display:flex;align-items:center;justify-content:center;padding:20px';
+  /* COLOUR SET EXPLICITLY, not inherited. Without it the dialog took whatever
+     the element behind it was using and every label in here rendered as grey
+     on grey — readable on a developer's screen, not on somebody's desk. */
   ov.innerHTML = `
-    <div style="background:var(--bg-card,#fff);border-radius:14px;max-width:440px;width:100%;
-                max-height:88vh;overflow:auto;padding:20px 22px">
-      <div style="font-weight:800;font-size:1rem;margin-bottom:2px">
+    <div style="background:var(--bg-card,#fff);color:var(--text,#111);border-radius:14px;
+                max-width:440px;width:100%;max-height:88vh;overflow:auto;padding:20px 22px">
+      <div style="font-weight:800;font-size:1.05rem;margin-bottom:3px;color:var(--text,#111)">
         ${isInflow ? 'Funds arrived' : 'Payout at maturity'}</div>
-      <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px">
+      <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:16px">
         ${_esc(Utils.rand(txn.amount || 0))} · ${_esc(txn.reference || txnId)}</div>
 
-      <label class="form-label" style="font-size:0.74rem">Reported to the Reserve Bank as</label>
+      <label class="form-label" style="font-size:0.76rem;color:var(--text,#111)">Reported to the Reserve Bank as</label>
       <select class="form-select" id="flow-bop">
         <option value="">Not coded yet</option>
         <option value="${isInflow ? 'inflow' : 'outflow'}">${_esc(isInflow ? INFLOW : OUTFLOW)}</option>
       </select>
-      <div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px;line-height:1.5">
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.55">
         ${isInflow
           ? 'An inflow is never coded as a loan, a gift or other — that is a different transaction on the record, not a filing detail.'
           : 'All conversion costs and bank charges are deducted from the payout.'}
       </div>
 
       ${isInflow ? `
-      <div style="font-size:0.74rem;font-weight:800;margin:16px 0 7px;color:var(--text-muted)">ON FILE</div>
+      <div style="font-size:0.76rem;font-weight:800;margin:18px 0 8px;color:var(--text,#111);
+                  letter-spacing:0.03em">ON FILE</div>
       ${_foreignFilingItems().map(i => `
-        <label style="display:flex;align-items:center;gap:9px;padding:7px 0;font-size:0.8rem;cursor:pointer">
-          <input type="checkbox" class="flow-file" value="${i.key}" ${onFile.includes(i.key) ? 'checked' : ''} />
+        <label style="display:flex;align-items:center;gap:11px;padding:9px 11px;margin-bottom:6px;
+                      font-size:0.84rem;cursor:pointer;color:var(--text,#111);
+                      border:1px solid var(--border);border-radius:9px;background:var(--bg-secondary)">
+          <input type="checkbox" class="flow-file" value="${i.key}" ${onFile.includes(i.key) ? 'checked' : ''}
+                 style="width:17px;height:17px;flex:0 0 auto;accent-color:#eda5ff;cursor:pointer" />
           <span>${_esc(i.label)}</span>
         </label>`).join('')}` : ''}
 
@@ -3254,6 +3309,7 @@ async function viewInvestor(id) {
         <div style="font-family:monospace;font-size:0.78rem;color:var(--text-muted);margin:2px 0">${_esc(inv.id)||''}<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(inv.id||""))},this)' title="Copy account number"><i class="fa-regular fa-copy"></i></button></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
           ${Utils.statusBadge(inv.status)}
+          ${_isNonResidentInvestor(inv) ? `<span class="badge" style="background:rgba(237,165,255,0.18);color:#eda5ff;border:1px solid rgba(237,165,255,0.4)" title="Non-resident — FICA is reviewed manually, payments are coded for the Reserve Bank, and a declaration is on file"><i class="fa-solid fa-globe" style="margin-right:4px"></i>NON-RESIDENT${inv.country_of_residence ? ` · ${_esc(inv.country_of_residence)}` : ''}</span>` : ''}
           ${_kycVerified(inv)?`<span class="badge badge--green"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>${inv.fica_reviewed_by?`<span style="font-size:0.65rem;color:var(--text-muted);margin-left:2px">by ${_esc(inv.fica_reviewed_by)}</span>`:''}` : '<span class="badge badge--yellow">KYC Pending</span>'}
         </div>
       </div>
@@ -3834,6 +3890,9 @@ async function viewInvestor(id) {
   _loadInvestorRewards(inv.id);
   _loadClientDocuments(inv.id);
   if (_isNonResidentInvestor(inv)) _loadForeignDeclarationState(inv.id);
+  /* Warm the country list while the modal is being read, so the edit form
+     opens straight away rather than after a request. */
+  _foreignCountries().catch(() => {});
   _loadInvestorWatchlistBanner(inv.id);
 }
 

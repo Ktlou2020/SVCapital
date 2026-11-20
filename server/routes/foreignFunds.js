@@ -91,7 +91,13 @@ router.use(requireAuth, requireRole('admin', 'director'));
 
 /* The process as the console needs it, so the screen is not a second
    transcription of the document. */
+const COUNTRIES = require('../services/countries');
+
 router.get('/reference', (_req, res) => res.json({
+  /* The console builds its country dropdowns from this rather than carrying
+     its own copy. One list, and the one the sign-up form is generated from. */
+  countries:       COUNTRIES.NAMES,
+  defaultCountry:  COUNTRIES.DEFAULT_COUNTRY,
   inwardBank:      FOREIGN.INWARD_BANK,
   inwardRules:     FOREIGN.INWARD_RULES,
   bopInflow:       FOREIGN.BOP_INFLOW,
