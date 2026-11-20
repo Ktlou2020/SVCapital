@@ -395,6 +395,71 @@ console.log('\nand there is ONE form, with residency and the document asked sepa
      + 'the rest of the page\'s JavaScript with it');
 }
 
+console.log('\nand the form offers every country, from one list');
+{
+  const COUNTRIES = require(path.join(ROOT, 'server', 'services', 'countries.js'));
+  const RAW = read('signup.html');
+
+  const optionsOf = id => {
+    const at = RAW.indexOf(`id="${id}"`);
+    if (at < 0) return [];
+    const end = RAW.indexOf('</select>', at);
+    return [...RAW.slice(at, end).matchAll(/<option[^>]*>([^<]+)<\/option>/g)]
+      .map(m => m[1].replace(/&amp;/g, '&').trim())
+      .filter(t => !/^Select /.test(t));
+  };
+
+  const residence   = optionsOf('countryResidence');
+  const nationality = optionsOf('nationality');
+
+  ok('the list is the whole world, not a shortlist',
+     COUNTRIES.NAMES.length > 240, String(COUNTRIES.NAMES.length));
+  ok('COUNTRY OF RESIDENCE OFFERS ALL OF IT',
+     residence.length === COUNTRIES.NAMES.length,
+     `${residence.length} of ${COUNTRIES.NAMES.length} — it offered about thirty, `
+     + 'grouped by region, so most of the world could not say where they live');
+  ok('AND SO DOES NATIONALITY',
+     nationality.length === COUNTRIES.NAMES.length,
+     `${nationality.length} of ${COUNTRIES.NAMES.length} — a client who can pick `
+     + 'their country of residence and not their nationality cannot finish the form');
+  ok('and both are the same list, not two that happen to agree today',
+     residence.join('|') === nationality.join('|'), 'they differ');
+
+  /* Countries somebody actually lives in that the old shortlist left out. */
+  for (const c of ['Angola', 'Malawi', 'Mauritius', 'Ireland', 'Japan', 'Brazil'])
+    ok(`${c} can be chosen`, residence.includes(c), c);
+
+  ok('SOUTH AFRICA IS THE DEFAULT',
+     /<option selected>South Africa<\/option>/.test(RAW),
+     'the list opens on "Select country", so the commonest answer is a '
+     + 'scroll through two hundred and fifty options');
+  ok('and only one option is preselected',
+     (RAW.match(/<option selected>/g) || []).length === 1,
+     String((RAW.match(/<option selected>/g) || []).length));
+  ok('the page settles from it at boot',
+     /onCountryChange\(\);\n  _initSignupAddressSearch/.test(RAW),
+     'otherwise the address block and the banner show whatever the markup '
+     + 'happened to carry, not what the default country means');
+
+  /* THE DRIFT THIS IS REALLY FOR. The FICA mapper used to be a hand-kept
+     mirror of the old thirty, so a nationality added to the form and not to
+     the map throws on a client whose documents are fine. */
+  const fica = require(path.join(ROOT, 'server', 'services', 'ficaService.js'));
+  const unmappable = nationality.filter(n => {
+    try { return !fica.nationalityToCode(n); } catch (_) { return true; }
+  });
+  ok('EVERY NATIONALITY THE FORM OFFERS CAN BE VERIFIED',
+     unmappable.length === 0,
+     `${unmappable.length} cannot be mapped to a country code: `
+     + unmappable.slice(0, 5).join(', '));
+
+  /* And the records written before the field became a country still work. */
+  for (const old of ['Zimbabwean', 'South African', 'British'])
+    ok(`a stored "${old}" still resolves`, (() => {
+      try { return !!fica.nationalityToCode(old); } catch (_) { return false; }
+    })(), old);
+}
+
 console.log('\nand the FICA consent is one an international client can truthfully tick');
 {
   const CONSENT = require(path.join(ROOT, 'server', 'services', 'ficaConsent.js'));

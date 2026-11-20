@@ -10,13 +10,20 @@ const stitch    = require('./stitch');
 const datanamix = require('./datanamix');
 
 /* ─── Country code lookup ─────────────────────────────── */
-const NATIONALITY_TO_CODE = {
-  /* investors.nationality defaults to South African, so this map has to be able
-     to answer for it. It could not: every other entry here is a foreign
-     nationality, because the only caller is the passport branch below and the
-     signup form only asks the question on the international path. A default
-     the codebase's own mapper throws on is a trap laid for whoever wires the
-     column into a verification call. */
+
+/* The sign-up form used to offer about thirty nationalities and this map
+ * listed exactly those thirty. The form offers every country now, so a
+ * hand-kept mirror of it would be wrong the first time either side moved —
+ * and being wrong here means throwing on a client whose documents are fine.
+ *
+ * So the countries come from services/countries.js, the same list the form
+ * is generated from, and the DEMONYMS below are kept on top of it for every
+ * record written before the field became a country: 'Zimbabwean' is what is
+ * stored against those clients and it still has to resolve.
+ */
+const COUNTRIES = require('./countries');
+
+const LEGACY_DEMONYMS = {
   'south african':  'ZA',
   zimbabwean:       'ZW', namibian:    'NA', batswana:    'BW', zambian:    'ZM',
   mozambican:       'MZ', basotho:     'LS', swazi:       'SZ', kenyan:     'KE',
@@ -29,6 +36,10 @@ const NATIONALITY_TO_CODE = {
   emirati:          'AE', 'saudi arabian': 'SA', qatari: 'QA',
   indian:           'IN', chinese:     'CN', singaporean: 'SG',
 };
+
+/* Countries first, then the legacy demonyms — they cannot collide, because
+   no country is named "Zimbabwean". */
+const NATIONALITY_TO_CODE = Object.assign({}, COUNTRIES.BY_NAME, LEGACY_DEMONYMS);
 
 function nationalityToCode(nationality) {
   const nationalityCode = NATIONALITY_TO_CODE[(nationality || '').toLowerCase()];
