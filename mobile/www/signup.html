@@ -531,15 +531,6 @@
     }
 
     /* Selfie card */
-    .selfie-card {
-      background: linear-gradient(135deg, rgba(47,140,155,0.06) 0%, rgba(255,130,21,0.04) 100%);
-      border: 1.5px dashed rgba(47,140,155,0.30);
-      border-radius: 12px; padding: 24px 20px;
-      text-align: center; cursor: pointer;
-      transition: all 0.2s; position: relative;
-    }
-    .selfie-card:hover { border-color: var(--teal); }
-    .selfie-card.uploaded { border-style: solid; border-color: #22c55e; }
 
     /* FICA info banner */
     .fica-info-banner {
@@ -2111,30 +2102,17 @@
         </span>
       </div>
 
-      <!-- Selfie / Liveness -->
-      <div class="selfie-card fica-upload-card" id="card-selfie">
-        <input type="file" id="fileSelfie" accept="image/*" capture="user" style="display:none" />
-        <span class="fica-required-badge" style="position:absolute;top:10px;right:10px">
-          <i class="fa-solid fa-asterisk" style="font-size:0.5rem"></i> Required
-        </span>
-        <i class="fica-upload-card__icon fa-solid fa-camera" style="color:#eda5ff"></i>
-        <div class="fica-upload-card__title">Selfie / Liveness Photo</div>
-        <div class="fica-upload-card__sub">Take a clear photo of yourself holding your ID document. This confirms you are the account holder.</div>
-        <div class="fica-upload-card__accepted">Accepted: JPG, PNG — Max 10MB &nbsp;|&nbsp; <strong style="color:#1a1a1a">No sunglasses or hats</strong></div>
-        <button type="button" class="fica-upload-btn" id="uploadBtn-selfie">
-          <i class="fa-solid fa-camera"></i> Take / Upload Selfie
-        </button>
-        <div class="fica-thumb-wrap" id="thumb-selfie">
-          <img class="fica-thumb-img" id="thumbImg-selfie" alt="" />
-          <div class="fica-thumb-pdf" id="thumbPdf-selfie"><i class="fa-solid fa-file-pdf"></i><span>PDF</span></div>
-        </div>
-        <div class="fica-file-status" id="status-selfie">
-          <i class="fa-solid fa-check-circle" style="color:#22c55e"></i>
-          <span id="filename-selfie"></span>
-          <button type="button" class="fica-remove-btn" id="removeBtn-selfie">Remove</button>
-        </div>
-      </div>
+      <!-- The selfie / liveness photo was here and is no longer asked for.
+           Nothing verified against it: it was stored as a document and
+           looked at by a person, and the FICA checks that do run - identity,
+           address, bank, sanctions - never read it. Dropped rather than made
+           optional, because an upload nobody uses is a step that costs every
+           client something and the platform nothing.
 
+           The TYPE is deliberately left intact everywhere it is displayed,
+           on the server, in the console and in the portal's document list,
+           so the selfies already on file still render with a name instead of
+           turning into "selfie" or vanishing. -->
       <!-- Optional Documents -->
       <div class="fica-section-title" style="margin-top:20px">
         Additional Documents
@@ -2262,8 +2240,8 @@ let selectedRisk  = 'moderate';
 let clientType    = 'sa'; // 'sa' | 'intl'
 let _derivedGender = null; // set when SA ID is validated
 
-const ficaFiles   = { id: null, address: null, selfie: null, bank: null, tax: null };
-const REQUIRED_DOCS = ['id', 'address', 'selfie'];
+const ficaFiles   = { id: null, address: null, bank: null, tax: null };
+const REQUIRED_DOCS = ['id', 'address'];
 const SIGNUP_DRAFT_KEY = 'svcapital_signup_draft_v2';
 let _draftStatusTimer = null;
 
@@ -2417,7 +2395,7 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnSkipFica').addEventListener('click', skipFicaAndSubmit);
 
   // FICA upload cards
-  ['id', 'address', 'selfie', 'bank', 'tax'].forEach(wireUploadCard);
+  ['id', 'address', 'bank', 'tax'].forEach(wireUploadCard);
 });
 
 /* ── Social proof animated counters ── */
@@ -3233,7 +3211,7 @@ async function submitRegistration() {
   const missingDocs = REQUIRED_DOCS.filter(k => ficaFiles[k] === null);
   if (missingDocs.length > 0) {
     missingDocs.forEach(k => document.getElementById(`card-${k}`)?.classList.add('required-missing'));
-    const labels = { id: 'ID / Passport', address: 'Proof of Address', selfie: 'Selfie / Liveness Photo' };
+    const labels = { id: 'ID / Passport', address: 'Proof of Address' };
     /* Naming the other route out. This error used to be the whole of what a
        person without a proof of address was told, and the way past it was an
        11px link they had to notice underneath. */
@@ -3340,7 +3318,7 @@ async function _doSubmit(skippedFica) {
     if (!skippedFica && uploadedDocs.length > 0) {
       const DOC_TYPE_MAP = {
         id: 'id_document', address: 'proof_of_address',
-        selfie: 'selfie', bank: 'proof_of_bank', tax: 'tax',
+        bank: 'proof_of_bank', tax: 'tax',
       };
       const readFile = file => new Promise((res, rej) => {
         const r = new FileReader();

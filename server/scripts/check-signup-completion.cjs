@@ -6,8 +6,10 @@
  * coming out of it. The last thing they meet is step 4:
  *
  *   - a primary button, "Create Account & Submit FICA", which refuses to
- *     submit until an ID, a proof of address AND a selfie are all attached,
- *     and answers a missing one with a red error; and
+ *     submit until an ID and a proof of address are both attached, and
+ *     answers a missing one with a red error. (It wanted a selfie too until
+ *     21 November 2026, when that requirement was dropped — nothing ever
+ *     verified against it.) And
  *   - the other way to finish, which the product has always supported —
  *     rendered as an underlined link at 0.71rem inside a paragraph of grey
  *     0.71rem text, below the fold on a phone.
@@ -130,10 +132,27 @@ for (const rel of PAGES) {
   {
     ok('skipping still submits', /_doSubmit\(true\)/.test(src));
     ok('uploading still submits', /_doSubmit\(false\)/.test(src));
-    /* The point of the change is reach, not a weaker FICA rule. */
-    ok('the required-document list is unchanged',
-       /REQUIRED_DOCS = \['id', 'address', 'selfie'\]/.test(src),
+    /* THE LIST IS STILL PINNED, and this assertion is still here for the
+       reason it was written: to stop a change made for completion quietly
+       becoming a change to what FICA requires.
+     
+       It now reads ['id', 'address']. The selfie was removed on 21 November
+       2026 as a deliberate decision, not as a side effect of a funnel fix —
+       nothing verified against it. It was stored as a document and looked at
+       by a person; the checks that actually run, identity, address, bank and
+       sanctions screening, never read it. An upload nobody uses costs every
+       client a step and the platform nothing.
+     
+       If this ever fails again, the question is the same one: was the list
+       changed on purpose, by somebody entitled to change it? */
+    ok('the required-document list is what compliance asked for',
+       /REQUIRED_DOCS = \['id', 'address'\]/.test(src),
        'this check exists to stop a "completion" fix quietly becoming a compliance one');
+    ok('and the selfie is not asked for anywhere on the page',
+       !/id="card-selfie"/.test(src) && !/uploadBtn-selfie/.test(src),
+       'removing it from the required list while leaving the card on screen '
+       + 'is the worst of both — a step that still costs the client and '
+       + 'still gets ignored');
   }
 }
 
