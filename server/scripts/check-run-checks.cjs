@@ -26,7 +26,7 @@ if (!process.env.DATABASE_URL) {
 
 const fs   = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { execFileSync, spawn } = require('child_process');
 const { Pool } = require('pg');
 
 const ROOT   = path.join(__dirname, '..', '..');
@@ -113,6 +113,102 @@ const scratchDbs = async () => (await admin.query(
          `left behind: ${JSON.stringify(added)}`);
       ok('including its template',
          !added.some(d => /^svc_chk_tpl/.test(d)), JSON.stringify(added));
+    }
+
+    /* A RUN THAT IS KILLED. The template was dropped on the line after the
+       loop, so every path that did not reach that line kept it: Ctrl-C, a
+       harness timeout, a parent that gave up. Fourteen of them had piled up
+       on the scratch server, each a full copy of the schema, before a
+       shuffled run measured the delta and reported one. */
+    console.log('\neven when the run is killed');
+    {
+      const before = new Set(await scratchDbs());
+      const child = spawn('node', [RUNNER, '--filter', 'maturity'],
+        { env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+
+      /* Killed once the template EXISTS and checks are running — before it
+         exists there is nothing to leak, and that is not the case that
+         went wrong. */
+      const exited = new Promise(res => child.on('exit', (c, sig) => res({ c, sig })));
+      /* STDERR TOO. The line that says what it is doing about the signal is
+         written there, and capturing only stdout asserted its absence. */
+      let out = '';
+      const running = new Promise(res => {
+        child.stdout.on('data', d => { out += d; if (/✓|✗/.test(out)) res(true); });
+        child.stderr.on('data', d => { out += d; });
+        child.on('exit', () => res(false));
+      });
+      const reached = await Promise.race([
+        running, new Promise(res => setTimeout(() => res(false), 120000))]);
+      if (reached) child.kill('SIGTERM');
+      await exited;
+
+      /* The signal handler drops it; give the server a moment to finish. */
+      await new Promise(r => setTimeout(r, 500));
+      const left = (await scratchDbs()).filter(d => !before.has(d));
+      ok('A KILLED RUN TAKES ITS DATABASES WITH IT', reached && left.length === 0,
+         reached ? `left behind: ${JSON.stringify(left)}` : 'the run never got as far as a check');
+      ok('and it says so rather than going quietly',
+         /dropping svc_chk_tpl/.test(out), out.slice(-300));
+      ok('AND IT STOPS, rather than asking a closed pool for more databases',
+         !/Cannot use a pool after calling end/.test(out),
+         'that printed once per remaining check \u2014 a hundred lines of noise '
+         + 'over the one line that says what happened');
+
+      /* Give the exit a moment, then read the extra wait above. */
+
+      for (const d of left) await admin.query(`DROP DATABASE IF EXISTS ${d} WITH (FORCE)`).catch(() => {});
+    }
+
+    /* AND WHAT AN EARLIER KILLED RUN LEFT. The sweep is what clears the
+       ones already there, and the ones a kill -9 will always leave. */
+    console.log('\nand it sweeps what an earlier run abandoned');
+    {
+      /* Pid 2 is the kernel's — not a node runner, and `process.kill(pid, 0)`
+         from inside a container reports it as not ours to signal. A pid that
+         cannot possibly be a live runner of this script is what is wanted,
+         so the highest pid the kernel will allocate, plus one. */
+      const deadPid = Number(
+        (fs.readFileSync('/proc/sys/kernel/pid_max', 'utf8') || '4194304').trim()) + 1;
+      const abandoned = `svc_chk_tpl_${deadPid}_sweepme`;
+      const mine      = `svc_chk_tpl_${process.pid}_keepme`;
+      for (const d of [abandoned, mine]) {
+        await admin.query(`DROP DATABASE IF EXISTS ${d} WITH (FORCE)`).catch(() => {});
+        await admin.query(`CREATE DATABASE ${d}`);
+      }
+
+      const r = run(['--filter', 'check-tax-year-options']);
+      const after = new Set(await scratchDbs());
+
+      ok('A DATABASE WHOSE RUN IS GONE IS DROPPED', !after.has(abandoned),
+         `${abandoned} is still there — nothing is ever coming back for it`);
+      ok('and the run says which ones it swept',
+         new RegExp(abandoned).test(r.out), r.out.slice(0, 600));
+      ok('BUT A LIVE RUN\u2019S DATABASES ARE LEFT ALONE', after.has(mine),
+         'check-run-checks spawns several runners at once, and dropping a '
+         + 'live one\u2019s template kills its checks with "terminating connection '
+         + 'due to administrator command" \u2014 an error that names neither the '
+         + 'database nor who dropped it');
+
+      for (const d of [abandoned, mine])
+        await admin.query(`DROP DATABASE IF EXISTS ${d} WITH (FORCE)`).catch(() => {});
+    }
+
+    /* AND A DROP THAT DOES NOT GO IS REPORTED. This is how fourteen of them
+       went unnoticed: every error was swallowed. */
+    console.log('\nand a drop that will not go is not passed off as done');
+    {
+      const src = fs.readFileSync(RUNNER, 'utf8');
+      const drop = src.slice(src.indexOf('async function dropDb'),
+                             src.indexOf('let OWN_TEMPLATE_DROPPED'));
+      ok('the failure is printed, with the name',
+         /console\.error\([^)]*could not drop \$\{name\}/.test(drop), drop.slice(-400));
+      ok('and the connections are terminated before the drop, not only by FORCE',
+         drop.indexOf('pg_terminate_backend') < drop.indexOf('DROP DATABASE'),
+         'WITH (FORCE) terminates what it can see when it runs, so a connection '
+         + 'opened a moment later defeats it');
+      ok('and it is retried rather than given up on first refusal',
+         /attempt <= 3/.test(drop), drop.slice(0, 300));
     }
 
     console.log('\nit refuses a database that does not look like scratch');

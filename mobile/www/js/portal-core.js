@@ -2575,8 +2575,22 @@ async function loadWallet() {
   if (document.getElementById('walletRecurringTab')?.style.display !== 'none') _renderRecurringTab();
 
   const activity = document.getElementById('walletActivity');
+  /* THIS WALLET'S OWN ACTIVITY.
+   *
+   * A sub-account's rows carry the holder's investor_id as well, so this
+   * listed the group's deposits, payouts and contributions beside the
+   * person's own money — and at the same time left OUT the one row that
+   * belongs here, the transfer out of this wallet that funded the group,
+   * because transfer_out was not in the list of types.
+   *
+   * So it showed what other people did with the group's money and hid what
+   * this person did with theirs. Both halves fixed: rows belonging to a
+   * sub-account are its own screen's business, and a transfer either way is
+   * this wallet's. */
   const walletTxns = [...PORTAL.transactions]
-    .filter(t => ['deposit', 'return', 'payout', 'referral_bonus', 'withdrawal', 'gift_sent', 'gift_received'].includes(t.type))
+    .filter(t => !t.sub_account_id)
+    .filter(t => ['deposit', 'return', 'payout', 'referral_bonus', 'withdrawal',
+                  'gift_sent', 'gift_received', 'transfer_out', 'transfer_in'].includes(t.type))
     .sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0))
     .slice(0, 8);
 
@@ -11608,7 +11622,12 @@ function _renderMonthlyReturnsChart() {
   /* Income only. Including `payout` charted the client's returned CAPITAL as
      a return, so the month a holding matured showed a spike the size of the
      holding itself. See _isIncomeTxn. */
-  const txns = PORTAL.transactions.filter(t => _isIncomeTxn(t) && _stmtCounts(t));
+  /* And personal income only. A sub-account's rows carry the holder's
+     investor_id, so interest earned by a group was charted as the
+     chairperson's own earnings — money that is not theirs, divided among
+     the members by share. The group's own screens chart the group. */
+  const txns = PORTAL.transactions.filter(t => !t.sub_account_id
+                                            && _isIncomeTxn(t) && _stmtCounts(t));
 
   const monthly = {};
   txns.forEach(t => {

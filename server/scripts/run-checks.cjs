@@ -185,10 +185,107 @@ function skipsIn(output) {
 const FAIL_LOG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'svc-checks-'));
 const admin = new Pool({ connectionString: process.env.DATABASE_URL, ssl: SSL });
 
+/* DROPPING IT AND SWALLOWING THE FAILURE IS NOT DROPPING IT.
+ *
+ * This swallowed every error, so a drop that did not go left a database
+ * behind and said nothing. FOURTEEN template databases had accumulated on
+ * the scratch server before a shuffled run happened to measure the delta
+ * and report one — each a full copy of the schema, each invisible.
+ *
+ * WITH (FORCE) terminates the connections it can see when it runs, so a
+ * connection that opens between that and the drop defeats it: the clone a
+ * check is still finishing, or pg's own pool reconnecting. So the backends
+ * are terminated first, the drop is retried, and a drop that still will not
+ * go is REPORTED — with the name, which is the one thing needed to clear it
+ * by hand. */
 async function dropDb(name) {
-  await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`).catch(async () => {
-    await admin.query(`DROP DATABASE IF EXISTS ${name}`).catch(() => {});
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await admin.query(
+      `SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+        WHERE datname = $1 AND pid <> pg_backend_pid()`, [name]).catch(() => {});
+    try {
+      await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
+      return true;
+    } catch (err) {
+      try { await admin.query(`DROP DATABASE IF EXISTS ${name}`); return true; }
+      catch (_) {
+        if (attempt === 3) {
+          console.error(`\n[runner] could not drop ${name}: ${err.message}`);
+          console.error('[runner] it is still on the server. Drop it by hand.');
+          return false;
+        }
+        await new Promise(r => setTimeout(r, 250 * attempt));
+      }
+    }
+  }
+  return false;
+}
+
+/* AND A RUN THAT IS KILLED STILL HAS TO CLEAN UP.
+ *
+ * The template was dropped on the line after the loop, so every path that
+ * did not reach it — Ctrl-C, a harness timeout, SIGTERM from a parent that
+ * gave up — left the copy behind. Those are not rare: this runner is
+ * spawned by check-run-checks, and a long suite gets interrupted.
+ *
+ * `process.on('exit')` cannot help: the drop is asynchronous and the loop
+ * is already closed by then. So the signals are caught, the template is
+ * dropped, and the signal's own exit code is honoured. */
+let OWN_TEMPLATE_DROPPED = false;
+/* Set the moment a signal lands. execFileSync blocks the event loop, so a
+   handler only runs BETWEEN checks — and it then has awaits of its own, in
+   which the loop resumes and asks an ended pool for another database. That
+   printed "Cannot use a pool after calling end on the pool" once per
+   remaining check, which is a hundred lines of noise over the one line that
+   says what happened. The loop reads this and stops. */
+let ABORTED = false;
+async function dropOwnTemplate() {
+  if (OWN_TEMPLATE_DROPPED) return;
+  OWN_TEMPLATE_DROPPED = true;
+  await dropDb(TEMPLATE);
+}
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(sig, async () => {
+    ABORTED = true;
+    console.error(`\n[runner] ${sig} — dropping ${TEMPLATE} before leaving.`);
+    await dropOwnTemplate();
+    await admin.end().catch(() => {});
+    process.exit(sig === 'SIGINT' ? 130 : 143);
   });
+}
+
+/* AND WHATEVER AN EARLIER RUN LEFT BEHIND IS SWEPT ON THE WAY IN.
+ *
+ * Every database this runner makes is named with the pid that made it, so a
+ * name whose pid is no longer running belongs to nobody — nothing is going
+ * to come back for it. A pid that IS running might be a concurrent runner
+ * (check-run-checks spawns several), and those are left strictly alone: the
+ * cost of dropping one is another runner's checks dying with
+ * "terminating connection due to administrator command".
+ *
+ * A pid is recycled eventually, so a live pid can be the wrong process.
+ * That only ever means a stale database is kept, which is the safe way to
+ * be wrong. */
+const OWN_PID_RE = /^(?:svc_chk_tpl|chk_\d{3})_(\d+)_[a-z0-9]+$/;
+async function sweepAbandoned() {
+  let rows;
+  try {
+    ({ rows } = await admin.query(
+      `SELECT datname FROM pg_database
+        WHERE datname LIKE 'svc\\_chk\\_tpl\\_%' OR datname LIKE 'chk\\_%'`));
+  } catch (_) { return []; }
+
+  const swept = [];
+  for (const { datname } of rows) {
+    const m = datname.match(OWN_PID_RE);
+    if (!m) continue;
+    const pid = Number(m[1]);
+    if (pid === process.pid) continue;
+    try { process.kill(pid, 0); continue; }   // alive — somebody else's run
+    catch (err) { if (err.code === 'EPERM') continue; }
+    if (await dropDb(datname)) swept.push(datname);
+  }
+  return swept;
 }
 
 async function buildTemplate() {
@@ -242,13 +339,19 @@ async function buildTemplate() {
 
   console.log(`\n${checks.length} check(s)${SHUFFLE ? `, shuffled with seed ${SEED}` : ', in order'}`);
 
+  const swept = await sweepAbandoned();
+  if (swept.length) {
+    console.log(`swept ${swept.length} database(s) left by a run that was killed: `
+                + swept.join(', '));
+  }
+
   try {
     process.stdout.write('building template schema… ');
     await buildTemplate();
     console.log('done\n');
   } catch (err) {
     console.error('could not build the template:', err.message);
-    await dropDb(TEMPLATE); await admin.end().catch(() => {});
+    await dropOwnTemplate(); await admin.end().catch(() => {});
     process.exit(2);
   }
 
@@ -256,7 +359,12 @@ async function buildTemplate() {
   const failures = [];
   const asserted = {};
 
+  /* The loop is wrapped rather than indented, so that a throw inside it
+     cannot carry the template out of the run with it. */
+  try {
+
   for (let i = 0; i < checks.length; i++) {
+    if (ABORTED) break;
     const rel = checks[i];
     const name = path.basename(rel);
     const wantsDb = needsDatabase(rel);
@@ -334,7 +442,9 @@ async function buildTemplate() {
     if (wantsDb && !KEEP) await dropDb(dbName);
   }
 
-  if (!KEEP) await dropDb(TEMPLATE);
+  } finally {
+    if (!KEEP) await dropOwnTemplate();
+  }
   await admin.end().catch(() => {});
 
   const total = Object.values(asserted).reduce((n, v) => n + v, 0);

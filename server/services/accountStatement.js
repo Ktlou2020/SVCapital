@@ -36,12 +36,21 @@ class NotFound extends Error {
    of balances anchored to a wallet, one document. The column each query
    filters on is the only thing that changes.
 
-   WHEN NO SUB-ACCOUNT IS GIVEN NOTHING CHANGES AT ALL. This service
-   produces live client statements, and an investor's statement includes
-   their sub-accounts' transactions today — rows carry investor_id as well.
-   Narrowing that would silently alter documents clients already have, so
-   the predicate for an investor statement is left exactly as it was, and
-   the check asserts the output is identical. */
+   AND A PERSONAL STATEMENT IS PERSONAL. This used to carry the holder's
+   SUB-ACCOUNTS' rows as well, because those rows carry investor_id too —
+   so a stokvel's contributions, investments and payouts all appeared on
+   the chairperson's own statement beside their own money. It was left that
+   way on purpose when sub-account statements were built, as narrowing it
+   changes documents clients already hold; narrowed now, on 21 November
+   2026, because the group has a statement of its own and the question
+   "what did I do with my money" cannot be answered by a page that also
+   lists what four other people did with theirs.
+
+   IT ALSO MAKES THE PERSONAL STATEMENT RECONCILE. Every balance here is
+   anchored to the holder's OWN wallet, while the rows included money that
+   never passed through it — so the ledger and the anchor could not agree
+   and the footer said so. A transfer out of the main wallet into a group
+   now counts, the group's side of it does not, and the two ends meet. */
 async function buildAccountStatement(pool, { investorId, subAccountId, from, to }) {
   if ((!investorId && !subAccountId) || !from || !to) {
     const e = new Error('investorId or subAccountId, and from and to, are required');
@@ -51,6 +60,12 @@ async function buildAccountStatement(pool, { investorId, subAccountId, from, to 
      it is matched against. */
   const scopeCol = subAccountId ? 'sub_account_id' : 'investor_id';
   const scopeId  = subAccountId || investorId;
+  /* A sub-account statement is already exactly its own rows. A PERSONAL one
+     has to say so, because a sub-account's rows carry the holder's
+     investor_id as well and would otherwise come along. Written once and
+     interpolated into each query beside the scope it belongs to. */
+  const ownRowsOnly = subAccountId ? '' : ' AND sub_account_id IS NULL';
+  const ownInvOnly  = subAccountId ? '' : ' AND i.sub_account_id IS NULL';
 
     const fromDt = new Date(from + 'T00:00:00.000Z');
     const toDt   = new Date(to   + 'T23:59:59.999Z');
@@ -112,7 +127,7 @@ async function buildAccountStatement(pool, { investorId, subAccountId, from, to 
           * the period: it began on or before the period ended, and it had not
           * already ended before the period began. An investment with no end
           * date has not ended, so it qualifies on the first test alone. */
-         WHERE i.${scopeCol} = $1
+         WHERE i.${scopeCol} = $1${ownInvOnly}
            AND COALESCE(i.start_date, i.created_at::date) <= $3
            AND (i.end_date IS NULL OR i.end_date >= $2)
          ORDER BY i.created_at ASC`,
@@ -123,7 +138,7 @@ async function buildAccountStatement(pool, { investorId, subAccountId, from, to 
         `SELECT type, amount, description, reference,
                 COALESCE(transaction_date, created_at) AS txn_date
          FROM transactions
-         WHERE ${scopeCol} = $1
+         WHERE ${scopeCol} = $1${ownRowsOnly}
            AND status = 'completed'
            AND COALESCE(transaction_date, created_at) >= $2
            AND COALESCE(transaction_date, created_at) <= $3
@@ -141,7 +156,7 @@ async function buildAccountStatement(pool, { investorId, subAccountId, from, to 
            COALESCE(SUM(${cashMovementSQL()}) FILTER (
              WHERE COALESCE(transaction_date, created_at) > $3), 0) AS after_period
          FROM transactions
-         WHERE ${scopeCol} = $1
+         WHERE ${scopeCol} = $1${ownRowsOnly}
            AND status = 'completed'`,
         [scopeId, fromDt, toDt]
       ),

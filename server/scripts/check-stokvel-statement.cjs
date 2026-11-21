@@ -1,27 +1,37 @@
 #!/usr/bin/env node
-/* A statement for an account that is not a person.
+/* A statement for an account that is not a person — and a personal one that
+ * is only the person's.
  *
- * No sub-account had one — not a stokvel, a trust, a business or a child's
- * account — because every query in services/accountStatement.js is scoped by
- * investor_id. A stokvel's AGM had nothing to table.
+ * No sub-account had a statement at all — not a stokvel, a trust, a business
+ * or a child's account — because every query in services/accountStatement.js
+ * was scoped by investor_id. A stokvel's AGM had nothing to table.
  *
- * THE ASSERTION THAT MATTERS MOST IS THE ONE ABOUT NOT CHANGING ANYTHING.
- * This service produces live client statements. An investor's statement
- * today includes their sub-accounts' transactions, because those rows carry
- * investor_id as well — so "scope it to the investor properly" would be a
- * silent change to documents clients already hold. The first thing checked
- * below is that an investor statement is IDENTICAL, field for field, to
- * what the same inputs produced before the sub-account dimension existed.
+ * AND THE ROWS WENT THE OTHER WAY TOO. A sub-account's transactions carry the
+ * holder's investor_id as well as the account's, so a personal statement
+ * listed the group's deposits, contributions, payouts and holdings beside its
+ * owner's own money. While a sub-account had no statement of its own that was
+ * the right call: better on the wrong page than on none. It has one now, and
+ * the decision taken on 21 November 2026 was to narrow the personal one.
  *
- * Then the new half: a stokvel statement carries the money view every
- * account gets, plus the three things an AGM actually asks — who
- * contributed what, what each member's share is, and WHICH signatories
- * approved the money that moved.
+ * THAT IS ALSO WHY A CLIENT WITH A GROUP COULD NOT BE HANDED A STATEMENT THAT
+ * TIED. Every balance on one is anchored to the holder's own wallet, and the
+ * ledger beneath it listed money that never passed through that wallet — so
+ * the two could not agree, and the footer said so, in as many words, on every
+ * statement issued to a client with a sub-account. `reconciles` is the
+ * service's own answer to whether they agree, and it is asserted here.
  *
+ * The same split is asserted on the client: the wallet's activity list and
+ * the income chart are the same question asked on a screen instead of a page.
+ *
+ * Then the other half: a stokvel statement carries the money view every
+ * account gets, plus the three things an AGM actually asks — who contributed
+ * what, what each member's share is, and WHICH signatories approved the money
+ * that moved.
  * Run: DATABASE_URL=… DATABASE_SSL=false node server/scripts/check-stokvel-statement.cjs
  */
 'use strict';
 
+const fs   = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
 
@@ -31,6 +41,39 @@ const ok = (name, cond, detail) => {
   if (cond) { pass++; console.log(`  ✓ ${name}`); }
   else { fail++; console.log(`  ✗ ${name}${detail ? `\n      ${detail}` : ''}`); }
 };
+
+/* ── The same decision, on the screens ────────────────────────────────
+   A comment that explains the fix quotes the thing it warns about, so the
+   source is read with comments stripped. */
+const CORE = fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
+
+console.log('\nand the wallet screen answers the same question');
+{
+  const list = CORE.slice(CORE.indexOf('const walletTxns'),
+                          CORE.indexOf('if (!walletTxns.length)'));
+  ok('THE WALLET LISTS ITS OWN ROWS',
+     /\.filter\(t => !t\.sub_account_id\)/.test(list),
+     'a sub-account\u2019s rows carry the holder\u2019s investor_id, so the eight '
+     + 'most recent movements on a client\u2019s wallet were often the group\u2019s: '
+     + list.slice(0, 200));
+  ok('AND THE TRANSFER THAT FUNDED THE GROUP IS ONE OF THEM',
+     /'transfer_out'/.test(list) && /'transfer_in'/.test(list),
+     'the one row about the group that IS this wallet\u2019s business was the one '
+     + 'row missing \u2014 transfer_out was in no list of visible types, so money '
+     + 'left and the wallet said nothing');
+  ok('and the eight are still the most recent eight',
+     /\.slice\(0, 8\)/.test(list), list.slice(-200));
+
+  const chart = CORE.slice(CORE.indexOf('const txns = PORTAL.transactions.filter'),
+                           CORE.indexOf('const monthly = {};'));
+  ok('AND THE INCOME CHART CHARTS THEIR OWN INCOME',
+     /!t\.sub_account_id/.test(chart),
+     'interest earned by a group, which is divided among its members by share, '
+     + 'was charted as the chairperson\u2019s own earnings: ' + chart.slice(0, 200));
+  ok('and still only what counts as income',
+     /_isIncomeTxn\(t\)/.test(chart) && /_stmtCounts\(t\)/.test(chart), chart.slice(0, 200));
+}
 
 const db = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -60,17 +103,24 @@ const db = new Pool({
     };
     await clean();
 
-    for (const [id, fn] of [['INV-ST-A', 'Ayanda'], ['INV-ST-B', 'Bongi']])
+    /* EVERY BALANCE ON A STATEMENT IS ANCHORED TO THE WALLET, and the
+       opening is that wallet unwound by the period's movements. So a
+       fixture wallet that does not equal its own ledger makes the
+       statement report a gap it is right to report, and `reconciles`
+       would then be testing the fixture rather than the code. Ayanda's
+       wallet is her own rows: 1000 in, 200 out. */
+    for (const [id, fn, wallet] of [['INV-ST-A', 'Ayanda', 800], ['INV-ST-B', 'Bongi', 0]])
       await db.query(
         `INSERT INTO investors (id, first_name, last_name, email, status, wallet_balance)
-         VALUES ($1,$2,'Member',$3,'active',5000)`, [id, fn, id.toLowerCase() + '@example.test']);
+         VALUES ($1,$2,'Member',$3,'active',$4)`,
+        [id, fn, id.toLowerCase() + '@example.test', wallet]);
 
     await db.query(
       `INSERT INTO sub_accounts (id, parent_investor_id, account_type, name,
                                  wallet_balance, kyc_status, status, stokvel_quorum,
                                  stokvel_reg_number, sa_reference)
        VALUES ('SA-ST-1','INV-ST-A','stokvel','Siyakhula Stokvel',
-               1500,'approved','active',2,'NAS-4242','SA-ST4242')`);
+               1000,'approved','active',2,'NAS-4242','SA-ST4242')`);
     for (const [id, role] of [['INV-ST-A', 'chairperson'], ['INV-ST-B', 'member']])
       await db.query(
         `INSERT INTO stokvel_members (id, sub_account_id, investor_id, role, is_signatory, status)
@@ -85,6 +135,43 @@ const db = new Pool({
     await db.query(
       `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, transaction_date, created_at, updated_at)
        VALUES (gen_random_uuid(),'INV-ST-A','SA-ST-1','stokvel_contribution_received',500,'completed','ST-GRP-1','Contribution received','2026-06-12','2026-06-12',NOW())`);
+    /* A member funding the group: two rows, one movement. The OUT leaves
+       the personal wallet and belongs on the personal statement; the IN
+       lands in the group and belongs on the group's. */
+    await db.query(
+      `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at, updated_at)
+       VALUES (gen_random_uuid(),'INV-ST-A','transfer_out',200,'completed','ST-OUT-1','Wallet transfer to the group','2026-06-14','2026-06-14',NOW())`);
+    await db.query(
+      `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, transaction_date, created_at, updated_at)
+       VALUES (gen_random_uuid(),'INV-ST-A','SA-ST-1','transfer_in',200,'completed','ST-OUT-1-IN','Wallet transfer from a member','2026-06-14','2026-06-14',NOW())`);
+
+    /* A GROUP ROW BEFORE THE WINDOW. The opening balance is the sum of the
+       cash effect of everything prior, and that query is scoped by the same
+       clause as the list. With only in-period rows in the fixture, dropping
+       the clause from it summed nothing either way and the omission was
+       invisible — a client with a group older than the statement is the
+       ordinary case, not an edge one. The group's wallet is its own rows:
+       300 before the window and 700 inside it. */
+    await db.query(
+      `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, transaction_date, created_at, updated_at)
+       VALUES (gen_random_uuid(),'INV-ST-A','SA-ST-1','stokvel_contribution_received',300,'completed','ST-GRP-PRE','Contribution received','2026-05-10','2026-05-10',NOW())`);
+
+    /* AND THE GROUP'S HOLDING. The investments on a statement are scoped by
+       the same rule as the rows, and a group's investment is placed FROM the
+       group's wallet by whichever member carried the mandate out — so the
+       row carries that member's investor_id as well as the sub-account's,
+       and listed the group's holding on their personal statement beside
+       their own. */
+    await db.query(
+      `INSERT INTO investments (id, investor_id, sub_account_id, amount, status, product_type,
+                                start_date, end_date, created_at)
+       VALUES ('INVST-ST-GRP','INV-ST-A','SA-ST-1',5000,'active','fixed_term',
+               '2026-06-05','2027-06-05','2026-06-05')`);
+    await db.query(
+      `INSERT INTO investments (id, investor_id, amount, status, product_type,
+                                start_date, end_date, created_at)
+       VALUES ('INVST-ST-OWN','INV-ST-A',1200,'active','fixed_term',
+               '2026-06-06','2027-06-06','2026-06-06')`);
 
     const WIN = { from: '2026-06-01', to: '2026-06-30' };
 
@@ -93,11 +180,57 @@ const db = new Pool({
     const asInvestor = await buildAccountStatement(db, { investorId: 'INV-ST-A', ...WIN });
     ok('it still builds', !!asInvestor && !!asInvestor.investor,
        JSON.stringify(Object.keys(asInvestor || {})));
-    ok('and still carries the sub-account’s rows',
-       (asInvestor.transactions || []).some(t => t.reference === 'ST-GRP-1'),
-       'an investor statement has always included their sub-accounts’ transactions — '
-       + 'narrowing that would silently change documents clients already hold');
-    ok('and their own', (asInvestor.transactions || []).some(t => t.reference === 'ST-PERS-1'));
+    /* THIS ASSERTED THE OPPOSITE, and said why: an investor statement had
+       always carried their sub-accounts' rows, and narrowing it would
+       change documents clients already hold. That was the right call while
+       a sub-account had no statement of its own. It has one now, and the
+       decision was taken on 21 November 2026 to narrow it: a group's
+       contributions, investments and payouts belong on the group's
+       statement, not beside the chairperson's own money.
+
+       It also makes the personal statement RECONCILE. Every balance in it
+       is anchored to the holder's own wallet, and it was listing money
+       that never passed through that wallet — so the ledger and the anchor
+       could not agree, and the footer said so on every statement a client
+       with a sub-account was issued. */
+    ok('A PERSONAL STATEMENT IS PERSONAL',
+       !(asInvestor.transactions || []).some(t => t.reference === 'ST-GRP-1'),
+       'the group’s rows carry the holder’s investor_id too, and used to come '
+       + 'along — so "what did I do with my money" was answered by a page that '
+       + 'also listed what four other people did with theirs');
+    ok('and it carries their own', (asInvestor.transactions || []).some(t => t.reference === 'ST-PERS-1'));
+
+    /* THE SYMPTOM A CLIENT ACTUALLY SAW. Every balance on a statement is
+       anchored to the holder's own wallet. While the rows included a
+       sub-account's — money that never passed through that wallet — the
+       ledger and the anchor could not agree, and the footer said so in as
+       many words on every statement issued to a client with a group.
+       `reconciles` is the service's own answer to whether they agree. */
+    ok('AND IT RECONCILES TO THE WALLET IT IS ANCHORED TO',
+       asInvestor.reconciles === true,
+       `derived ${asInvestor.derived_opening_balance} vs opening `
+       + `${asInvestor.opening_balance} — `
+       + 'a statement that cannot tie to its own anchor tells the client so '
+       + 'in a red box at the bottom');
+
+    /* The transfer that funds a group is the holder's own money leaving, so
+       it stays — it is the one row about the group that belongs here. */
+    ok('THE GROUP\u2019S HOLDING IS NOT LISTED AS THEIRS',
+       !(asInvestor.investments || []).some(i => i.id === 'INVST-ST-GRP'),
+       'the member who placed it is on the row, which is how R5 000 of the '
+       + 'group\u2019s money appeared under one person\u2019s own holdings');
+    ok('and their own still is',
+       (asInvestor.investments || []).some(i => i.id === 'INVST-ST-OWN'),
+       JSON.stringify((asInvestor.investments || []).map(i => i.id)));
+
+    ok('the money LEAVING for the group is still on it',
+       (asInvestor.transactions || []).some(t => t.reference === 'ST-OUT-1'),
+       'what left this wallet is this wallet\u2019s business; what the group '
+       + 'then did with it is the group\u2019s');
+    ok('and the group\u2019s side of the same transfer is not',
+       !(asInvestor.transactions || []).some(t => t.reference === 'ST-OUT-1-IN'),
+       'both halves on one page net to zero against an anchor that moved by '
+       + 'the full amount, which is exactly how it stopped reconciling');
     ok('the person is named as a person',
        asInvestor.investor.first_name === 'Ayanda' && asInvestor.investor.last_name === 'Member',
        JSON.stringify(asInvestor.investor).slice(0, 160));
@@ -122,14 +255,25 @@ const db = new Pool({
        JSON.stringify(grp.investor).slice(0, 200));
     ok('with its type and reference', grp.investor.account_type === 'stokvel'
        && grp.investor.sa_reference === 'SA-ST4242');
+    ok('the group’s statement carries the group’s holding',
+       (grp.investments || []).some(i => i.id === 'INVST-ST-GRP')
+       && !(grp.investments || []).some(i => i.id === 'INVST-ST-OWN'),
+       JSON.stringify((grp.investments || []).map(i => i.id)));
     ok('it carries the group’s transactions',
        (grp.transactions || []).some(t => t.reference === 'ST-GRP-1'));
     ok('and NOT the personal ones',
        !(grp.transactions || []).some(t => t.reference === 'ST-PERS-1'),
        'the group’s statement is the group’s money');
     ok('the balances anchor to the group wallet',
-       Math.abs(Number(grp.closing_balance) - 1500) < 0.02,
-       `closing ${grp.closing_balance}, wallet is 1500`);
+       Math.abs(Number(grp.closing_balance) - 1000) < 0.02,
+       `closing ${grp.closing_balance}, wallet is 1000`);
+    ok('and it opens where the group\u2019s earlier rows left it',
+       Math.abs(Number(grp.opening_balance) - 300) < 0.02,
+       `opening ${grp.opening_balance} \u2014 the 300 contributed in May`);
+    ok('and the group\u2019s reconciles too', grp.reconciles === true,
+       `derived ${grp.derived_opening_balance} vs opening ${grp.opening_balance} \u2014 `
+       + 'the group\u2019s rows are the group\u2019s wallet, which is the other half '
+       + 'of the same decision');
 
     console.log('\nand a stokvel’s carries what an AGM asks for');
     await db.query(

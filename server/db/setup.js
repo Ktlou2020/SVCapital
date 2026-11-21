@@ -6359,6 +6359,32 @@ async function autoSetup() {
                   `${defaulted} defaulted to South African.`);
     });
 
+    await step("38. Announce the split between personal and group money", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'both','everyone','fa-scale-balanced', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['personal-vs-group-money-2026-11',
+         'A personal wallet and statement now show only personal money',
+         'A group’s transactions carry the member’s own reference as well as the group’s, '
+         + 'so a client who belongs to a stokvel saw the group’s contributions, payouts and '
+         + 'holdings listed on their own wallet and their own statement — beside their own '
+         + 'money, and often instead of it, since the eight most recent movements were as likely '
+         + 'to be the group’s. The group’s money now appears on the group’s screens and the '
+         + 'group’s statement only. What does stay on the personal side is the transfer that '
+         + 'funds the group: that is this wallet’s money leaving, and it used to be the one row '
+         + 'missing. This is also what stopped a statement balancing: every figure on one is '
+         + 'anchored to the client’s own wallet, so listing money that never passed through it '
+         + 'left a difference the footer reported on every statement a client with a group was '
+         + 'issued. Those statements now tie.',
+         'Portal → Wallet (the Activity list) and the Income chart on the dashboard; a group’s '
+         + 'own figures are under My Groups → open the group. Statements: Console → Clients → '
+         + 'open a client → Statement, and for the group, Sub-accounts → open the group → '
+         + 'Statement.']);
+      if (rowCount) console.log('✅ Announced the personal/group money split.');
+    });
+
 
 
   } catch (err) {
