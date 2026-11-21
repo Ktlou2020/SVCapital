@@ -44,6 +44,7 @@
 
 const defaultPool = require('../db/pool');
 const mandate     = require('./stokvelMandate');
+const invites     = require('./stokvelInvites');
 
 const fmtR = v => 'R' + Number(v || 0).toLocaleString('en-ZA',
   { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -435,7 +436,7 @@ async function invited({ inviteId, db } = {}) {
            nine bare digits would be dropped in silence, leaving the
            invitation recorded and the SMS never sent. Restored here, where
            the storage convention is known. */
-        const dialable = /^\d{9}$/.test(String(v.cell)) ? '0' + v.cell : v.cell;
+        const dialable = invites.dialable(v.cell);
         await Promise.resolve(sms.sendStokvelInvite(dialable,
           { inviterName: who, stokvelName: group, terms, alreadyAUser: !!v.matched_investor_id, inviteId: v.id }))
           .then(() => reached.push('sms'))

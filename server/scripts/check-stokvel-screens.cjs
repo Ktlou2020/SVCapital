@@ -1150,7 +1150,61 @@ const STUB = {
     fail++;
   } finally {
     await stop();
-    console.log(`\n${pass} passed, ${fail} failed`);
+    console.log('\nand the roster says who signs, and how that changes');
+{
+  const CORE = read('js/portal-core.js').replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const at   = CORE.indexOf('function _svMembers');
+  const blk  = CORE.slice(at, CORE.indexOf('function levyStokvelFine', at));
+  ok('the members panel was found', at > 0 && blk.length > 300,
+     'a slice that missed it would assert nothing while passing');
+
+  ok('SIGNATORY IS A WORD, not a bare icon',
+     />Signatory<\/span>/.test(blk),
+     'it was a pink nib with the word only in a tooltip — and a phone has '
+     + 'no hover, so nothing on the screen said who could authorise money');
+
+  /* THE CALL SITE, not just the function. Deleting the one line that
+     renders the note left every assertion below passing — they all read
+     _svSignatoryNote, which still existed, just unused. A function nobody
+     calls is a function nobody sees. */
+  ok('AND THE ROSTER ACTUALLY RENDERS IT',
+     /_svSignatoryNote\(gid, rows, ctx\)/.test(blk),
+     'the note can be perfect and still be absent from the screen');
+
+  const note = CORE.slice(CORE.indexOf('function _svSignatoryNote'),
+                          CORE.indexOf('function _svCanProposeMandate'));
+  ok('the note was found', note.length > 300);
+  ok('it counts the signatories', /sigs\.length/.test(note) && /active\.length/.test(note));
+  ok('and states the quorum beside the count',
+     /must approve before money moves/.test(note),
+     'how many sign and how many must agree are the same question');
+  ok('THE WAY TO CHANGE IT IS ON THIS SCREEN',
+     /raiseStokvelMandateChange\(/.test(note),
+     'the control lived on the Approvals tab — "who are our signatories" and '
+     + '"how do we change them" are asked in the same breath');
+  ok('and it is the SAME dialog the approvals tab opens',
+     (CORE.match(/raiseStokvelMandateChange\('/g) || []).length >= 2
+     && !/function raiseStokvelMandateChange2/.test(CORE),
+     'a second dialog is a second set of rules to keep in step');
+  ok('somebody who cannot propose is told who can, not shown nothing',
+     /chairperson, the secretary or the treasurer can start that/.test(note),
+     '"I cannot see it" and "I am not allowed" look identical otherwise');
+  ok('and it says the change needs approval rather than taking effect',
+     /changes nothing on its own/.test(note), note.slice(0, 200));
+
+  /* One rule for who may ask, so the two tabs cannot disagree. */
+  /* The lookbehind excludes the DECLARATION, which matches the call shape
+     exactly. Counting without it finds three "callers" and two of them are
+     real — the same mistake check-document-delivery made when it reported
+     svcDeliverToast's own definition as a call site. */
+  const callers = (CORE.match(/(?<!function )_svCanProposeMandate\(g, meIsSignatory\)/g) || []).length;
+  ok('BOTH TABS ASK THE SAME QUESTION',
+     /function _svCanProposeMandate/.test(CORE) && callers === 2,
+     `${callers} call site(s) — the approvals tab had the rule written inline; `
+     + 'a copy on the members tab is a second answer to "can I change this?"');
+}
+
+console.log(`\n${pass} passed, ${fail} failed`);
     process.exit(fail ? 1 : 0);
   }
 })();

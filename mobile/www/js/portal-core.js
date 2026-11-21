@@ -2469,13 +2469,19 @@ function svcShowNonResidentDeclaration(d) {
 
   const ov = document.createElement('div');
   ov.id = 'svc-nrd';
+  /* NEAR THE TOP, not pinned to the bottom. As a bottom sheet it opened
+     below the fold on a desktop — the heading and the first clauses were
+     off screen, and what a person saw first was the button. A declaration
+     is read before it is agreed to, so it starts where reading starts. */
   ov.style.cssText = 'position:fixed;inset:0;z-index:99997;background:rgba(6,10,15,0.82);'
-                   + 'display:flex;align-items:flex-end;justify-content:center;'
-                   + 'padding:0;backdrop-filter:blur(3px)';
+                   + 'display:flex;align-items:flex-start;justify-content:center;'
+                   + 'padding:max(4vh, 16px) 16px 16px;overflow:auto;'
+                   + 'backdrop-filter:blur(3px)';
   ov.innerHTML =
-    '<div style="background:#fff;border-radius:18px 18px 0 0;width:100%;max-width:520px;'
+    '<div style="background:#fff;border-radius:16px;width:100%;max-width:520px;'
          + 'max-height:92vh;overflow:auto;padding:22px 20px '
-         + 'calc(20px + env(safe-area-inset-bottom, 0px))">'
+         + 'calc(20px + env(safe-area-inset-bottom, 0px));'
+         + 'box-shadow:0 24px 60px rgba(0,0,0,0.45)">'
       + '<div style="font-weight:800;font-size:1.05rem;margin-bottom:4px">'
         + _esc(d.title || 'Declaration') + '</div>'
       + `<div style="font-size:0.82rem;color:#4b5563;line-height:1.55;margin-bottom:14px">`
@@ -13945,13 +13951,13 @@ async function _svRenderHub(id, tab, opts) {
     switch (key) {
     case 'contributions': out = _svContributions(contributions, mine, id, g); break;
     case 'approvals':     out = _svWithdrawals(requests, meIsSignatory, id, {
-                              g, canPropose: meIsSignatory || !!g.i_opened_it
-                                || ['chairperson', 'secretary', 'treasurer'].includes(g.my_role),
+                              g, canPropose: _svCanProposeMandate(g, meIsSignatory),
                               signatories: ((members && members.data) || [])
                                 .filter(m => m.status === 'active' && m.is_signatory).length }); break;
     case 'shares':        out = _svShares(shareData, id); break;
     case 'payouts':       out = _svPayouts(payoutData, id); break;
-    case 'members':       out = _svMembers(members, id, !!(invitations && invitations.can_invite))
+    case 'members':       out = _svMembers(members, id, !!(invitations && invitations.can_invite),
+                              { g, canPropose: _svCanProposeMandate(g, meIsSignatory) })
                                + _svInvitations(invitations, id); break;
     case 'investments':   out = (await _svNoticeFund(id)) + (await _svInvestments(id)); break;
     case 'proposals':     out = await _svProposals(id); break;
@@ -15714,7 +15720,67 @@ async function confirmStokvelSignatory(groupId) {
   await _svRenderHub(groupId, 'approvals');
 }
 
-function _svMembers(res, gid, canLevy) {
+/* WHO SIGNS, AND HOW THAT CHANGES.
+ *
+ * The roster showed a role and, for a signatory, a bare pink nib with the
+ * word only in a tooltip — so on a phone, where there is no hover, nothing
+ * on this screen said who could authorise money at all. And the control
+ * that changes it lives on the Approvals tab, which is not where anybody
+ * looks for it: the question "who are our signatories" and the question
+ * "how do we change them" are asked in the same breath and were two
+ * screens apart.
+ *
+ * The count is stated, the quorum with it, and the way to change it is the
+ * SAME dialog the Approvals tab opens — not a second one that could drift
+ * from it. For somebody who cannot propose, the sentence says who can
+ * rather than the button simply being absent, because "I cannot see it"
+ * and "I am not allowed" look identical otherwise.
+ */
+function _svSignatoryNote(gid, rows, ctx) {
+  const g       = (ctx && ctx.g) || {};
+  const active  = (rows || []).filter(m => m.status !== 'invited');
+  const sigs    = active.filter(m => m.is_signatory);
+  const quorum  = parseInt(g.stokvel_quorum, 10) || 0;
+  const can     = !!(ctx && ctx.canPropose) && !!quorum;
+
+  const count = sigs.length
+    ? `<strong>${sigs.length}</strong> of ${active.length} member${active.length === 1 ? '' : 's'} `
+      + `${sigs.length === 1 ? 'is a signatory' : 'are signatories'}`
+    : 'No signatories are recorded yet';
+  const needs = quorum
+    ? ` · <strong>${quorum}</strong> must approve before money moves`
+    : '';
+
+  return `<div style="margin-top:10px;padding:11px 13px;border:1px solid var(--border);
+       border-radius:10px;background:rgba(237,165,255,0.05)">
+    <div style="font-size:0.78rem;margin-bottom:${can ? '8px' : '4px'}">
+      <i class="fa-solid fa-pen-nib" style="color:#eda5ff;margin-right:6px"></i>${count}${needs}.
+    </div>
+    ${can
+      ? `<button class="btn btn--secondary btn--sm" onclick="raiseStokvelMandateChange('${_esc(gid)}')">
+           <i class="fa-solid fa-user-pen" style="margin-right:5px"></i>Add or remove a signatory
+         </button>
+         <div style="font-size:0.72rem;color:var(--text-muted);margin-top:7px;line-height:1.5">
+           This changes nothing on its own. It asks the signatories to approve, and takes
+           effect once enough of them have. A signatory cannot vote on their own removal.
+         </div>`
+      : `<div style="font-size:0.72rem;color:var(--text-muted);line-height:1.5">
+           Signatories are added and removed by asking the signatories to approve it.
+           A signatory, the chairperson, the secretary or the treasurer can start that.
+         </div>`}
+  </div>`;
+}
+
+/* Who may ASK for a change to the mandate. Not who may make one — nobody
+   can do that alone, which is the point of a mandate. Defined once because
+   the Members tab and the Approvals tab both offer it and two answers to
+   "can I change this?" is worse than one wrong one. */
+function _svCanProposeMandate(g, meIsSignatory) {
+  return !!meIsSignatory || !!(g && g.i_opened_it)
+    || ['chairperson', 'secretary', 'treasurer'].includes((g && g.my_role) || '');
+}
+
+function _svMembers(res, gid, canLevy, ctx) {
   const rows = (res && res.data) || [];
   return `<div class="sa-section-title mt-16"><i class="fa-solid fa-users"></i> ${_esc(_svT('mem.title', 'Members'))}</div>
     ${canLevy ? `<div style="margin-bottom:8px">
@@ -15729,10 +15795,15 @@ function _svMembers(res, gid, canLevy) {
     ${rows.map(m => `<tr>
       <td>${_esc(m.first_name)} ${_esc(m.last_name || '')}${m.is_me ? ' <span style="color:var(--text-muted)">(you)</span>' : ''}</td>
       <td>${_esc(String(m.role).replace(/^\w/, c => c.toUpperCase()))}</td>
-      <td class="text-right">${m.is_signatory ? '<i class="fa-solid fa-pen-nib" title="Signatory" style="color:#eda5ff"></i>' : ''}</td>
+      <td class="text-right">${m.is_signatory
+        ? '<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.7rem;font-weight:700;'
+          + 'padding:2px 9px;border-radius:100px;background:rgba(237,165,255,0.16);color:#eda5ff;'
+          + 'white-space:nowrap"><i class="fa-solid fa-pen-nib"></i>Signatory</span>'
+        : ''}</td>
       <td class="text-right" style="color:var(--text-muted)">${m.status === 'invited' ? 'Invited' : ''}</td>
     </tr>`).join('')}
     </tbody></table>
+    ${_svSignatoryNote(gid, rows, ctx)}
     ${(window.__SVREL || {}).templates ? `<div style="font-size:0.8rem;margin-top:12px;color:var(--text-muted)">
       <i class="fa-solid fa-file-signature" style="color:#eda5ff"></i>
       ${_esc(_svT('mem.templates', 'Templates for your committee:'))}

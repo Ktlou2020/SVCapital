@@ -198,7 +198,13 @@ const settle = async () => {
     const { rows: [byCell] } = await db.query(
       `SELECT cell, matched_investor_id FROM stokvel_invites WHERE id = $1`,
       [asChair.body.data.id]);
-    ok('a cell keeps its last nine digits only', byCell.cell === '721110004', byCell.cell);
+    /* THIS ASSERTED THE BUG. "Last nine digits only" is a South African
+       shorthand — it makes 0XX and +27XX the same number by discarding the
+       country code, and nine digits do not identify a person on earth. The
+       country code is kept now; the two South African forms are still
+       reconciled, explicitly, which is what this was really for. */
+    ok('a cell is stored canonically, country code and all',
+       byCell.cell === '27721110004', byCell.cell);
     ok('and a contact that already has an account is resolved at once',
        byCell.matched_investor_id === 'INV-IV-OUTSIDE', JSON.stringify(byCell));
     ok('the contact is masked in what comes back',
@@ -212,8 +218,12 @@ const settle = async () => {
        sent.email.some(c => c.fn === 'sendStokvelInvite'), JSON.stringify(sent.email.map(c => c.fn)));
     ok('a cell number gets an SMS',
        sent.sms.some(c => c.fn === 'sendStokvelInvite'), JSON.stringify(sent.sms.map(c => c.fn)));
-    ok('and the SMS number is dialable, not nine bare digits',
-       sent.sms.some(c => /^0\d{9}$|^\+27/.test(String(c.args[0] || ''))),
+    /* Still the same rule: what is STORED is for comparing and what is
+       DIALLED is for ringing, and they are not the same string. This caught
+       the canonical form going out with no plus on it the moment the stored
+       form gained its country code — which is exactly what it is for. */
+    ok('and the SMS number is dialable, not a bare string of digits',
+       sent.sms.some(c => /^0\d{9}$|^\+\d{8,}$/.test(String(c.args[0] || ''))),
        JSON.stringify(sent.sms.map(c => c.args[0])));
     ok('a contact that already has an account is pushed as well',
        (await (async () => { reset();
@@ -439,6 +449,71 @@ const settle = async () => {
     ok('and never reads a signatory flag off the invitation',
        !/invite\.is_signatory|invite\.role/.test(acceptFn),
        'the values are written here so that there is nothing to tamper with');
+
+    console.log('\nand an invitation reaches the person it was sent to AND NOBODY ELSE');
+    {
+      /* REPORTED: "just signed up and I see that I am already invited to a
+         group". An invitation is discovered by matching the contact it was
+         sent to against the contacts on the signed-in account, and the
+         number was matched on its LAST NINE DIGITS — a South African
+         shorthand that makes 061 420 7723 and +27 61 420 7723 the same
+         number by throwing the country code away. Nine digits do not
+         identify a person on earth. A match here is not cosmetic: it puts
+         somebody else's group invitation on your screen with a working
+         Accept button beside it. */
+      const svc2 = require(path.join(ROOT, 'server', 'services', 'stokvelInvites.js'));
+      const keys = n => svc2.cellKeys(n);
+      const collide = (a, b) => keys(a).some(k => keys(b).includes(k));
+
+      ok('the two ways of writing a South African number still match',
+         collide('+27 61 420 7723', '061 420 7723'),
+         'that equivalence is real and must survive the fix');
+      ok('A UK NUMBER DOES NOT MATCH A SOUTH AFRICAN ONE',
+         !collide('+27 61 420 7723', '+44 7614 207723'),
+         'same last nine digits — this is the one that was reported');
+      ok('nor does a US one',
+         !collide('+27 61 420 7723', '+1 614 207 7230'), 'same tail, different country');
+      ok('and two different South African numbers still do not match',
+         !collide('+27 61 420 7723', '+27 82 111 2222'));
+      ok('the country code is kept, not discarded',
+         (keys('+44 7614 207723')[0] || '').startsWith('44'),
+         JSON.stringify(keys('+44 7614 207723')));
+      ok('and a foreign number offers no nine-digit key at all',
+         keys('+44 7614 207723').every(k => k.length !== 9),
+         'that key is what a legacy South African row is stored under, so '
+         + 'offering one is how a foreigner would match it');
+      ok('while a South African number still answers to the legacy form',
+         keys('+27 61 420 7723').includes('614207723'),
+         'invitations sent before the fix are stored that way and must stay '
+         + 'findable by the person they were sent to');
+
+      ok('setup rewrites the stored nine-digit numbers',
+         /SET cell = '27' \|\| cell[\s\S]{0,90}\^\[0-9\]\{9\}\$/.test(read('server/db/setup.js')),
+         'so the compatibility branch stops being load-bearing');
+
+      /* RUN, not read. The first version of this looked for the string
+         `cellKeys(investor.phone)` in addressedTo — which survives happily
+         while the line that USES the keys is replaced by the old tail
+         comparison, so the mutation went uncaught. Seeing an invitation and
+         being allowed to take it must not be two different questions, and
+         only driving the function can say whether they are. */
+      const saInvite = { cell: svc2.normCell('+27 61 420 7723'), email: null };
+      ok('ACCEPTING IS GUARDED BY THE SAME RULE',
+         svc2.addressedTo(saInvite, { phone: '061 420 7723' })
+         && !svc2.addressedTo(saInvite, { phone: '+44 7614 207723' })
+         && !svc2.addressedTo(saInvite, { phone: '+1 614 207 7230' }),
+         'a stranger whose number ends the same way could accept it');
+      ok('and a legacy nine-digit invitation is still acceptable by its owner',
+         svc2.addressedTo({ cell: '614207723', email: null }, { phone: '+27 61 420 7723' }),
+         'invitations sent before the fix must not become unacceptable');
+      ok('but not by a foreigner with the same tail',
+         !svc2.addressedTo({ cell: '614207723', email: null }, { phone: '+44 7614 207723' }),
+         'the legacy key is the one a foreign number must never produce');
+
+      const SRC = codeOnly(read('server/services/stokvelInvites.js'));
+      ok('and the listing query matches against every form',
+         /v\.cell = ANY\(\$2::text\[\]\)/.test(SRC), 'forInvestor');
+    }
 
     await clean();
     await db.query(`DELETE FROM investors WHERE id IN ('INV-IV-GONE','INV-IV-LATE','INV-IV-LAST')`);

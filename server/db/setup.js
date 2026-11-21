@@ -6079,6 +6079,27 @@ async function autoSetup() {
           WHERE id = 'FAC-GRAINCO' AND funded_from IS NULL`);
     });
 
+    /* An invitation's contact used to be stored as the last NINE digits of
+       the number, which is a South African shorthand: it makes 061 420 7723
+       and +27 61 420 7723 the same number by discarding the country code.
+       Nine digits do not identify a person on earth, so +44 7614 207723
+       matched a South African mobile — and an invitation that matches is an
+       invitation shown to that person, with a working Accept button beside
+       it. Harmless while only South Africans could register; reachable the
+       day international sign-up opened.
+
+       The matcher keeps the country code now. These rows are rewritten to
+       the same canonical form so the compatibility branch that still reads
+       the old nine-digit key has nothing left to read. Only rows of exactly
+       nine digits are touched, so running it twice changes nothing. */
+    await step("37. Give stored invitation numbers their country code back", async () => {
+      const { rowCount } = await pool.query(
+        `UPDATE stokvel_invites
+            SET cell = '27' || cell
+          WHERE cell ~ '^[0-9]{9}$'`);
+      return rowCount ? `canonicalised ${rowCount} invitation contact(s)` : 'nothing to change';
+    });
+
     await step("34. Announce the address check", async () => {
       const { rowCount } = await pool.query(
         `INSERT INTO feature_announcements

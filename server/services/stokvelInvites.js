@@ -51,9 +51,83 @@ function normEmail(raw) {
   const e = String(raw || '').trim().toLowerCase();
   return /^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(e) ? e : null;
 }
+/* A phone number, canonically.
+ *
+ * THIS KEPT THE LAST NINE DIGITS AND NOTHING ELSE. That is a South African
+ * heuristic: it makes 061 420 7723 and +27 61 420 7723 the same number,
+ * which is right, by throwing away the country code — which is not. Nine
+ * digits do not identify a person on earth, and +44 7614 207723 has the
+ * same last nine as 061 420 7723.
+ *
+ * An invitation is found by matching the contact it was sent to against the
+ * contacts on the signed-in account, so a collision is not a cosmetic
+ * problem: it shows one client another client's invitation to a savings
+ * group, and the Accept button beside it works. It took international
+ * sign-up being open to make that reachable, which is exactly when it was
+ * reported.
+ *
+ * The country code is kept now. South Africa's two ways of writing the same
+ * number are still reconciled, explicitly, because that is a real
+ * equivalence rather than a side effect of truncation.
+ */
 function normCell(raw) {
-  const digits = String(raw || '').replace(/\D/g, '');
-  return digits.length >= 9 ? digits.slice(-9) : null;
+  let d = String(raw || '').replace(/\D/g, '');
+  if (!d) return null;
+  if (d.startsWith('00')) d = d.slice(2);              // 0027… — the long way to write +27
+  if (d.length === 10 && d[0] === '0') d = '27' + d.slice(1);   // 0XX XXX XXXX, South African
+  else if (d.length === 9) d = '27' + d;               // a bare SA national number
+  /* A foreign number keeps its own leading zero if that is how it was
+     given: 07614 207723 is a UK number, not a South African one, and
+     forcing it to +27 is the same mistake in the other direction. */
+  return d.length >= 10 ? d : null;
+}
+
+/* Every form of a number an invitation might be STORED under.
+ *
+ * Invitations written before the fix hold the nine-digit tail, and a live
+ * invitation must not stop being findable because the rule improved. So a
+ * South African number also matches its own legacy tail — and only a South
+ * African one, which is the whole point: a foreign number contributes no
+ * nine-digit key and therefore cannot collide with a legacy South African
+ * row. Once setup.js has rewritten the stored rows this is belt and braces.
+ */
+function cellKeys(raw) {
+  const c = normCell(raw);
+  if (!c) return [];
+  return c.startsWith('27') && c.length === 11 ? [c, c.slice(2)] : [c];
+}
+
+/* The same canonicalisation, in SQL, for the one query that has to apply it
+ * to a column instead of a value.
+ *
+ * Exported rather than written out at the call site: the rule above and a
+ * hand-copy of it in a WHERE clause is two definitions of "the same number",
+ * and the copy is what was wrong — it compared RIGHT(digits, 9), so an
+ * investor in another country whose number ends the same way WAS the person
+ * being invited as far as that lookup was concerned.
+ */
+function canonicalCellSQL(col) {
+  const d = `REGEXP_REPLACE(COALESCE(${col}, ''), '\\D', '', 'g')`;
+  return `CASE
+            WHEN LENGTH(${d}) = 10 AND LEFT(${d}, 1) = '0' THEN '27' || SUBSTRING(${d} FROM 2)
+            WHEN LENGTH(${d}) = 9                          THEN '27' || ${d}
+            ELSE ${d}
+          END`;
+}
+
+/* A number a telephone can ring.
+ *
+ * Invitations are stored canonically — digits, country code, no plus — which
+ * is right for comparing and wrong for dialling. This was done inline in
+ * stokvelNotify and knew only the old nine-digit form, so once the stored
+ * form gained its country code the SMS went to a number with no plus on it.
+ */
+function dialable(cell) {
+  const d = String(cell || '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.length === 9) return '0' + d;          // legacy rows: a bare SA national number
+  if (d[0] === '0')   return d;                // already national, foreign or otherwise
+  return '+' + d;
 }
 
 /* What a member is shown of somebody else's contact details. The roster is
@@ -99,7 +173,7 @@ async function create(client, group, invitedBy, { name, email, cell, asSignatory
   const { rows: matched } = await client.query(
     `SELECT id, first_name, email, phone FROM investors
       WHERE ($1::text IS NOT NULL AND LOWER(email) = $1)
-         OR ($2::text IS NOT NULL AND RIGHT(REGEXP_REPLACE(COALESCE(phone,''), '\\D', '', 'g'), 9) = $2)
+         OR ($2::text IS NOT NULL AND ${canonicalCellSQL('phone')} = $2)
       LIMIT 1`, [e, c]);
   const who = matched[0] || null;
 
@@ -156,8 +230,8 @@ async function create(client, group, invitedBy, { name, email, cell, asSignatory
    invitation is theirs. */
 async function forInvestor(client, investor) {
   const e = normEmail(investor && investor.email);
-  const c = normCell(investor && investor.phone);
-  if (!e && !c) return [];
+  const c = cellKeys(investor && investor.phone);
+  if (!e && !c.length) return [];
   const { rows } = await client.query(
     `SELECT v.*, a.name AS stokvel_name, a.stokvel_reg_number,
             /* The mandate, so the accept screen can state the rules the
@@ -175,7 +249,7 @@ async function forInvestor(client, investor) {
         AND v.expires_at > NOW()
         AND ( (v.matched_investor_id IS NOT NULL AND v.matched_investor_id = $3)
            OR ($1::text IS NOT NULL AND v.email = $1)
-           OR ($2::text IS NOT NULL AND v.cell  = $2) )
+           OR (v.cell IS NOT NULL AND v.cell = ANY($2::text[])) )
         /* Somebody who is already in is not shown an invitation to join. */
         AND NOT EXISTS (SELECT 1 FROM stokvel_members m
                          WHERE m.sub_account_id = v.sub_account_id
@@ -192,9 +266,9 @@ async function forInvestor(client, investor) {
 function addressedTo(invite, investor) {
   if (!invite || !investor) return false;
   const e = normEmail(investor.email);
-  const c = normCell(investor.phone);
+  const keys = cellKeys(investor.phone);
   if (invite.email && e && invite.email === e) return true;
-  if (invite.cell  && c && invite.cell  === c) return true;
+  if (invite.cell && keys.includes(invite.cell)) return true;
   return false;
 }
 
@@ -282,6 +356,6 @@ async function revoke(client, group, inviteId) {
 
 module.exports = {
   MAX_MEMBERS, MAX_PENDING_INVITES, EXPIRES_DAYS, COMMITTEE,
-  normEmail, normCell, maskContact, mayInvite,
+  normEmail, normCell, cellKeys, canonicalCellSQL, dialable, maskContact, mayInvite,
   create, forInvestor, addressedTo, accept, decline, revoke,
 };
