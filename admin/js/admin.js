@@ -16313,13 +16313,19 @@ async function exportAumReport() {
    ═══════════════════════════════════════════════ */
 async function loadAML() {
   try {
-    const [flagRes, invRes] = await Promise.all([
+    const [flagRes, invRes, heldRes] = await Promise.all([
       API._fetch('GET', 'tables/support_tickets', null, { category: 'aml_review', limit: 200 }),
-      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 5000 })
+      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 5000 }),
+      /* Held deposits are real money waiting on a decision. A failure to
+         load them must not take the flag history down with it, but it must
+         not look like "none held" either — renderAMLHeld says so. */
+      API._fetch('GET', 'admin/aml/held').catch(e => ({ error: e.message || 'could not load' })),
     ]);
     STATE.amlFlags = flagRes.data || [];
     if (!STATE.investors.length) STATE.investors = invRes.data || [];
+    STATE.amlHeld = heldRes && heldRes.error ? heldRes : { data: (heldRes && heldRes.data) || [] };
     renderAMLStats();
+    renderAMLHeld();
     renderAMLTable();
 
     // Update nav badge
@@ -16332,6 +16338,88 @@ async function loadAML() {
   } catch (e) {
     Toast.error('Failed to load AML flags');
     console.error(e);
+  }
+}
+
+/* ─── Funds held, and the two decisions ──────────────────────────────
+   The money has been taken from the client's card and is NOT in their
+   wallet. Both buttons say what they do to the money, because that is the
+   only thing that matters on this screen. */
+function renderAMLHeld() {
+  const card = document.getElementById('amlHeldCard');
+  const body = document.getElementById('amlHeldBody');
+  const total = document.getElementById('amlHeldTotal');
+  if (!card || !body) return;
+
+  const held = STATE.amlHeld || { data: [] };
+  if (held.error) {
+    card.style.display = '';
+    if (total) total.textContent = '—';
+    body.innerHTML = `<tr><td colspan="6" class="text-center" style="padding:24px;color:#ef4444">
+      Could not load held deposits (${_esc(held.error)}). This is NOT "none held" —
+      money may be waiting. Refresh, and tell us if it keeps failing.</td></tr>`;
+    return;
+  }
+
+  const rows = held.data || [];
+  card.style.display = rows.length ? '' : 'none';
+  if (!rows.length) return;
+
+  if (total) total.textContent = Utils.rand(rows.reduce((n, r) => n + (parseFloat(r.amount) || 0), 0));
+  body.innerHTML = rows.map(r => {
+    const name = `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.investor_id;
+    /* The reason was written onto the row as "AML: <reason>" when it was
+       held, so it is read from there rather than re-derived — the figure
+       that tripped the rule was the figure at that moment. */
+    const why = String(r.notes || '').replace(/^AML:\s*/, '') || 'Flagged by the AML rules';
+    return `<tr>
+      <td style="white-space:nowrap">${Utils.date(r.created_at)}</td>
+      <td><div style="font-weight:600">${_esc(name)}</div>
+          <div class="text-muted" style="font-size:0.72rem">${_esc(r.email || '')}</div>
+          <div class="text-muted" style="font-size:0.72rem">FICA: ${_esc(r.kyc_status || 'unknown')}</div></td>
+      <td style="font-weight:800;white-space:nowrap">${Utils.rand(r.amount)}</td>
+      <td style="font-size:0.78rem">${_esc(why)}
+          <div class="text-muted" style="font-size:0.7rem">${_esc(r.reference || '')}</div></td>
+      <td style="font-size:0.78rem">${r.sub_account_id
+          ? _esc(r.sub_account_name || r.sub_account_id) : 'Main wallet'}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn--primary btn--sm" onclick="releaseHeldDeposit('${_esc(r.reference)}')">
+          <i class="fa-solid fa-check"></i> Release</button>
+        <button class="btn btn--secondary btn--sm" style="color:#ef4444;border-color:rgba(239,68,68,0.3)"
+                onclick="rejectHeldDeposit('${_esc(r.reference)}')">
+          <i class="fa-solid fa-xmark"></i> Reject</button>
+      </td></tr>`;
+  }).join('');
+}
+
+async function releaseHeldDeposit(reference) {
+  const row = ((STATE.amlHeld && STATE.amlHeld.data) || []).find(r => r.reference === reference);
+  const amt = row ? Utils.rand(row.amount) : 'this deposit';
+  const who = row ? `${row.first_name || ''} ${row.last_name || ''}`.trim() : 'the client';
+  if (!confirm(`Release ${amt} into ${who}'s wallet? They will be able to invest or `
+             + 'withdraw it immediately, and they will be emailed to say it has cleared.')) return;
+  try {
+    await API._fetch('POST', `admin/aml/held/${encodeURIComponent(reference)}/release`);
+    Toast.show(`Released. ${amt} is in the wallet.`, 'success');
+    await loadAML();
+  } catch (err) {
+    Toast.show('Could not release: ' + (err.message || ''), 'error');
+  }
+}
+
+async function rejectHeldDeposit(reference) {
+  const reason = prompt('Why is it rejected? This goes on the record and into the AML ticket.');
+  if (reason === null) return;
+  if (!String(reason).trim()) { Toast.show('A reason is required.', 'error'); return; }
+  if (!confirm('Reject it? Nothing is credited. REFUNDING THE CLIENT IS A SEPARATE, '
+             + 'MANUAL STEP through the gateway — this does not do it.')) return;
+  try {
+    await API._fetch('POST', `admin/aml/held/${encodeURIComponent(reference)}/reject`,
+                     { reason: String(reason).trim() });
+    Toast.show('Rejected. Nothing was credited. The refund is still to be done by hand.', 'success');
+    await loadAML();
+  } catch (err) {
+    Toast.show('Could not reject: ' + (err.message || ''), 'error');
   }
 }
 
@@ -23054,6 +23142,10 @@ async function openStokvelAdmin(id) {
   host.innerHTML = _stokvelAdminMandate(s) + _stokvelAdminMembers(s)
                  + _stokvelAdminPayouts(s) + _stokvelAdminShares(s) + _stokvelAdminInvites(s)
                  + _stokvelAdminSchedule(s) + _stokvelAdminActivity(s);
+  /* The schedule panel shows one of three day controls depending on the
+     cadence, and innerHTML runs no script of its own — so a group already
+     on a weekly schedule would open showing the day-of-the-month box. */
+  _svAdminCadence();
   host.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -23412,25 +23504,69 @@ function _stokvelAdminSchedule(s) {
       <div><label style="font-size:0.78rem;display:block" class="text-muted">Amount each</label>
         <input type="number" min="1" step="0.01" id="svAmount" class="input input--sm" style="width:120px"
                value="${sch ? _esc(sch.amount) : ''}"></div>
-      <div><label style="font-size:0.78rem;display:block" class="text-muted">Day of the month</label>
+      <div><label style="font-size:0.78rem;display:block" class="text-muted">How often</label>
+        <select id="svCadence" class="input input--sm" style="width:150px" onchange="_svAdminCadence()">
+          <option value="monthly"${!sch || sch.cadence === 'monthly' ? ' selected' : ''}>Every month</option>
+          <option value="fortnightly"${sch && sch.cadence === 'fortnightly' ? ' selected' : ''}>Every second week</option>
+          <option value="weekly"${sch && sch.cadence === 'weekly' ? ' selected' : ''}>Every week</option>
+        </select></div>
+      <div id="svDueDayWrap"><label style="font-size:0.78rem;display:block" class="text-muted">Day of the month</label>
         <input type="number" min="1" max="31" id="svDueDay" class="input input--sm" style="width:90px"
-               value="${sch ? _esc(sch.due_day) : '1'}"></div>
+               value="${sch && (!sch.cadence || sch.cadence === 'monthly') ? _esc(sch.due_day) : '1'}"></div>
+      <div id="svWeekdayWrap" style="display:none"><label style="font-size:0.78rem;display:block" class="text-muted">Due every</label>
+        <select id="svWeekday" class="input input--sm" style="width:130px">
+          ${['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+            .map((n, i) => `<option value="${i + 1}"${sch && sch.cadence === 'weekly' && Number(sch.due_day) === i + 1 ? ' selected' : ''}>${n}</option>`).join('')}
+        </select></div>
       <button class="btn btn--primary btn--sm" onclick="saveStokvelSchedule('${_esc(s.id)}')">
         ${sch ? 'Replace schedule' : 'Start schedule'}</button>
     </div>
     <div class="text-muted" style="font-size:0.75rem;padding:0 14px 12px">
-      Monthly only. A day past the end of a short month settles on its last day.
-      ${sch ? 'Replacing ends the current schedule and starts a new one — obligations already raised keep the amount they were raised at.'
-            : 'Nothing is owed until a schedule exists.'}
+      <span id="svCadenceNote">A day past the end of a short month settles on its last day.</span>
+      ${sch ? ' Replacing ends the current schedule and starts a new one — obligations already raised keep the amount they were raised at.'
+            : ' Nothing is owed until a schedule exists.'}
     </div>
   </div>`;
 }
 
+/* The three cadences do not ask the same question: a day of the MONTH when
+   monthly, a day of the WEEK when weekly, and nothing at all when
+   fortnightly — that one is counted from the day the schedule starts and
+   falls on the same weekday from then on. */
+function _svAdminCadence() {
+  const c = (document.getElementById('svCadence') || {}).value || 'monthly';
+  const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+  show('svDueDayWrap', c === 'monthly');
+  show('svWeekdayWrap', c === 'weekly');
+  const note = document.getElementById('svCadenceNote');
+  if (note) {
+    note.textContent = c === 'monthly'
+      ? 'A day past the end of a short month settles on its last day.'
+      : c === 'weekly'
+        ? 'One contribution per week, due on the day chosen.'
+        : 'Every second week, counted from today — so it falls on today\u2019s weekday from now on.';
+  }
+}
+
 async function saveStokvelSchedule(stokvelId) {
   const amount = parseFloat(document.getElementById('svAmount').value);
-  const dueDay = parseInt(document.getElementById('svDueDay').value, 10);
+  const cadence = (document.getElementById('svCadence') || {}).value || 'monthly';
   if (!(amount > 0))               { Toast.show('An amount above zero is required.', 'error'); return; }
-  if (!(dueDay >= 1 && dueDay <= 31)) { Toast.show('The day must be between 1 and 31.', 'error'); return; }
+
+  /* due_day is NOT NULL. Fortnightly has no day of its own, so the weekday
+     the schedule starts on is stored — the same answer the generated dates
+     will give, recorded rather than left at the column default of 1 saying
+     Monday about a Thursday. */
+  let dueDay;
+  if (cadence === 'monthly') {
+    dueDay = parseInt(document.getElementById('svDueDay').value, 10);
+    if (!(dueDay >= 1 && dueDay <= 31)) { Toast.show('The day must be between 1 and 31.', 'error'); return; }
+  } else if (cadence === 'weekly') {
+    dueDay = parseInt(document.getElementById('svWeekday').value, 10);
+    if (!(dueDay >= 1 && dueDay <= 7)) { Toast.show('Choose the day of the week.', 'error'); return; }
+  } else {
+    dueDay = new Date(Date.now() + 2 * 3600 * 1000).getUTCDay() || 7;
+  }
   const existing = STATE.stokvelOpen.schedule;
   if (existing && !confirm(
       `This ends the current schedule of ${Utils.rand(existing.amount)} and starts a new one at ${Utils.rand(amount)}. ` +
@@ -23443,7 +23579,7 @@ async function saveStokvelSchedule(stokvelId) {
       await API._fetch('PATCH', `tables/stokvel_contribution_schedules/${existing.id}`, { active: false });
     }
     await API._fetch('POST', 'tables/stokvel_contribution_schedules', {
-      sub_account_id: stokvelId, amount, cadence: 'monthly',
+      sub_account_id: stokvelId, amount, cadence,
       due_day: dueDay, active: true,
     });
     Toast.show('Schedule saved. The next nightly run opens the period.', 'success');

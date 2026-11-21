@@ -6385,6 +6385,54 @@ async function autoSetup() {
       if (rowCount) console.log('✅ Announced the personal/group money split.');
     });
 
+    await step("39. Announce that a flagged deposit is now held", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'admin','staff','fa-hand', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['aml-funds-held-2026-11',
+         'A deposit the AML rules flag is no longer credited — it is held for you to release',
+         'The rules (a single deposit of R50 000 or more, or more than R100 000 in 24 hours) '
+         + 'raised a high-priority ticket and the money was credited to the wallet in the same '
+         + 'breath — so a client could invest or withdraw it before anybody opened the ticket. '
+         + 'A flagged card deposit now sits as “Being checked” and reaches no wallet until a '
+         + 'person releases it; the client is emailed to say their payment arrived and is being '
+         + 'checked, without being told which threshold it crossed. Releasing credits it to the '
+         + 'wallet or sub-account it was paid into and closes the ticket; rejecting credits '
+         + 'nothing and leaves the refund as a manual step through the gateway, which the ticket '
+         + 'says in as many words. A manual EFT credit is now assessed too — it never was, so '
+         + 'the largest deposits on the platform met no rule at all — but it is NOT held: a '
+         + 'staff member has already verified that money, so it raises a ticket and goes through.',
+         'Console → Support → AML Review → the “Funds held for AML review” table at the top '
+         + 'of the tab. It only appears when something is waiting.']);
+      if (rowCount) console.log('✅ Announced the AML hold.');
+    });
+
+    await step("40. Announce weekly and fortnightly contributions", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'both','everyone','fa-calendar-week', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['stokvel-cadences-2026-11',
+         'A group can now collect weekly or every second week, not only monthly',
+         'Contributions were monthly only, so a stokvel that collects on payday could not be '
+         + 'set up at all. A group can now be set to every month, every second week or every '
+         + 'week. The day asked for changes with it: a day of the month when monthly, a day of '
+         + 'the week when weekly, and nothing when fortnightly — that one is counted from the '
+         + 'day it starts and falls on the same weekday from then on. Changing the rule still '
+         + 'does not restate what anybody already owes: each period keeps the amount it opened '
+         + 'at. One sentence now says what the rule is — “R 500,00 a week, due every Friday” '
+         + '— and the screen, the console and the email that tells every member all print that '
+         + 'same sentence instead of writing their own, which is why they all used to say '
+         + '“a month”.',
+         'The committee sets it in the app: My Groups → open the group → Contributions → Set '
+         + 'or Change the contribution. Staff can set it in Console → Groups (Stokvels) → open '
+         + 'a group → Contribution schedule.']);
+      if (rowCount) console.log('✅ Announced the contribution cadences.');
+    });
+
 
 
   } catch (err) {

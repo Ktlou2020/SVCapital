@@ -2611,7 +2611,14 @@ async function loadWallet() {
     const isOut = ['withdrawal', 'gift_sent'].includes(t.type);
     const colour = isOut ? '#ef4444' : '#22c55e';
     const sign   = isOut ? '−' : '+';
+    /* pending_aml is a deposit that has arrived and is being checked before
+       it reaches the wallet. It must not read as "Pending" beside a pending
+       withdrawal — one is money the client is waiting for and the other is
+       money they asked to send — and it must not read as nothing at all,
+       which is what an unknown status did: the payment would appear with no
+       mark on it while the balance above did not move. */
     const statusTag = t.status === 'pending' ? ' <span style="font-size:0.7rem;background:rgba(254,194,79,0.15);color:#fec24f;padding:1px 6px;border-radius:4px;font-weight:600">Pending</span>' :
+                      t.status === 'pending_aml' ? ' <span style="font-size:0.7rem;background:rgba(237,165,255,0.18);color:#eda5ff;padding:1px 6px;border-radius:4px;font-weight:600">Being checked</span>' :
                       t.status === 'rejected' ? ' <span style="font-size:0.7rem;background:rgba(239,68,68,0.12);color:#ef4444;padding:1px 6px;border-radius:4px;font-weight:600">Rejected</span>' : '';
     return `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
@@ -14267,7 +14274,7 @@ function _svSetupSteps(id, ctx, d) {
     { key: 'schedule', core: false, done: !!sched,
       title: 'Set the monthly contribution',
       note: sched
-        ? `${Utils.rand(sched.amount)} ${_esc(sched.cadence || 'monthly')}, due on day ${_esc(String(sched.due_day || 1))}.`
+        ? `${_esc(sched.label || `${Utils.rand(sched.amount)} each`)}.`
         : committee
           ? 'The amount each member pays and the day of the month it is due. Every member is told when you set it or change it.'
           : 'The chairperson, secretary or treasurer sets this. You will be told what it is.',
@@ -15203,59 +15210,143 @@ function _svScheduleBlock(g, gid) {
       border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px">
     <div>
       <div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Each member pays</div>
-      <div style="font-size:1.15rem;font-weight:800">${Utils.rand(sch.amount)} a month, due on day ${_esc(String(sch.due_day))}</div>
+      <div style="font-size:1.15rem;font-weight:800">${_esc(sch.label
+        || `${Utils.rand(sch.amount)} each`)}</div>
       <div style="font-size:0.74rem;color:var(--text-muted)">${starts && starts > today ? `Starts ${_esc(starts)}. ` : ''}${
         sch.set_by_name ? `Set by ${_esc(sch.set_by_name)}.` : ''} Members on a different amount keep theirs.</div>
     </div>${btn}</div>`;
+}
+
+/* ─── Setting the contribution ──────────────────────────────────────
+   MONTHLY, FORTNIGHTLY OR WEEKLY. A stokvel that collects on payday could
+   not be set up here at all: the form asked only for a day of the month and
+   the server refused anything but monthly.
+
+   The three cadences do not ask the same question. Monthly wants a day of
+   the MONTH; weekly wants a day of the WEEK; fortnightly wants neither,
+   because the fortnight is counted from the day it starts and lands on that
+   weekday for ever. So all three controls are in the form and the cadence
+   decides which one is shown — a form that rebuilt itself would lose what
+   had already been typed into it. */
+/* A FUNCTION, not a const. portal-core.js may declare no top-level state
+   and no load-time executable statements — check-portal-split enforces it,
+   and caught this — because the same name declared in two scripts loaded
+   into one page is a redeclaration error that takes the whole file down. */
+function _svWeekdays() {
+  return ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 }
 
 function raiseStokvelSchedule(groupId) {
   const cached = _svCache(groupId) || {};
   const g = (cached.group && cached.group.data) || {};
   const sch = (g.setup && g.setup.schedule) || null;
-  const today = Number(new Date(Date.now() + 2 * 3600 * 1000).toISOString().slice(8, 10));
-  const day = sch ? Number(sch.due_day) : 1;
+  const cadence = (sch && sch.cadence) || 'monthly';
+  const day = sch && cadence === 'monthly' ? Number(sch.due_day) : 1;
+  const wday = sch && cadence === 'weekly' ? Number(sch.due_day) : 5;
   _svFormShell(groupId, {
     icon: 'fa-calendar-check',
     title: sch ? 'Change the contribution' : 'Set the contribution',
-    intro: `What each member pays every month, and the day it is due. Every member is told.
-      ${sch ? 'Contributions already raised keep the amount they were raised at; the new amount applies from the month you choose.' : ''}`,
+    intro: `What each member pays, how often, and the day it is due. Every member is told.
+      ${sch ? 'Contributions already raised keep the amount they were raised at; the new amount applies from the period you choose.' : ''}`,
     fields: _svField('svSchAmount', 'Each member pays (R)', 'number', '', `min="1" step="0.01" inputmode="decimal" value="${sch ? _esc(String(sch.amount)) : ''}"`)
+      + `<label for="svSchCadence" style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">How often</label>
+        <select id="svSchCadence" class="form-input" style="width:100%;margin-bottom:12px" onchange="_svSchCadenceChanged()">
+          <option value="monthly"${cadence === 'monthly' ? ' selected' : ''}>Every month</option>
+          <option value="fortnightly"${cadence === 'fortnightly' ? ' selected' : ''}>Every second week</option>
+          <option value="weekly"${cadence === 'weekly' ? ' selected' : ''}>Every week</option>
+        </select>
+        <div id="svSchDayMonthly">`
       + _svField('svSchDay', 'Due on day of the month', 'number', 'A day past the end of a short month settles on its last day.',
                  `min="1" max="31" step="1" inputmode="numeric" value="${_esc(String(day))}" oninput="_svSchStartHint()"`)
-      + `<label for="svSchStart" style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Starting</label>
-        <select id="svSchStart" class="form-input" style="width:100%;margin-bottom:6px">
-          <option value="this_month"${today > day ? '' : ' selected'}>This month</option>
-          <option value="next_month"${today > day ? ' selected' : ''}>Next month</option>
+      + `</div>
+        <div id="svSchDayWeekly" style="display:none">
+          <label for="svSchWeekday" style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Due every</label>
+          <select id="svSchWeekday" class="form-input" style="width:100%;margin-bottom:12px" onchange="_svSchStartHint()">
+            ${_svWeekdays().map((n, i) => `<option value="${i + 1}"${wday === i + 1 ? ' selected' : ''}>${n}</option>`).join('')}
+          </select>
+        </div>
+        <div id="svSchDayFortnightly" style="display:none;font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">
+          Every second week, counted from the day it starts — so it falls on that
+          same day of the week from then on.
+        </div>
+        <label for="svSchStart" style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Starting</label>
+        <select id="svSchStart" class="form-input" style="width:100%;margin-bottom:6px"
+                onchange="this.dataset.touched = '1'">
+          <option value="now">This period</option>
+          <option value="next">The next one</option>
         </select>
         <div id="svSchStartNote" style="font-size:0.74rem;color:var(--text-muted);margin-bottom:12px"></div>`,
     submit: `submitStokvelSchedule('${_esc(groupId)}')`,
     submitIcon: 'fa-check',
     submitLabel: sch ? 'Change it' : 'Set it',
   });
+  _svSchCadenceChanged();
+}
+
+/* Show the control the chosen cadence actually asks for. */
+function _svSchCadenceChanged() {
+  const c = _svVal('svSchCadence') || 'monthly';
+  const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+  show('svSchDayMonthly', c === 'monthly');
+  show('svSchDayWeekly', c === 'weekly');
+  show('svSchDayFortnightly', c === 'fortnightly');
+  const sel = document.getElementById('svSchStart');
+  if (sel && sel.options[0]) {
+    sel.options[0].textContent = c === 'monthly' ? 'This month'
+                               : c === 'weekly' ? 'This week' : 'Straight away';
+    sel.options[1].textContent = c === 'monthly' ? 'Next month'
+                               : c === 'weekly' ? 'Next week' : 'In two weeks';
+  }
   _svSchStartHint();
 }
 
-/* Starting this month when its due day has passed raises a contribution
-   that is overdue the day it appears. Said, and the default avoids it. */
+/* Starting in a period whose due day has already gone by raises a
+   contribution that is overdue the day it appears. Said, and the default
+   avoids it. Fortnightly cannot have the problem: it is counted from the
+   day it starts, so the first one falls on that day. */
 function _svSchStartHint() {
   const note = document.getElementById('svSchStartNote');
   if (!note) return;
-  const day = parseInt(_svVal('svSchDay'), 10) || 1;
-  const today = Number(new Date(Date.now() + 2 * 3600 * 1000).toISOString().slice(8, 10));
-  note.textContent = today > day
-    ? `Day ${day} has already passed this month, so starting this month would make this month’s contribution overdue straight away.`
-    : '';
+  const sast = new Date(Date.now() + 2 * 3600 * 1000);
+  const c = _svVal('svSchCadence') || 'monthly';
+  const sel = document.getElementById('svSchStart');
+  let passed = false, msg = '';
+  if (c === 'monthly') {
+    const day = parseInt(_svVal('svSchDay'), 10) || 1;
+    passed = Number(sast.toISOString().slice(8, 10)) > day;
+    msg = `Day ${day} has already passed this month, so starting this month would make this month’s contribution overdue straight away.`;
+  } else if (c === 'weekly') {
+    const want = parseInt(_svVal('svSchWeekday'), 10) || 1;
+    const today = sast.getUTCDay() || 7;
+    passed = today > want;
+    msg = `${_svWeekdays()[want - 1]} has already passed this week, so starting this week would make this week’s contribution overdue straight away.`;
+  }
+  note.textContent = passed ? msg : '';
+  /* The default moves with the answer rather than only being warned about,
+     which is what it did for monthly and is the reason the warning is
+     rarely seen. */
+  if (sel && !sel.dataset.touched) sel.value = passed ? 'next' : 'now';
 }
 
 async function submitStokvelSchedule(groupId) {
   const amount = parseFloat(_svVal('svSchAmount'));
-  const due_day = parseInt(_svVal('svSchDay'), 10);
+  const cadence = _svVal('svSchCadence') || 'monthly';
   if (!(amount > 0)) return _svFormError('Say how much each member pays.');
-  if (!(due_day >= 1 && due_day <= 31)) return _svFormError('The due day must be between 1 and 31.');
+  /* Each cadence validates the question it actually asked. */
+  let due_day = null;
+  if (cadence === 'monthly') {
+    due_day = parseInt(_svVal('svSchDay'), 10);
+    if (!(due_day >= 1 && due_day <= 31)) return _svFormError('The due day must be between 1 and 31.');
+  } else if (cadence === 'weekly') {
+    due_day = parseInt(_svVal('svSchWeekday'), 10);
+    if (!(due_day >= 1 && due_day <= 7)) return _svFormError('Choose the day of the week it is due.');
+  }
   try {
-    const res = await API._fetch('PUT', `stokvels/${groupId}/schedule`, { amount, due_day, start: _svVal('svSchStart') });
-    _svToast(`Done: ${Utils.rand(amount)} a month from ${(res && res.data && res.data.first_month) || 'the month you chose'}. Every member has been told.`, 'success');
+    const res = await API._fetch('PUT', `stokvels/${groupId}/schedule`,
+      { amount, cadence, due_day, start: _svVal('svSchStart') });
+    const d = (res && res.data) || {};
+    _svToast(`Done: ${d.label || Utils.rand(amount)} from ${d.first_period || 'the period you chose'}. `
+             + 'Every member has been told.', 'success');
   } catch (err) {
     return _svFormError(err.message || 'Could not set the contribution.');
   }

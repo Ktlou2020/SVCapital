@@ -171,8 +171,14 @@ const scratchDbs = async () => (await admin.query(
       const deadPid = Number(
         (fs.readFileSync('/proc/sys/kernel/pid_max', 'utf8') || '4194304').trim()) + 1;
       const abandoned = `svc_chk_tpl_${deadPid}_sweepme`;
+      /* A CHECK THAT BUILDS ITS OWN DATABASE names it in its own way:
+         check-fee-pool-attribution uses chk_feepool_<pid>_<rand>, and the
+         first version of the sweep matched only the two shapes the runner
+         writes — so one of those was sitting on the scratch server while
+         the sweep walked past it. */
+      const theirs    = `chk_feepool_${deadPid}_sweepme`;
       const mine      = `svc_chk_tpl_${process.pid}_keepme`;
-      for (const d of [abandoned, mine]) {
+      for (const d of [abandoned, theirs, mine]) {
         await admin.query(`DROP DATABASE IF EXISTS ${d} WITH (FORCE)`).catch(() => {});
         await admin.query(`CREATE DATABASE ${d}`);
       }
@@ -182,6 +188,11 @@ const scratchDbs = async () => (await admin.query(
 
       ok('A DATABASE WHOSE RUN IS GONE IS DROPPED', !after.has(abandoned),
          `${abandoned} is still there — nothing is ever coming back for it`);
+      ok('WHATEVER SHAPE ITS NAME IS, not only the two the runner writes',
+         !after.has(theirs),
+         `${theirs} is still there — a sweep that knows only the names one `
+         + 'file writes stops working the next time a check needs a database '
+         + 'of its own');
       ok('and the run says which ones it swept',
          new RegExp(abandoned).test(r.out), r.out.slice(0, 600));
       ok('BUT A LIVE RUN\u2019S DATABASES ARE LEFT ALONE', after.has(mine),
@@ -190,7 +201,7 @@ const scratchDbs = async () => (await admin.query(
          + 'due to administrator command" \u2014 an error that names neither the '
          + 'database nor who dropped it');
 
-      for (const d of [abandoned, mine])
+      for (const d of [abandoned, theirs, mine])
         await admin.query(`DROP DATABASE IF EXISTS ${d} WITH (FORCE)`).catch(() => {});
     }
 

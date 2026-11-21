@@ -228,6 +228,7 @@ app.use('/api/payments',    require('./routes/payments'));
 /* Before the routers mounted on /api/admin as a whole, so none of their
    blanket checks answers for this one. */
 app.use('/api/admin/notice-funds', require('./routes/noticeFundAdmin'));
+app.use('/api/admin/aml',   require('./routes/aml'));
 app.use('/api/admin',       require('./routes/broadcast'));
 app.use('/api/admin',       require('./routes/bankVerify'));
 app.use('/api/admin',       require('./routes/manualCredit'));

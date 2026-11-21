@@ -5,7 +5,11 @@
  * checklist sent the committee to WhatsApp to ask. The committee now sets
  * it in the app. Checked:
  *   · only the chairperson, secretary or treasurer sets it
- *   · it is monthly, between R0 and a sanity bound, on a day from 1 to 31
+ *   · MONTHLY, FORTNIGHTLY OR WEEKLY, between R0 and a sanity bound, on a
+ *     day the cadence actually asks for — a day of the month when monthly,
+ *     a day of the week when weekly, and neither when fortnightly. Only
+ *     monthly was generated, so the other two were refused and a stokvel
+ *     that collects on payday could not be set up here at all.
  *   · CHANGING IT DOES NOT RESTATE WHAT IS OWED: a period already opened
  *     keeps the amount it opened at; the new amount applies from the month
  *     the committee chose
@@ -31,12 +35,129 @@ const ok = (name, cond, detail) => {
 console.log('\nwithout a database');
 {
   const S = require(path.join(ROOT, 'server', 'services', 'stokvelSchedule.js'));
-  ok('a due day already passed this month defaults to starting next month',
-     S.defaultStart(1, '2026-11-09') === 'next_month' && S.defaultStart(25, '2026-11-09') === 'this_month');
-  ok('weekly is refused rather than stored and never raised', !!S.parse({ amount: 500, due_day: 1, cadence: 'weekly' }).error);
+  /* 'now' / 'next', because a period is not always a month. The WIRE still
+     carries this_month / next_month: the installed app sends those and
+     cannot be updated until the next release. */
+  ok('a due day already passed this period defaults to starting the next one',
+     S.defaultStart(1, '2026-11-09') === 'next' && S.defaultStart(25, '2026-11-09') === 'now');
+  ok('AND THE OLD APP’S WORDS ARE STILL ACCEPTED',
+     S.parse({ amount: 500, due_day: 1, start: 'this_month' }).schedule.start === 'now'
+     && S.parse({ amount: 500, due_day: 1, start: 'next_month' }).schedule.start === 'next',
+     'the app on members’ phones sends these two strings and cannot be '
+     + 'updated until the next release; refusing them would break setting a '
+     + 'contribution from the app at all');
+
+  /* THIS ASSERTED THE OPPOSITE, and it was right to: openPeriod generated
+     monthly only, so storing a weekly schedule would have meant a rule that
+     never raised an obligation — worse than a refusal. All three are
+     generated now. */
+  ok('WEEKLY IS ACCEPTED NOW', !S.parse({ amount: 500, due_day: 5, cadence: 'weekly' }).error,
+     JSON.stringify(S.parse({ amount: 500, due_day: 5, cadence: 'weekly' })));
+  ok('and fortnightly, which asks for no day at all',
+     S.parse({ amount: 500, cadence: 'fortnightly' }).schedule.dueDay === null,
+     JSON.stringify(S.parse({ amount: 500, cadence: 'fortnightly' })));
+  ok('but a weekly day of the month is refused, not wrapped onto a weekday',
+     !!S.parse({ amount: 500, due_day: 9, cadence: 'weekly' }).error,
+     'day 9 of the week is somebody meaning the 9th, and storing it as '
+     + 'Tuesday would collect on a day nobody chose');
+  ok('and a cadence that is not one of the three',
+     !!S.parse({ amount: 500, due_day: 1, cadence: 'daily' }).error);
   ok('so is nothing, and so is an absurd amount',
      !!S.parse({ amount: 0, due_day: 1 }).error && !!S.parse({ amount: 250000, due_day: 1 }).error);
   ok('and a day that is not a day of the month', !!S.parse({ amount: 500, due_day: 32 }).error);
+
+  /* ONE SENTENCE, SERVED BY THE SERVER. Three places were building it from
+     the amount and the day, so all three said "a month" about a weekly
+     contribution. */
+  console.log('\nand one sentence says what the rule is');
+  ok('monthly reads as it always did',
+     S.describe({ amount: 500, cadence: 'monthly', due_day: 1 })
+       === 'R 500,00 a month, due on day 1 of the month',
+     S.describe({ amount: 500, cadence: 'monthly', due_day: 1 }));
+  ok('WEEKLY DOES NOT SAY MONTH',
+     S.describe({ amount: 500, cadence: 'weekly', due_day: 5 })
+       === 'R 500,00 a week, due every Friday',
+     S.describe({ amount: 500, cadence: 'weekly', due_day: 5 }));
+  ok('and fortnightly says every second week, on the day it starts',
+     S.describe({ amount: 500, cadence: 'fortnightly', starts_on: '2026-11-27' })
+       === 'R 500,00 every second week, due every second Friday',
+     S.describe({ amount: 500, cadence: 'fortnightly', starts_on: '2026-11-27' }));
+  ok('in the platform’s own notation, comma for the decimal',
+     /^R 500,00 /.test(S.describe({ amount: 500, cadence: 'weekly', due_day: 5 })),
+     'the sentence is printed on a screen beside amounts from Utils.rand, '
+     + 'and in South Africa the comma is the decimal separator');
+  /* A DATE COLUMN COMES BACK AS A Date OBJECT. Setting a weekly schedule
+     answered 500 because of it — after the row had been committed, so the
+     group had a new contribution and was told the opposite. */
+  ok('AND IT TAKES THE Date A DATE COLUMN ACTUALLY RETURNS',
+     S.firstPeriodLabel({ cadence: 'weekly', starts_on: new Date('2026-11-21T00:00:00Z') })
+       === 'the week of 16 November 2026'
+     && S.describe({ amount: 500, cadence: 'fortnightly', starts_on: new Date('2026-11-27T00:00:00Z') })
+       === 'R 500,00 every second week, due every second Friday',
+     JSON.stringify([S.firstPeriodLabel({ cadence: 'weekly', starts_on: new Date('2026-11-21T00:00:00Z') })]));
+  ok('and it says which period it starts in, in that cadence’s words',
+     S.firstPeriodLabel({ cadence: 'monthly', starts_on: '2026-11-21' }) === 'November 2026'
+     && S.firstPeriodLabel({ cadence: 'fortnightly', starts_on: '2026-11-27' }) === '27 November 2026'
+     && /^the week of 16 November 2026$/.test(S.firstPeriodLabel({ cadence: 'weekly', starts_on: '2026-11-21' })),
+     JSON.stringify([S.firstPeriodLabel({ cadence: 'weekly', starts_on: '2026-11-21' })]));
+
+  /* ─── Which period a date falls in ─────────────────────────────── */
+  console.log('\nand each cadence knows its own periods');
+  {
+    const C = require(path.join(ROOT, 'server', 'services', 'stokvelContributions.js'));
+    const at = (cadence, due_day, starts_on, when) =>
+      C.periodFor({ cadence, due_day, starts_on }, when);
+
+    ok('a monthly period is its calendar month',
+       at('monthly', 1, null, '2026-11-21T10:00:00Z').label === '2026-11');
+    ok('and a due day past the end of a short month settles inside it',
+       at('monthly', 31, null, '2026-02-10T10:00:00Z').dueDate === '2026-02-28');
+
+    /* THE LABEL IS THE IDENTITY OF A PERIOD: the unique index is on it, so
+       it is what stops a daily job raising the same obligation thirty
+       times. */
+    ok('A WEEKLY PERIOD IS ONE WEEK, and every day in it agrees which',
+       at('weekly', 5, null, '2026-11-16T10:00:00Z').label === '2026-W47'
+       && at('weekly', 5, null, '2026-11-22T23:00:00Z').label === '2026-W47',
+       JSON.stringify([at('weekly', 5, null, '2026-11-16T10:00:00Z'),
+                       at('weekly', 5, null, '2026-11-22T23:00:00Z')]));
+    ok('and the next week is a different one',
+       at('weekly', 5, null, '2026-11-23T10:00:00Z').label === '2026-W48');
+    ok('and it falls on the weekday chosen',
+       at('weekly', 5, null, '2026-11-18T10:00:00Z').dueDate === '2026-11-20'
+       && at('weekly', 1, null, '2026-11-18T10:00:00Z').dueDate === '2026-11-16',
+       JSON.stringify([at('weekly', 5, null, '2026-11-18T10:00:00Z'),
+                       at('weekly', 1, null, '2026-11-18T10:00:00Z')]));
+    /* A WEEK THAT SPANS NEW YEAR is one period, not two, and it belongs to
+       the ISO week-numbering year rather than the calendar one. Taking the
+       year from the date instead of from its Thursday is how 1 January
+       lands in week 1 of the wrong year and a group is billed twice. */
+    ok('A WEEK ACROSS NEW YEAR IS STILL ONE WEEK',
+       at('weekly', 1, null, '2026-12-31T10:00:00Z').label
+         === at('weekly', 1, null, '2027-01-01T10:00:00Z').label,
+       JSON.stringify([at('weekly', 1, null, '2026-12-31T10:00:00Z').label,
+                       at('weekly', 1, null, '2027-01-01T10:00:00Z').label]));
+    ok('and it is numbered in the week-numbering year, not the calendar one',
+       at('weekly', 1, null, '2027-01-01T10:00:00Z').label === '2026-W53',
+       at('weekly', 1, null, '2027-01-01T10:00:00Z').label);
+
+    ok('A FORTNIGHT IS COUNTED FROM THE START DATE',
+       at('fortnightly', 5, '2026-11-27', '2026-11-27T10:00:00Z').dueDate === '2026-11-27'
+       && at('fortnightly', 5, '2026-11-27', '2026-12-10T23:00:00Z').dueDate === '2026-11-27'
+       && at('fortnightly', 5, '2026-11-27', '2026-12-11T00:00:00Z').dueDate === '2026-12-11',
+       JSON.stringify([at('fortnightly', 5, '2026-11-27', '2026-12-10T23:00:00Z'),
+                       at('fortnightly', 5, '2026-11-27', '2026-12-11T00:00:00Z')]));
+    ok('and thirteen days in is still the same fortnight, not the next one',
+       at('fortnightly', 5, '2026-11-27', '2026-12-09T10:00:00Z').label === '2026-11-27');
+    ok('and a date before the start cannot count backwards',
+       at('fortnightly', 5, '2026-11-27', '2026-11-24T10:00:00Z').dueDate === '2026-11-27',
+       'openPeriod refuses one, but a service that reads a column must not '
+       + 'depend on its one caller to keep it in range');
+    ok('and no cadence throws any more',
+       ['monthly', 'weekly', 'fortnightly'].every(c => !!at(c, 1, '2026-11-01', '2026-11-21T10:00:00Z').label),
+       'openPeriod runs from a daily job over every group, and a throw took '
+       + 'that group’s whole run with it');
+  }
 
   const CORE = fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8');
   const ctx = { window: {}, location: { search: '' }, localStorage: { getItem: () => null },
@@ -44,9 +165,25 @@ console.log('\nwithout a database');
                 Utils: { rand: n => 'R' + Number(n).toFixed(2) }, encodeURIComponent };
   vm.createContext(ctx); vm.runInContext(CORE, ctx);
   ctx._esc = s => String(s == null ? '' : s);
-  const chair = { my_role: 'chairperson', setup: { schedule: { amount: 500, due_day: 1, set_by_name: 'Thandi' } } };
+  /* THE PORTAL PRINTS THE SENTENCE IT IS SERVED. It used to build
+     `${amount} a month, due on day ${due_day}` itself, which says "a month"
+     about a weekly contribution — and asserting that string here is what
+     made the wrong wording look correct. */
+  const chair = { my_role: 'chairperson', setup: { schedule: {
+    amount: 500, due_day: 5, cadence: 'weekly',
+    label: 'R 500,00 a week, due every Friday', set_by_name: 'Thandi' } } };
   ok('Contributions shows the schedule, and who set it',
-     /R500\.00 a month, due on day 1/.test(ctx._svScheduleBlock(chair, 'G')) && /Set by Thandi/.test(ctx._svScheduleBlock(chair, 'G')));
+     /R 500,00 a week, due every Friday/.test(ctx._svScheduleBlock(chair, 'G'))
+     && /Set by Thandi/.test(ctx._svScheduleBlock(chair, 'G')),
+     ctx._svScheduleBlock(chair, 'G').slice(0, 400));
+  ok('AND IT DOES NOT SAY "A MONTH" ABOUT A WEEKLY ONE',
+     !/a month/.test(ctx._svScheduleBlock(chair, 'G')),
+     'the screen had one definition of the sentence and the email had '
+     + 'another, and both said month');
+  ok('and a payload with no sentence claims no cadence at all',
+     !/a month|a week/.test(ctx._svScheduleBlock(
+       { my_role: 'member', setup: { schedule: { amount: 500, due_day: 1 } } }, 'G')),
+     'a fallback that guesses "a month" is worse than one that says only the amount');
   ok('with the committee’s button to change it', /raiseStokvelSchedule\('G'\)/.test(ctx._svScheduleBlock(chair, 'G')));
   ok('and no button for an ordinary member',
      !/raiseStokvelSchedule/.test(ctx._svScheduleBlock({ my_role: 'member', setup: chair.setup }, 'G')));
@@ -105,6 +242,12 @@ if (!process.env.DATABASE_URL) {
       r.end();
     });
     const setIt = (who, body) => call('PUT', `/api/stokvels/${G}/schedule`, who, body);
+    const _dowOf = d => (new Date(d).getUTCDay() || 7);
+    const _plusDays = (iso, n) => {
+      const d = new Date(iso + 'T00:00:00Z');
+      d.setUTCDate(d.getUTCDate() + n);
+      return d.toISOString().slice(0, 10);
+    };
     const contributions = require(path.join(ROOT, 'server', 'services', 'stokvelContributions.js'));
     const owed = async label => (await db.query(
       `SELECT amount_due::float a FROM stokvel_contributions WHERE sub_account_id = $1 AND period_label = $2`, [G, label])).rows.map(r => r.a);
@@ -144,6 +287,47 @@ if (!process.env.DATABASE_URL) {
     ok('next month opens at R600', JSON.stringify(await owed(nextLabel)) === '[600,600,600]', JSON.stringify(await owed(nextLabel)));
     const same = await setIt('CHAIR', { amount: 600, due_day: 5 });
     ok('setting what it already is is refused, not a silent new schedule', same.status === 409);
+
+    /* ── And a group that collects on payday ────────────────────────
+       The point of the whole change: a weekly rule set through the route
+       really does raise one obligation per week. */
+    console.log('\nand a group can collect weekly');
+    {
+      const wk = await setIt('CHAIR', { amount: 100, cadence: 'weekly', due_day: _dowOf(now), start: 'now' });
+      ok('the committee can set a weekly contribution',
+         wk.status === 200 && wk.body.data.cadence === 'weekly', JSON.stringify(wk.body));
+      ok('and is told what it now is, in weeks',
+         /a week/.test((wk.body.data || {}).label || ''), (wk.body.data || {}).label);
+
+      const label = iso => {
+        const monday = _plusDays(iso, 1 - _dowOf(new Date(iso)));
+        const thu = _plusDays(monday, 3);
+        const y = Number(thu.slice(0, 4));
+        const doy = Math.round((Date.parse(thu + 'T00:00:00Z') - Date.UTC(y, 0, 1)) / 86400000) + 1;
+        return `${y}-W${String(Math.floor((doy - 1) / 7) + 1).padStart(2, '0')}`;
+      };
+      const thisWeek = label(now.toISOString().slice(0, 10));
+      const nextWeek = label(_plusDays(now.toISOString().slice(0, 10), 7));
+
+      await contributions.openPeriod(db, G, now);
+      ok('THIS WEEK OPENS AT R100 FOR EVERY MEMBER',
+         JSON.stringify(await owed(thisWeek)) === '[100,100,100]',
+         `${thisWeek}: ${JSON.stringify(await owed(thisWeek))}`);
+      await contributions.openPeriod(db, G, now);
+      ok('and running it again the same week raises nothing',
+         (await owed(thisWeek)).length === 3,
+         'the daily job calls this seven times a week, one of which must insert');
+      await contributions.openPeriod(db, G, new Date(now.getTime() + 7 * 86400000));
+      ok('AND NEXT WEEK IS A NEW PERIOD, not the same one',
+         JSON.stringify(await owed(nextWeek)) === '[100,100,100]',
+         `${nextWeek}: ${JSON.stringify(await owed(nextWeek))}`);
+      ok('so the two weeks are two obligations each, not one',
+         thisWeek !== nextWeek, `${thisWeek} vs ${nextWeek}`);
+      ok('and the monthly obligations raised before are untouched',
+         JSON.stringify(await owed(thisLabel)) === '[500,500,500]',
+         'changing the rule does not restate what is owed, whatever the '
+         + 'cadence of the new rule');
+    }
 
     console.log('\nthe members are told');
     const n = require(path.join(ROOT, 'server', 'services', 'stokvelNotify.js'));

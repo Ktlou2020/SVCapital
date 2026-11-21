@@ -266,7 +266,18 @@ for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
  * A pid is recycled eventually, so a live pid can be the wrong process.
  * That only ever means a stale database is kept, which is the safe way to
  * be wrong. */
-const OWN_PID_RE = /^(?:svc_chk_tpl|chk_\d{3})_(\d+)_[a-z0-9]+$/;
+/* EVERY SHAPE THIS SUITE CREATES, not only the two the runner makes
+   itself. The first version of this matched svc_chk_tpl_<pid>_<rand> and
+   chk_<nnn>_<pid>_<rand> — and chk_feepool_28331_62sskx was sitting on the
+   scratch server while the sweep walked past it, because
+   check-fee-pool-attribution builds a database of its own and names it in
+   its own way. A sweep that knows only the names one file writes is a
+   sweep that stops working the next time somebody needs a database.
+
+   So: anything beginning chk_ or svc_chk_ and ending in _<pid>_<suffix>.
+   The pid is still what decides — a live one is left strictly alone — and
+   no other software on this server names a database chk_anything. */
+const OWN_PID_RE = /^(?:svc_)?chk_[a-z0-9_]+_(\d+)_[a-z0-9]+$/;
 async function sweepAbandoned() {
   let rows;
   try {

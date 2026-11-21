@@ -7,7 +7,11 @@
    OPENING runs every day rather than on the due day, because a stokvel whose
    period opened only on the 1st would give a member who joined on the 3rd no
    obligation at all that month. Running daily means the unique index does
-   the work: about thirty calls per period, one of which inserts.
+   the work: one call a day per group, of which the first in each period
+   inserts and the rest do nothing — thirty of them for a monthly schedule,
+   fourteen for a fortnightly one, seven for a weekly one. The job does not
+   know or care which: periodFor answers "which period is today in" and the
+   index refuses a second attempt at the same one.
 
    CHASING is where restraint matters more than cleverness. A platform that
    reminds somebody daily that they are behind on R500 is a platform they

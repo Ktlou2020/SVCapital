@@ -450,7 +450,17 @@ router.get('/:id', async (req, res) => {
                FROM stokvel_contribution_schedules s
                LEFT JOIN investors i ON i.id = s.set_by
               WHERE s.sub_account_id = $1 AND s.active LIMIT 1`, [group.id]);
-          return { schedule: sc || null, verification: group.kyc_status || 'pending' };
+          /* THE SENTENCE IS BUILT HERE, not on the screen. The portal used
+             to print `${amount} a month, due on day ${due_day}` itself,
+             which says "a month" about a weekly contribution. One
+             definition, in services/stokvelSchedule.js, and both front
+             doors print what it returns. */
+          const schedule = sc ? Object.assign({}, sc, {
+            label:     schedules.describe(sc),
+            due_label: schedules.duePhrase(sc),
+            from:      schedules.firstPeriodLabel(sc),
+          }) : null;
+          return { schedule, verification: group.kyc_status || 'pending' };
         })(),
         i_am_signatory: !!group.my_is_signatory,
         i_am_nominated: await (async () => {
@@ -1692,7 +1702,15 @@ router.put('/:id/schedule', async (req, res) => {
 
     const s = out.schedule;
     return res.json({ data: { amount: s.amount, due_day: s.due_day, cadence: s.cadence,
-      starts_on: s.starts_on, first_month: schedules.monthLabel(new Date(s.starts_on).toISOString()),
+      starts_on: s.starts_on,
+      /* first_month is what the installed app reads out in its success
+         toast. It cannot be updated until the next release, so it stays —
+         and for a weekly or fortnightly schedule it would read oddly, which
+         is why first_period carries the right words beside it and the
+         portal uses that one. */
+      first_month:  schedules.monthLabel(new Date(s.starts_on).toISOString()),
+      first_period: schedules.firstPeriodLabel(s),
+      label:        schedules.describe(s),
       replaced: !!out.previous } });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});

@@ -10,6 +10,7 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const { buildIncomeReference } = require('../services/incomeReference');
 const { buildAccountStatement } = require('../services/accountStatement');
 const audit   = require('../services/audit');
+const aml     = require('../services/aml');
 
 router.use(requireAuth, requireRole('admin', 'director'));
 
@@ -61,17 +62,41 @@ router.post('/manual-credit', async (req, res) => {
       client.release();
     }
 
+    /* THE AML RULES NEVER SAW AN EFT. They were wired into the Paystack
+       path only, and the largest deposits on this platform arrive by bank
+       transfer and are credited here — so a R2m EFT met no rule at all
+       while a R50k card payment raised a ticket.
+
+       IT IS NOT HELD, and that is deliberate. A manual credit is a staff
+       member crediting money they have already seen in our account: a human
+       is in the loop by definition, and holding it would mean the same
+       person releasing it a moment later, which is a control in name only.
+       What was missing is the RECORD and the review, and that is what this
+       raises. services/aml.js says the same where the rules live.
+
+       Awaited, unlike the fire-and-forget call the card path used to make:
+       a ticket that fails to be written is worth knowing about, and this
+       response is not on a client's critical path. */
+    const flag = await aml.checkDeposit(pool, investorId, numAmount, reference)
+      .catch(e => { console.error('[aml] manual credit assessment failed:', e.message); return null; });
+
     setImmediate(() => audit.log({
       actorId:    req.user.id,
       actorEmail: req.user.email,
       action:     'wallet.manual_credit',
       entityType: 'investors',
       entityId:   investorId,
-      description: `Manual wallet credit of R${numAmount} to investor ${investor.first_name} ${investor.last_name} (${investorId}). Ref: ${reference}. Notes: ${notes || 'none'}`,
+      description: `Manual wallet credit of R${numAmount} to investor ${investor.first_name} ${investor.last_name} (${investorId}). Ref: ${reference}. Notes: ${notes || 'none'}`
+                 + (flag && flag.flagged ? ` AML FLAGGED: ${flag.reason}` : ''),
       ip:         req.ip,
     }).catch(() => {}));
 
-    res.json({ success: true, reference });
+    /* Said in the response, so the person who pressed the button knows a
+       review has been raised rather than finding out from the ticket
+       queue. */
+    res.json({ success: true, reference,
+               aml_flagged: !!(flag && flag.flagged),
+               aml_reason: (flag && flag.reason) || null });
   } catch (err) {
     console.error('/admin/manual-credit error:', err.message);
     res.status(500).json({ error: 'Internal server error.' });

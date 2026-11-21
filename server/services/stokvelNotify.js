@@ -688,15 +688,20 @@ function _rows(a, required, reference) {
 async function scheduleChanged({ groupId, actorId, schedule, previous, db } = {}) {
   const pool = db || defaultPool;
   try {
-    const { monthLabel } = require('./stokvelSchedule');
+    /* ONE DEFINITION OF WHAT THE RULE SAYS. This built its own sentence —
+       "a month, due on day N" — so the moment a group could collect weekly
+       or fortnightly, the email telling every member about it said monthly.
+       describe() is the same function the portal and the console print. */
+    const SCHED = require('./stokvelSchedule');
     const { rows: [g] } = await pool.query(`SELECT name FROM sub_accounts WHERE id = $1`, [groupId]);
     const actor = await _person(pool, actorId);
     const { rows: members } = await pool.query(
       `SELECT i.id, i.email, i.first_name FROM stokvel_members m JOIN investors i ON i.id = m.investor_id
         WHERE m.sub_account_id = $1 AND m.status = 'active' AND m.investor_id <> $2`, [groupId, actorId]);
     const who = (actor && actor.first_name) || 'The committee';
-    const from = monthLabel(new Date(schedule.starts_on).toISOString());
-    const now = `${fmtR(schedule.amount)} a month, due on day ${schedule.due_day}`;
+    const from = SCHED.firstPeriodLabel(schedule);
+    const now = SCHED.describe(schedule);
+    const every = (SCHED.CADENCE[String(schedule.cadence || 'monthly')] || SCHED.CADENCE.monthly).every;
     const body = previous
       ? `${who} changed the contribution from ${fmtR(previous.amount)} to ${now}, from ${from}. What you already owe is unchanged.`
       : `${who} set the contribution: ${now}, from ${from}.`;
@@ -705,11 +710,11 @@ async function scheduleChanged({ groupId, actorId, schedule, previous, db } = {}
       told.push(await _tell(m, {
         url: hubUrl(groupId), title: (g && g.name) || 'Your group', body,
         email: {
-          subject: `${(g && g.name) || 'Your group'}: the contribution is now ${fmtR(schedule.amount)} a month`,
+          subject: `${(g && g.name) || 'Your group'}: the contribution is now ${fmtR(schedule.amount)} ${every}`,
           heading: previous ? 'The contribution has changed' : 'The contribution is set',
           lead: body,
-          rows: [['Group', (g && g.name) || ''], ['Each member pays', `${fmtR(schedule.amount)} a month`],
-                 ['Due on', `day ${schedule.due_day} of the month`], ['From', from], ['Set by', who]],
+          rows: [['Group', (g && g.name) || ''], ['Each member pays', `${fmtR(schedule.amount)} ${every}`],
+                 ['Due', SCHED.duePhrase(schedule)], ['From', from], ['Set by', who]],
           note: 'Contributions raised before this keep the amount they were raised at. '
               + 'If you think this is wrong, raise it with your committee.',
         },

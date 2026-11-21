@@ -17,13 +17,82 @@ const { recordTransaction, systemActor } = require('./ledger');
 
 const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
 
-/* The label and due date for the period a date falls in. Monthly only for
-   now; the cadence column exists so the other two can be added without a
-   migration, and this refuses rather than guessing at them. */
+/* ─── Which period a date falls in ────────────────────────────────────
+   THE LABEL IS THE IDENTITY OF A PERIOD. The unique index is on
+   (stokvel, member, period_label), so it is the label — not the due date —
+   that stops a daily job from raising the same obligation thirty times.
+   Each cadence therefore needs a label that is unique to one of its
+   periods and to no other:
+
+     monthly      2026-11      the calendar month
+     weekly       2026-W47     the ISO week, which is unique within its own
+                               week-numbering year even when that year is
+                               not the calendar one
+     fortnightly  2026-11-27   the date the fortnight starts, counted from
+                               the schedule's start date
+
+   It was monthly only, and threw on the other two — so a stokvel that
+   collects on payday could not be set up at all. The cadence column and its
+   CHECK already allowed all three; only this function and the form did not.
+
+   DUE_DAY MEANS DIFFERENT THINGS BY CADENCE: day of the month when monthly,
+   ISO day of the week when weekly (1 = Monday), and nothing when
+   fortnightly, where the day is fixed by the start date. */
+
+/* A DATE column arrives from node-postgres as a Date object, so schedule
+   .starts_on is sometimes a Date and sometimes the string a caller passed.
+   One normaliser: String(aDate).slice(0, 10) is "Fri Nov 2", which parses
+   as an invalid date and throws. */
+const _iso   = d => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10);
+const _isoOf = v => (v instanceof Date ? v.toISOString().slice(0, 10)
+                                       : String(v == null ? '' : v).slice(0, 10));
+const _dow   = iso => (new Date(iso + 'T00:00:00Z').getUTCDay() || 7);
+const _addDays = (iso, n) => {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+/* The ISO week-numbering year and week of a date, taken from the Thursday
+   of its week — which is the definition: week 1 is the week containing the
+   year's first Thursday. Taking it from the Monday or from the date itself
+   is how 29 December lands in week 1 of the wrong year. */
+function _isoWeekLabel(anyDayOfTheWeek) {
+  const monday = _addDays(anyDayOfTheWeek, 1 - _dow(anyDayOfTheWeek));
+  const thu    = _addDays(monday, 3);
+  const year   = Number(thu.slice(0, 4));
+  const dayOfYear = Math.round(
+    (Date.parse(thu + 'T00:00:00Z') - Date.UTC(year, 0, 1)) / 86400000) + 1;
+  const week = Math.floor((dayOfYear - 1) / 7) + 1;
+  return `${year}-W${String(week).padStart(2, '0')}`;
+}
+
 function periodFor(schedule, when) {
-  if (schedule.cadence !== 'monthly') {
-    throw new Error(`Only monthly contributions are generated so far (got ${schedule.cadence}).`);
+  const cadence = String(schedule.cadence || 'monthly');
+  const today = _iso(when);
+
+  if (cadence === 'weekly') {
+    /* A day of the week, 1..7. A schedule changed over from monthly can
+       carry a day of the month, so it is wrapped rather than throwing:
+       refusing here would stop the job for the whole group, and the route
+       will not accept one above 7 in the first place. */
+    const day = ((Math.max(1, Number(schedule.due_day) || 1) - 1) % 7) + 1;
+    const monday = _addDays(today, 1 - _dow(today));
+    return { label: _isoWeekLabel(today), dueDate: _addDays(monday, day - 1) };
   }
+
+  if (cadence === 'fortnightly') {
+    /* COUNTED FROM THE START DATE, which is the anchor every fortnight this
+       group will ever pay on is measured from. openPeriod refuses a date
+       before the start, so the index cannot go negative; it is floored all
+       the same, because a service that reads a column must not depend on
+       its one caller to keep it in range. */
+    const anchor = _isoOf(schedule.starts_on) || today;
+    const days = Math.round(
+      (Date.parse(today + 'T00:00:00Z') - Date.parse(anchor + 'T00:00:00Z')) / 86400000);
+    const dueDate = _addDays(anchor, 14 * Math.max(0, Math.floor(days / 14)));
+    return { label: dueDate, dueDate };
+  }
+
   const d = new Date(when);
   const year = d.getUTCFullYear();
   const month = d.getUTCMonth();                    // 0-based

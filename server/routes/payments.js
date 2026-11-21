@@ -52,7 +52,30 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
 
     const sourceLabel = source === 'webhook' ? 'Paystack (confirmed)' : 'Paystack';
     const dest = subAccountId ? `sub-account` : 'wallet';
-    const desc = `Top-up via ${sourceLabel} — R${Number(amount).toLocaleString('en-ZA')} credited to ${dest}`;
+
+    /* ── IS THIS ONE HELD? ────────────────────────────────────────────
+       Decided HERE: before the row is written, inside the transaction that
+       would otherwise credit the wallet, and against the same client row
+       that is already locked by the time money moves.
+
+       It used to be decided after the credit, by a fire-and-forget call
+       whose result was discarded — so the rules fired, a high-priority
+       ticket was raised, and the money was in the wallet and spendable
+       before anybody read it. An alert that arrives after the money has
+       moved is a record of a decision nobody got to make.
+
+       A flagged deposit is recorded and NOT credited. The row exists, so
+       the client can see their payment arrived and is being checked, and
+       the reference is taken, so neither the browser's return nor the
+       webhook can credit it later. Every balance counts completed rows
+       only, so nothing else had to learn about holds. */
+    const verdict = await aml.assess(client, { investorId, amount });
+    const held = !!verdict.flagged;
+
+    const desc = held
+      ? `Top-up via ${sourceLabel} — R${Number(amount).toLocaleString('en-ZA')} received, `
+        + 'being checked before it reaches the wallet'
+      : `Top-up via ${sourceLabel} — R${Number(amount).toLocaleString('en-ZA')} credited to ${dest}`;
 
     // Atomic idempotency guard — ON CONFLICT DO NOTHING means rowCount = 0 if duplicate
     /* A card deposit has two ways in: the client returning from Paystack,
@@ -62,6 +85,8 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
     const written = await recordTransaction(client, {
       investorId, type: 'deposit', amount, reference, description: desc,
       subAccountId: subAccountId || null, gateway: 'paystack',
+      status: held ? aml.HELD_STATUS : 'completed',
+      notes: held ? `AML: ${verdict.reason}` : null,
     }, actor || systemActor(`payments:${source}`), { onConflict: 'reference' });
     if (!written) {
       await client.query('ROLLBACK');
@@ -90,6 +115,41 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
        something to discover later from a support ticket. */
     let creditedTo = 'investor';
     let routingNote = null;
+
+    /* NOTHING MOVES FOR A HELD DEPOSIT. Not the wallet, not a sub-account's,
+       not the routing note — the row keeps the sub_account_id it was paid
+       for, and release resolves the destination then, the same way this
+       does. Returning early here rather than wrapping each statement in a
+       condition: a credit path with `if (!held)` scattered through it is a
+       credit path where one of them will eventually be missed. */
+    if (held) {
+      await client.query('COMMIT');
+      console.warn(`[payments] ${reference}: R${amount} HELD for AML review `
+                   + `(${verdict.reason}) — investor ${investorId} not credited`);
+      await aml.raiseTicket(pool, {
+        investorId, amount, reference, reason: verdict.reason, held: true,
+      }).catch(e => console.error('[aml] could not raise the ticket:', e.message));
+
+      await audit.log({
+        actorEmail: 'system',
+        action: 'payment.held_for_aml',
+        entityType: 'transactions',
+        entityId: reference,
+        description: `R${amount} received from ${investorId} and HELD: ${verdict.reason}. `
+                   + 'Not credited to any wallet. Awaiting release or rejection.',
+      }).catch(() => {});
+
+      /* The client is told, because the alternative is a payment that has
+         left their card and appears nowhere. */
+      Promise.resolve().then(() =>
+        emailService.sendDepositUnderReview
+          ? emailService.sendDepositUnderReview(investor, amount, reference)
+          : null
+      ).catch(e => console.error('[payments] review email error:', e.message));
+
+      return { alreadyProcessed: false, held: true, amount, investorId,
+               reason: verdict.reason, subAccountId: null };
+    }
 
     if (subAccountId) {
       const { rows: [sa] } = await client.query(
@@ -225,8 +285,11 @@ router.post('/paystack/verify', requireAuth, async (req, res) => {
     // Always credit the authenticated user — never trust investor_id from Paystack metadata.
     const creditAmount = Number(psData.data.metadata?.wallet_credit) || (psData.data.amount / 100);
 
+    /* The AML assessment happens INSIDE creditWallet now, before the money
+       moves, and a flagged deposit is held rather than credited. The
+       fire-and-forget call that used to sit here raised the ticket after
+       the wallet had already been credited. */
     const result = await creditWallet(investorId, creditAmount, reference, req.user?.email, 'paystack', subAccountId || null, actorFromRequest(req));
-    aml.checkDeposit(pool, investorId, creditAmount, reference).catch(e => console.error('[aml]', e.message));
 
     // Save reusable authorization code for future auto top-ups
     let authSaved = false;
@@ -317,9 +380,8 @@ router.post('/paystack/webhook', async (req, res) => {
 
   try {
     const result = await creditWallet(investorId, creditAmt, reference, null, 'webhook', subAccountId);
-    if (!result.alreadyProcessed) {
+    if (!result.alreadyProcessed && !result.held) {
       console.log(`[payments/webhook] charge.success — credited R${creditAmt} to ${investorId}`);
-      aml.checkDeposit(pool, investorId, creditAmt, reference).catch(e => console.error('[aml]', e.message));
     }
   } catch (err) {
     /* Last line of defence for a payment the customer has already made. Paystack

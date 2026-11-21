@@ -1238,6 +1238,36 @@
                     <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('aml',document.querySelector('[data-view=aml]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-circle"></i></div></div><div class="stat-card__value" id="aml-resolved">—</div><div class="stat-card__label">Resolved This Month</div></div>
                   </div>
           
+                  <!-- FUNDS HELD, which is the actionable half. A flagged client
+                       deposit is recorded and NOT credited: the money is ours and
+                       not theirs until somebody here decides, so it sits above the
+                       flag history rather than inside it. -->
+                  <div class="table-card mb-16" id="amlHeldCard" style="display:none">
+                    <div class="table-card__header">
+                      <div>
+                        <div class="table-card__title" style="color:#eda5ff">
+                          <i class="fa-solid fa-hand" style="margin-right:6px"></i>Funds held for AML review
+                          — <span id="amlHeldTotal">R 0,00</span>
+                        </div>
+                        <div class="table-card__sub">Received and <strong>not credited</strong>.
+                          The client cannot invest or withdraw this money. Releasing credits it
+                          to the wallet it was paid into; rejecting credits nothing and leaves
+                          the refund to a person.</div>
+                      </div>
+                      <button class="btn btn--secondary btn--sm" onclick="loadAML()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                    </div>
+                    <div style="overflow-x:auto">
+                      <table class="data-table">
+                        <thead><tr>
+                          <th style="width:12%">Received</th><th style="width:22%">Client</th>
+                          <th style="width:11%">Amount</th><th style="width:25%">Why it is held</th>
+                          <th style="width:12%">Paid into</th><th style="width:18%">Decision</th>
+                        </tr></thead>
+                        <tbody id="amlHeldBody"></tbody>
+                      </table>
+                    </div>
+                  </div>
+
                   <div class="table-card">
                     <div class="table-card__header">
                       <div>
@@ -5462,7 +5492,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=32"></script>
 <script src="../js/investor-documents.js?v=9"></script>
-<script src="js/admin.js?v=240"></script>
+<script src="js/admin.js?v=241"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

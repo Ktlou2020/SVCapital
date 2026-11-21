@@ -207,6 +207,65 @@ function sendDepositConfirmed(investor, amount, reference, gateway = 'EFT', subA
   });
 }
 
+/* ── 2b. Deposit received, and being checked ──────────────────
+   A deposit the AML rules flagged is NOT credited: it waits for a person to
+   release it. Which means the client's money has left their card and
+   appears nowhere — and the one thing worse than a delay is a silent one.
+   So this says it arrived, that it is being checked, and roughly how long,
+   without stating or implying anything about them.
+
+   IT DOES NOT SAY WHY. The thresholds are a control, and a message that
+   explains which one a payment crossed teaches somebody how to stay under
+   it. "Larger payments are checked" is true, is the reason, and gives
+   nothing away. */
+function sendDepositUnderReview(investor, amount, reference) {
+  const { email, first_name } = investor;
+  return _send({
+    to: email,
+    subject: `We have your ${_fmt(amount)} payment — it is being checked`,
+    html: _wrap(`
+      <h2>Payment received</h2>
+      <p>Hi ${first_name}, we have your payment of ${_fmt(amount)}. Larger payments
+         are checked by our compliance team before the funds reach your wallet, so
+         this one is with them now.</p>
+      <span class="big">${_fmt(amount)}</span>
+      <div class="box">
+        <div class="row"><span class="lbl">Amount</span><span class="val">${_fmt(amount)}</span></div>
+        <div class="row"><span class="lbl">Reference</span><span class="val">${reference}</span></div>
+        <div class="row"><span class="lbl">Status</span><span class="val">Being checked</span></div>
+      </div>
+      <p>You will see it in your wallet as soon as the check is done — usually within
+         one business day. It shows on your transactions as being checked until then.
+         Nothing is needed from you; we will come back to you if anything is.</p>
+      <a href="${BASE_URL}/portal/" class="btn">View My Portal →</a>
+    `),
+    text: `Hi ${first_name}, we have your payment of ${_fmt(amount)} (ref: ${reference}). `
+        + 'Larger payments are checked by our compliance team before the funds reach your '
+        + 'wallet — usually within one business day. Nothing is needed from you.',
+  });
+}
+
+/* ── 2c. A held deposit, released ─────────────────────────────── */
+function sendDepositReleased(investor, amount, reference) {
+  const { email, first_name } = investor;
+  return _send({
+    to: email,
+    subject: `Deposit cleared — ${_fmt(amount)} is in your wallet`,
+    html: _wrap(`
+      <h2>Deposit Cleared ✅</h2>
+      <p>Hi ${first_name}, the check is done and your ${_fmt(amount)} is in your wallet.</p>
+      <span class="big">${_fmt(amount)}</span>
+      <div class="box">
+        <div class="row"><span class="lbl">Amount</span><span class="val green">${_fmt(amount)}</span></div>
+        <div class="row"><span class="lbl">Reference</span><span class="val">${reference}</span></div>
+        <div class="row"><span class="lbl">Status</span><span class="val green">Credited</span></div>
+      </div>
+      <a href="${BASE_URL}/portal/" class="btn">Invest Now →</a>
+    `),
+    text: `Hi ${first_name}, the check is done and ${_fmt(amount)} (ref: ${reference}) is now in your SV Capital wallet.`,
+  });
+}
+
 /* ── 3. Investment created ────────────────────────────────── */
 function sendInvestmentCreated(investor, { poolName, amount, termMonths, endDate, startDate }) {
   const { email, first_name } = investor;
@@ -1525,6 +1584,8 @@ module.exports = {
   sendLeaveRequestSubmitted,
   sendLeaveOutcome,
   sendDepositConfirmed,
+  sendDepositUnderReview,
+  sendDepositReleased,
   sendInvestmentCreated,
   sendMaturityAlert,
   sendMaturity3DayAlert,
