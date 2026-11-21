@@ -5,6 +5,13 @@
 
 'use strict';
 
+/* One refresh at a time, and one sign-out. Declared up here rather than
+   beside the code that uses it: Auth.setToken reads _svcSessionEnded and is
+   defined hundreds of lines earlier, so leaving the binding below it put a
+   temporal dead zone between the two for no reason. */
+let _svcRefreshInFlight = null;
+let _svcSessionEnded    = false;
+
 /* ─── Platform tag for analytics/audit (ios | android | web) ───
    Sent as the X-Platform header so the server records which platform each
    request came from (powers admin "Mobile App Activity"). */
@@ -83,6 +90,13 @@ const Auth = {
    * Store token and user info
    */
   setToken(token, user, remember = true) {
+    /* A session exists again, so the one-shot teardown re-arms. Without
+       this, somebody who was signed out by an expiry and then signed back
+       in would hit the NEXT expiry with the flag still set — no logout, no
+       redirect, just failing requests and a screen that never says why.
+       Resetting here covers both doors: a silent refresh and a real
+       sign-in. */
+    _svcSessionEnded = false;
     /* BOTH STORES ARE CLEARED FIRST. getToken() reads localStorage before
        sessionStorage, so a token left in localStorage by an earlier sign-in
        outranks the one just issued: somebody signing in WITHOUT "remember
@@ -346,6 +360,53 @@ const API = {
      * that was already here. Anything else is a sign-in, and a sign-in
      * happens on the login screen.
      */
+/* ─── One refresh at a time, and one sign-out ──────────────────────────
+ *
+ * Observed in production: a single expired session on one phone produced
+ * three 401s on data endpoints and then SIX POSTs to /auth/refresh inside
+ * seventeen milliseconds, every one of them 401. The portal fires several
+ * requests in parallel at boot, each got a 401, and each independently
+ * started its own refresh — then each independently posted a logout and
+ * raised its own session-expired overlay.
+ *
+ * Nothing is unsafe about it: the session really had ended and nothing
+ * leaked. But it hammers the auth endpoint, spends a client's battery and
+ * data on work already in progress, and buries the 4xx line in monitoring
+ * so that nothing else can be seen in it.
+ *
+ * So the REFRESH is shared — N callers await one request and all retry
+ * with its result — and the TEARDOWN happens once.
+ */
+function _svcRefreshOnce(apiBase) {
+  if (_svcRefreshInFlight) return _svcRefreshInFlight;
+  _svcRefreshInFlight = (async () => {
+    try {
+      const res = await fetch(`${apiBase}auth/refresh`, { method: 'POST', credentials: 'include' });
+      if (!res.ok) return null;
+      const body = await res.json();
+      return (body && body.token) || null;
+    } catch (_) {
+      return null;
+    }
+  })();
+  /* Cleared when it settles, so the NEXT 401 after this one starts a fresh
+     attempt rather than replaying a stale answer for ever. */
+  _svcRefreshInFlight = _svcRefreshInFlight.finally(() => { _svcRefreshInFlight = null; });
+  return _svcRefreshInFlight;
+}
+
+/* The give-up. Idempotent, because every parallel request reaches it. */
+async function _svcEndSession(apiBase, onNative, onWeb) {
+  if (_svcSessionEnded) return;
+  _svcSessionEnded = true;
+  /* Kill the refresh cookie on the way out. Having decided this browser is
+     not carrying a session we will extend, leaving a grant that stays valid
+     for thirty days leaves the thing that caused the problem lying about. */
+  try { await fetch(`${apiBase}auth/logout`, { method: 'POST', credentials: 'include' }); } catch (_) {}
+  Auth.clear();
+  if (onNative) onNative(); else onWeb();
+}
+
     if (r.status === 401) {
       const here = Auth.getUser();
       /* "Is this browser signed in?", not "is its token still valid?" — an
@@ -355,38 +416,33 @@ const API = {
       const hadSession = !!token || !!here;
       try {
         if (hadSession) {
-          const refreshRes = await fetch(`${_API_BASE}auth/refresh`, { method: 'POST', credentials: 'include' });
-          if (refreshRes.ok) {
-            const { token: fresh } = await refreshRes.json();
-            const sub  = fresh ? Auth.subjectOf(fresh) : null;
-            const mine = here && here.id != null ? String(here.id) : null;
-            /* A refresh that comes back as a DIFFERENT account is the bug
-               above arriving by another door — an expired token belonging
-               to one person and a cookie belonging to another. Take it as a
-               session that has ended, not as the other person. */
-            if (fresh && (!mine || !sub || sub === mine)) {
-              Auth.setToken(fresh);
-              const retryOpts = { ...opts, headers: { ...opts.headers, Authorization: `Bearer ${fresh}` } };
-              const retry = await fetch(url, retryOpts);
-              if (retry.ok) { if (retry.status === 204) return true; return retry.json(); }
-            }
+          /* SHARED. Ten parallel requests meeting the same dead token ask
+             once between them and all ten retry with the answer. */
+          const fresh = await _svcRefreshOnce(_API_BASE);
+          const sub  = fresh ? Auth.subjectOf(fresh) : null;
+          const mine = here && here.id != null ? String(here.id) : null;
+          /* A refresh that comes back as a DIFFERENT account is the bug
+             above arriving by another door — an expired token belonging
+             to one person and a cookie belonging to another. Take it as a
+             session that has ended, not as the other person. */
+          if (fresh && (!mine || !sub || sub === mine)) {
+            Auth.setToken(fresh);
+            /* The session is alive again, so a later 401 gets a fresh
+               attempt at ending it rather than being swallowed by the
+               teardown this one never needed. */
+            _svcSessionEnded = false;
+            const retryOpts = { ...opts, headers: { ...opts.headers, Authorization: `Bearer ${fresh}` } };
+            const retry = await fetch(url, retryOpts);
+            if (retry.ok) { if (retry.status === 204) return true; return retry.json(); }
           }
         }
       } catch (_) {}
-      /* And kill the refresh cookie on the way out. Having decided this
-         browser is not carrying a session we will extend, leaving a grant
-         that stays valid for thirty days is leaving the thing that caused
-         the problem lying about — the next 401 would simply find it again
-         through some other path. Logging out is what has actually
-         happened, so it is what we tell the server. */
-      try { await fetch(`${_API_BASE}auth/logout`, { method: 'POST', credentials: 'include' }); } catch (_) {}
-      Auth.clear();
-      if (window.__SVC_NATIVE__) {
-        // Native: a redirect here lands mid-load and shows a white screen.
-        _showSessionExpiredOverlay();
-      } else if (!window.location.pathname.includes('login')) {
-        window.location.href = '/login.html';
-      }
+      await _svcEndSession(_API_BASE,
+        window.__SVC_NATIVE__
+          /* Native: a redirect here lands mid-load and shows a white screen. */
+          ? () => _showSessionExpiredOverlay()
+          : null,
+        () => { if (!window.location.pathname.includes('login')) window.location.href = '/login.html'; });
       throw new Error('Session expired — please log in again.');
     }
 
