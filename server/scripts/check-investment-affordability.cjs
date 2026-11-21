@@ -71,8 +71,20 @@ ok('the message is not "your wallet" when staff act for someone else',
    'an admin reading "your wallet" about a client\'s balance is confusing');
 
 console.log('\na sub-account is still owned-checked for investors only');
+/* Still ownership-checked, but no longer ownership ALONE.
+   A stokvel's parent is its chairperson, so this predicate by itself meant
+   signatories could approve an investment and nobody but that one person
+   could place it. An active member of the group may carry one out now —
+   which is safe only because WHAT is placed is pinned by the authority, so
+   the carrier chooses neither the pool nor the amount. Every other kind of
+   sub-account is owned by one person and is unchanged. */
 ok('investors may only spend from a sub-account they own',
-   /parent_investor_id=\$2 FOR UPDATE/.test(src));
+   /s\.parent_investor_id = \$2/.test(src));
+ok('or one whose group they are an active member of',
+   /account_type = 'stokvel'[\s\S]{0,240}?stokvel_members[\s\S]{0,320}?status = 'active'/.test(src),
+   'the widening is for stokvels only');
+ok('and the row is still locked while it is spent',
+   /FOR UPDATE/.test(src), 'two tabs must not spend one balance twice');
 /* The point is the absence of the ownership predicate, not the column list.
    Pinning the exact columns made this fail the day the stokvel gate needed
    account_type and stokvel_quorum off the same row — a green-to-red on a

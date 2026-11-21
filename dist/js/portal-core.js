@@ -13512,6 +13512,7 @@ function _svDict() {
       'btn.withdraw': 'Cela ukukhipha imali',
       'btn.invest': 'Cela ukutshala imali',
       'btn.mandate': 'Shintsha imithetho yokusayina noma usuku lokukhiya',
+      'btn.dissolve': 'Vala iqembu',
       'btn.approve': 'Vuma',
       'btn.reject': 'Yenqaba',
       'pr.title': 'Iziphakamiso',
@@ -13602,6 +13603,7 @@ function _svDict() {
       'btn.withdraw': 'Kopa ho ntsha tjhelete',
       'btn.invest': 'Kopa ho tsetela',
       'btn.mandate': 'Fetola melao ya ho saena kapa letsatsi la ho notlela',
+      'btn.dissolve': 'Koala sehlopha',
       'btn.approve': 'Dumela',
       'btn.reject': 'Hana',
       'pr.title': 'Ditlhahiso',
@@ -15596,8 +15598,94 @@ function _svWithdrawals(res, meIsSignatory, gid, ctx) {
       ${c.canPropose && g.stokvel_quorum ? `<button class="btn btn--ghost btn--sm" onclick="raiseStokvelMandateChange('${_esc(gid)}')">
         <i class="fa-solid fa-pen-nib"></i> ${_esc(_svT('btn.mandate', 'Change the mandate or lock date'))}
       </button>` : ''}
+      ${c.canPropose && g.stokvel_quorum ? `<button class="btn btn--ghost btn--sm" onclick="raiseStokvelDissolve('${_esc(gid)}')">
+        <i class="fa-solid fa-box-archive"></i> ${_esc(_svT('btn.dissolve', 'Wind the group up'))}
+      </button>` : ''}
     </div>
+    ${_svDissolveReady(g, gid, open)}
     ${past.length ? `<div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">${_esc(_svT('ap.recent', 'Recent'))}</div>${past.map(row).join('')}` : ''}`;
+}
+
+/* ── Winding the group up ─────────────────────────────────────────────
+ *
+ * Members could leave one at a time and the pot could be paid out, but
+ * nothing ended the group — so a stokvel that had finished its life stayed
+ * open for ever and the only way to be rid of it was to ask us.
+ *
+ * It goes through the signatories like every other decision that matters,
+ * and it is the one a chairperson acting alone should least be able to
+ * take. It moves NO money: paying the pot out is its own flow, with its
+ * own per-member split, and the server refuses to close a group that still
+ * holds anything rather than quietly emptying a wallet on the way past.
+ */
+function _svDissolveReady(g, gid, open) {
+  const ready = (open || []).find(r => r.kind === 'dissolve' && r.status === 'approved');
+  if (!ready) return '';
+  const left = Number(g.wallet_balance) || 0;
+  return `<div style="margin-top:12px;padding:12px 14px;border:1px solid rgba(239,68,68,0.3);
+       border-radius:10px;background:rgba(239,68,68,0.06)">
+    <div style="font-size:0.84rem;font-weight:700;margin-bottom:4px">
+      <i class="fa-solid fa-box-archive" style="margin-right:6px"></i>The signatories have agreed to close this group</div>
+    <div style="font-size:0.76rem;color:var(--text-muted);line-height:1.55;margin-bottom:10px">
+      ${left > 0
+        ? `There is still <strong>${Utils.rand(left)}</strong> in the group wallet. Pay the
+           members out first — the payout splits it by each member's share, which closing
+           the group would not do.`
+        : 'The wallet is empty and no investments are open. Closing it ends every membership '
+          + 'and cannot be undone.'}
+    </div>
+    ${left > 0 ? '' : `<button class="btn btn--sm" style="background:#ef4444;color:#fff"
+        onclick="dissolveStokvel('${_esc(gid)}','${_esc(ready.id)}')">
+        <i class="fa-solid fa-box-archive" style="margin-right:5px"></i>Close the group</button>`}
+  </div>`;
+}
+
+async function raiseStokvelDissolve(groupId) {
+  _svFormShell(groupId, {
+    icon: 'fa-box-archive',
+    title: 'Wind the group up',
+    intro: 'This asks the signatories to agree that the group should close. It changes nothing '
+         + 'by itself and moves no money. Once they have agreed, the group can be closed — but '
+         + 'only when every investment has ended and the wallet has been paid out to the '
+         + 'members. Closing is permanent.',
+    fields: _svField('svDsReason', 'Why is the group closing? (optional)', 'text', '',
+                     'maxlength="200"'),
+    submit: `submitStokvelDissolve('${_esc(groupId)}')`,
+    submitIcon: 'fa-paper-plane',
+    submitLabel: 'Ask the signatories',
+  });
+}
+
+async function submitStokvelDissolve(groupId) {
+  try {
+    await API._fetch('POST', `stokvels/${groupId}/withdrawal-requests`,
+      { kind: 'dissolve', reason: _svVal('svDsReason') || 'Winding the group up' });
+    _svToast('Asked. The signatories have been asked to agree to close the group.', 'success');
+  } catch (err) {
+    return _svFormError(err.message || 'Could not raise that.');
+  }
+  await _svRenderHub(groupId, 'approvals');
+}
+
+async function dissolveStokvel(groupId, authorityId) {
+  /* The same confirm the rest of this file uses for an irreversible vote.
+     Closing a group is the most irreversible thing in it. */
+  if (!confirm('Close this group? Every membership ends and it cannot be reopened.')) return;
+  try {
+    await API._fetch('POST', `stokvels/${groupId}/dissolve`, { authority_id: authorityId });
+    _svToast('The group has been closed.', 'success');
+    /* Back to the list — the workspace they were standing in is not theirs
+       any more, and re-rendering it would ask the server for a group they
+       are no longer an active member of. */
+    /* loadStokvels refetches the member's groups AND redraws the list —
+       the closed one is gone from it, because their membership ended with
+       it. Re-rendering the workspace instead would ask the server for a
+       group they are no longer an active member of. */
+    if (typeof loadStokvels === 'function') await loadStokvels().catch(() => {});
+    else if (typeof renderGroupsView === 'function') renderGroupsView();
+  } catch (err) {
+    _svToast(err.message || 'Could not close the group.', 'error');
+  }
 }
 
 /* The founding mandate, which is the one nobody votes on.

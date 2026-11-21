@@ -38,6 +38,7 @@ const groupDocs     = require('../services/stokvelDocuments');
 const schedules     = require('../services/stokvelSchedule');
 const noticeFund    = require('../services/noticeFund');
 const { actorFromRequest } = require('../services/ledger');
+const audit = require('../services/audit');
 /* Lazily required, and never awaited in a way that can fail a request: a
    mandate that cannot send an email must still record the vote. */
 let _notify = null;
@@ -524,15 +525,28 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
        signatories authorise a sum and whoever carries it out chooses where
        it lands, which is a mandate in name only. */
     const kind = String((req.body && req.body.kind) || 'withdrawal');
-    if (!['withdrawal', 'investment', 'exit', 'payout', 'mandate', 'notice_deposit'].includes(kind)) {
-      return res.status(400).json({ error: 'kind must be withdrawal, investment, exit, payout, mandate or notice_deposit.' });
+    if (!['withdrawal', 'investment', 'exit', 'payout', 'mandate', 'notice_deposit', 'dissolve'].includes(kind)) {
+      return res.status(400).json({ error: 'kind must be withdrawal, investment, exit, payout, mandate, notice_deposit or dissolve.' });
     }
 
-    /* A mandate change moves no money, so it is the one kind without an
-       amount; every other kind must name one. */
-    const amount = kind === 'mandate' ? 0
+    /* A mandate change and a wind-up move no money, so they are the two
+       kinds without an amount; every other kind must name one. */
+    const NO_AMOUNT = ['mandate', 'dissolve'];
+    const amount = NO_AMOUNT.includes(kind) ? 0
       : Math.round((parseFloat(req.body && req.body.amount) || 0) * 100) / 100;
-    if (kind !== 'mandate' && !(amount > 0)) return res.status(400).json({ error: 'An amount is required.' });
+    if (!NO_AMOUNT.includes(kind) && !(amount > 0)) return res.status(400).json({ error: 'An amount is required.' });
+
+    /* Who may ASK to wind the group up: the same people who may ask for a
+       change to the mandate. Asking grants nothing — the signatories
+       decide — but it should not be something any member can put in front
+       of the whole group on a whim. */
+    if (kind === 'dissolve') {
+      const sigs = await mandate.currentSignatories(pool, group.id);
+      if (!invites.mayInvite(group) && !sigs.has(me)) {
+        return res.status(403).json({
+          error: 'Only the chairperson, secretary, treasurer or a signatory can ask the group to close.' });
+      }
+    }
 
     let bankName = '', bankAcct = '', poolId = null, exitInvestorId = null, payoutId = null;
     let change = null, summary = null, lockWarning = null, proposalId = null;
@@ -1980,6 +1994,118 @@ router.post('/:id/signatory-confirmation', async (req, res) => {
     await client.query('ROLLBACK').catch(() => {});
     console.error('[stokvels] signatory confirmation failed:', err.message);
     return res.status(500).json({ error: 'Could not confirm that.' });
+  } finally {
+    client.release();
+  }
+});
+
+/* ─── POST /api/stokvels/:id/dissolve ────────────────────────────────
+   Winding the group up.
+
+   Members could leave one at a time and the pot could be paid out, but
+   nothing ended the group — so a stokvel that had finished its life stayed
+   open for ever, collecting nothing and owed to nobody, and the only way
+   to be rid of it was to ask us.
+
+   IT NEEDS THE SIGNATORIES, like every other decision that matters. This
+   is the largest one a group takes, and it is the one a chairperson acting
+   alone must least be able to take.
+
+   IT DOES NOT MOVE MONEY, and that is deliberate. Paying the pot out is
+   already a flow, with its own authority and its own per-member split; a
+   second route that emptied a wallet while closing it would be a second
+   way to distribute money and the two would eventually disagree. So this
+   REFUSES while there is anything left, and says what to do instead.
+──────────────────────────────────────────────────────────────────── */
+router.post('/:id/dissolve', async (req, res) => {
+  const me = callerInvestorId(req);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'No such stokvel.' });
+    }
+
+    const { rows: [row] } = await client.query(
+      `SELECT id, name, status, COALESCE(wallet_balance, 0) AS wallet_balance
+         FROM sub_accounts WHERE id = $1 FOR UPDATE`, [group.id]);
+    if (!row) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'No such stokvel.' });
+    }
+    if (row.status === 'closed') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'That group is already closed.' });
+    }
+
+    const { authority, error } = await mandate.authorityFor(
+      client, group, req.body && req.body.authority_id, { kind: 'dissolve' });
+    if (error) {
+      await client.query('ROLLBACK');
+      return res.status(/No such authority/.test(error) ? 404 : 403).json({ error });
+    }
+
+    /* Live investments first: closing a group around money that is still in
+       a pool leaves holdings belonging to a group that no longer exists,
+       and nobody goes looking for those. */
+    const { rows: [live] } = await client.query(
+      `SELECT COUNT(*)::int AS n FROM investments
+        WHERE sub_account_id = $1 AND COALESCE(status, '') IN ('active', 'pending')`,
+      [group.id]);
+    if (live.n > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: `The group still holds ${live.n} investment${live.n === 1 ? '' : 's'}. `
+             + 'Wait for them to mature, or withdraw them, before closing it.' });
+    }
+
+    const left = Math.round((Number(row.wallet_balance) || 0) * 100) / 100;
+    if (left > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: `There is still R${left.toFixed(2)} in the group wallet. Pay the members out `
+             + 'first — the payout splits it by each member\'s share, which closing it here '
+             + 'would not. Then close the group.' });
+    }
+
+    await client.query(
+      `UPDATE sub_accounts SET status = 'closed', closed_at = NOW(), updated_at = NOW()
+        WHERE id = $1`, [group.id]);
+    /* Membership ends with the group. The rows stay — who was in it is part
+       of its record — but nobody is an ACTIVE member of a group that has
+       been wound up, so it stops appearing on their My Groups. */
+    await client.query(
+      `UPDATE stokvel_members SET status = 'ended', updated_at = NOW()
+        WHERE sub_account_id = $1 AND status = 'active'`, [group.id]);
+    /* Anything still waiting on a signature is moot. */
+    await client.query(
+      `UPDATE stokvel_withdrawal_requests SET status = 'expired', updated_at = NOW()
+        WHERE sub_account_id = $1 AND status = 'pending' AND id <> $2`, [group.id, authority.id]);
+
+    await mandate.consume(client, authority, 'DISSOLVE-' + group.id);
+    await client.query('COMMIT');
+
+    const actor = actorFromRequest(req);
+    await audit.log({
+      actorId: actor.id, actorEmail: actor.email, actorRole: actor.role,
+      action: 'stokvel.dissolved', entityType: 'sub_accounts', entityId: group.id,
+      description: `${row.name} was wound up on the signatories' authority ${authority.id}`,
+      ip: actor.ip,
+    }).catch(() => {});
+
+    const n = notify();
+    if (n && n.dissolved) {
+      n.dissolved({ groupId: group.id }).catch(e => console.warn('[stokvels] notify failed:', e.message));
+    }
+
+    return res.json({ data: { closed: true, id: group.id, name: row.name } });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] dissolve failed:', err.message);
+    return res.status(500).json({ error: 'Could not close the group.' });
   } finally {
     client.release();
   }

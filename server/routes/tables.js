@@ -1327,9 +1327,34 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
              on any, so the ownership predicate is theirs alone — applying it
              to staff would have made every staff POST a 403. */
           const _asInvestor = req.user.role === 'investor';
+          /* WHO MAY CARRY ONE OUT.
+           *
+           * The predicate was parent_investor_id alone, which is right for
+           * a minor, a trust or a business — one person owns the account.
+           * For a stokvel the parent is the CHAIRPERSON, and the effect was
+           * that signatories could approve an investment and nobody but the
+           * chairperson could place it. A group whose chairperson was away
+           * held an approved authority it could not use, and the mandate
+           * model exists precisely so that no single person is the group.
+           *
+           * A stokvel's active members may carry one out as well. That is
+           * not a loosening: WHAT may be placed is pinned by the authority
+           * — the pool and the amount the signatories agreed — so the
+           * carrier chooses nothing. Somebody who is not in the group still
+           * cannot, and nor can a member whose membership has ended.
+           */
           const { rows: sa } = _asInvestor
             ? await _invClient.query(
-                'SELECT wallet_balance, account_type, stokvel_quorum FROM sub_accounts WHERE id=$1 AND parent_investor_id=$2 FOR UPDATE',
+                `SELECT s.wallet_balance, s.account_type, s.stokvel_quorum
+                   FROM sub_accounts s
+                  WHERE s.id = $1
+                    AND ( s.parent_investor_id = $2
+                       OR ( s.account_type = 'stokvel'
+                            AND EXISTS (SELECT 1 FROM stokvel_members m
+                                         WHERE m.sub_account_id = s.id
+                                           AND m.investor_id = $2
+                                           AND m.status = 'active') ) )
+                  FOR UPDATE`,
                 [body.sub_account_id, req.user.investorId])
             : await _invClient.query(
                 'SELECT wallet_balance, account_type, stokvel_quorum FROM sub_accounts WHERE id=$1 FOR UPDATE',

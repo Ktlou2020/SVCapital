@@ -106,6 +106,9 @@ async function authorityFor(client, subAccount, authorityId, want) {
     if (want.kind === 'notice_deposit') {
       return { error: 'Moving money into the notice fund needs an approved authority. Ask the signatories first.' };
     }
+    if (want.kind === 'dissolve') {
+      return { error: 'Closing the group needs an approved authority. Raise it and have the signatories approve it first — this is the one decision nobody should be able to take alone.' };
+    }
     return { error: want.kind === 'investment'
       ? 'A group investment needs an approved authority. Raise a request and have the signatories approve it first.'
       : 'A group withdrawal needs an approved authority. Raise a withdrawal request and have the signatories approve it first.' };
@@ -122,7 +125,8 @@ async function authorityFor(client, subAccount, authorityId, want) {
   if (String(authority.kind || 'withdrawal') !== want.kind) {
     const WANTED = { investment: 'an investment', exit: 'an exit settlement',
                      payout: 'a payout to the whole group', withdrawal: 'a withdrawal',
-                     notice_deposit: 'a move into the notice fund' };
+                     notice_deposit: 'a move into the notice fund',
+                     dissolve: 'closing the group' };
     return { error: `That authority was approved for a ${authority.kind || 'withdrawal'}, not ${WANTED[want.kind] || 'a withdrawal'}.` };
   }
 
@@ -137,7 +141,11 @@ async function authorityFor(client, subAccount, authorityId, want) {
      control. The figure on an exit request is what her share stood at when
      it was raised, shown to the signatories so they know the order of it;
      what pins an exit is WHOSE membership ends, checked below. */
-  if (want.kind !== 'exit' && want.kind !== 'payout' &&
+  /* 'dissolve' carries no amount, like 'mandate': the group is not being
+     closed FOR a sum. What pins it is that the authority is a dissolve
+     authority for this group, checked above, and that the wallet is empty
+     when it is carried out, checked by the caller. */
+  if (want.kind !== 'exit' && want.kind !== 'payout' && want.kind !== 'dissolve' &&
       Math.round(parseFloat(authority.amount) * 100) !== Math.round(Number(want.amount) * 100)) {
     return { error: `That authority is for R${parseFloat(authority.amount).toFixed(2)}, not R${Number(want.amount).toFixed(2)}.` };
   }
@@ -170,6 +178,10 @@ async function authorityFor(client, subAccount, authorityId, want) {
     if (String(authority.exit_investor_id || '') !== String(want.investorId || '')) {
       return { error: 'That authority was approved to settle a different member.' };
     }
+  } else if (want.kind === 'dissolve') {
+    /* Nothing further to pin. There is no destination, no sum and no
+       product — the authority is to end the group, and there is only one
+       of those. */
   } else if (String(authority.bank_account_number || '').trim() !== String(want.bankAccount || '').trim()) {
     return { error: 'That authority was approved for a different bank account.' };
   }

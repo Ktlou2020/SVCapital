@@ -3249,7 +3249,19 @@ async function autoSetup() {
           BEGIN ALTER TABLE notice_fund_rates ADD CONSTRAINT nfr_actual_bounds
             CHECK (actual_rate IS NULL OR (actual_rate > -0.5 AND actual_rate < 0.2)); EXCEPTION WHEN duplicate_object THEN NULL; END;
           ALTER TABLE stokvel_withdrawal_requests DROP CONSTRAINT IF EXISTS stokvel_withdrawal_requests_amount_check;
-          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_amount_chk CHECK (amount > 0 OR kind = 'mandate'); EXCEPTION WHEN duplicate_object THEN NULL; END;
+          /* 'dissolve' joins 'mandate' as a decision with no sum attached:
+             winding a group up is not an amount, it is the end of the
+             group. Both constraints are DROPPED and re-added rather than
+             guarded with duplicate_object, because a constraint that
+             already exists under the same name keeps its OLD definition
+             and the new kind is rejected by a rule nobody can see. */
+          ALTER TABLE stokvel_withdrawal_requests DROP CONSTRAINT IF EXISTS swr_amount_chk;
+          ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_amount_chk
+            CHECK (amount > 0 OR kind IN ('mandate','dissolve'));
+          ALTER TABLE stokvel_withdrawal_requests DROP CONSTRAINT IF EXISTS swr_kind_chk;
+          ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_kind_chk
+            CHECK (kind IN ('withdrawal','investment','exit','payout','mandate',
+                            'notice_deposit','dissolve'));
           BEGIN ALTER TABLE sub_accounts ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
           /* ── The foreign investor funds process ────────────────────────
              Residency, not nationality, is what the Reserve Bank's reporting

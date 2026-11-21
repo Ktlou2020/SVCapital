@@ -111,9 +111,31 @@ console.log('\nand it grants nothing it has not earned');
      member can see what the group holds. The first draft of this forbade the
      column outright and failed on exactly that. What may not happen is a
      WRITE. */
+  /* NARROWED, deliberately, and it is worth saying why because loosening a
+     safety assertion to fit a new feature is exactly the move that deserves
+     suspicion.
+     
+     The rule this states is "never writes MONEY: no balance, no
+     transaction". The MECHANISM was broader than the rule — it banned any
+     UPDATE of sub_accounts at all, which was a fine proxy while the route
+     only ever read that table. Winding a group up writes
+     `status = 'closed'`, which is not money, and the endpoint refuses
+     outright if the wallet holds anything.
+     
+     So the money bans stay exactly as they were, and the sub_accounts write
+     is bounded by naming the only columns it may touch. A wallet write is
+     now caught twice. */
+  const saWrites = [...ROUTE.matchAll(/UPDATE\s+sub_accounts\s+SET\s+([\s\S]{0,160}?)WHERE/gi)]
+    .map(m => m[1]);
+  const ALLOWED_SA_COLS = ['status', 'closed_at', 'updated_at'];
+  const strayCol = saWrites.flatMap(w => (w.match(/\b([a-z_]+)\s*=/g) || [])
+      .map(c => c.replace(/\s*=$/, '')))
+    .find(c => !ALLOWED_SA_COLS.includes(c));
+  ok('and a sub_accounts write touches only the group\u2019s state',
+     !strayCol, `${strayCol} — this route closes a group; it does not bank for one`);
   ok('it writes authority, never money',
      !/INSERT INTO transactions/i.test(ROUTE)
-     && !/UPDATE\s+(?:investors|sub_accounts)\b/i.test(ROUTE)
+     && !/UPDATE\s+investors\b/i.test(ROUTE)
      && !/SET[^;]{0,200}wallet_balance/i.test(ROUTE),
      'the request is a permission slip; withdrawals.js is the only thing that moves a rand');
   ok('is_signatory is recorded but authorises nothing',
