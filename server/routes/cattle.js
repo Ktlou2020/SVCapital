@@ -10,6 +10,9 @@ const pool        = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 const { reconcileCattle, relinkOrphanAnimals } = require('../services/cattleReconciliation');
+const companies   = require('../services/cattleCompanies');
+const { actorFromRequest } = require('../services/ledger');
+const audit       = require('../services/audit');
 
 /* Everything under /api/cattle is fund books.
  *
@@ -1001,6 +1004,78 @@ router.delete('/purge', requireAuth, requireRole('admin', 'director'), async (re
     res.status(500).json({ error: 'Internal server error.' });
   } finally {
     client.release();
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════
+   Who owns which cattle
+
+   A batch carries one company and some batches hold more than one's
+   cattle. The split lives on the animals; see services/cattleCompanies.
+   ═══════════════════════════════════════════════════════════ */
+
+/* The split of one batch. */
+router.get('/cycles/:id/companies', requireFund, async (req, res) => {
+  try {
+    const split = await companies.splitFor(pool, String(req.params.id || ''));
+    res.json({ data: split, mixed: companies.isMixed(split) });
+  } catch (err) {
+    console.error('[cattle companies] split:', err.message);
+    res.status(500).json({ error: 'Could not load the split for that batch.' });
+  }
+});
+
+/* Set how many head of this batch belong to a company.
+ *
+ * A TOTAL, not an increment: "Company A owns 120 head of this batch",
+ * whatever it owned a moment ago. Sending 120 twice leaves 120. An
+ * "allocate 120 more" button pressed twice by somebody unsure whether the
+ * first press landed is how a batch ends up over-allocated. */
+router.put('/cycles/:id/companies', requireFund, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const out = await companies.setAllocation(
+      client, String(req.params.id || ''),
+      (req.body || {}).company, (req.body || {}).head);
+    if (out.error) {
+      await client.query('ROLLBACK');
+      return res.status(out.status || 400).json({ error: out.error });
+    }
+    await client.query('COMMIT');
+
+    const actor = actorFromRequest(req, 'staff');
+    await audit.log({
+      actorId: actor.id, actorEmail: actor.email, actorRole: actor.role,
+      action: 'cattle.company_allocated', entityType: 'cattle_cycles',
+      entityId: String(req.params.id || ''),
+      description: `${out.batchName}: ${out.company} now owns ${out.now} head`
+                 + (out.moved ? ` (+${out.moved})` : '')
+                 + (out.released ? ` (released ${out.released} back to ${out.batchCompany || 'the batch'})` : ''),
+      ip: actor.ip,
+    }).catch(() => {});
+
+    const split = await companies.splitFor(pool, String(req.params.id || ''));
+    res.json({ ...out, data: split, mixed: companies.isMixed(split) });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[cattle companies] allocate:', err.message);
+    res.status(500).json({ error: 'Could not change the allocation.' });
+  } finally {
+    client.release();
+  }
+});
+
+/* What every company owns, across every batch. */
+router.get('/companies', requireFund, async (_req, res) => {
+  try {
+    const [data, names, mixed] = await Promise.all([
+      companies.rollup(pool), companies.known(pool), companies.mixedCycleIds(pool),
+    ]);
+    res.json({ data, known: names, mixedCycles: mixed });
+  } catch (err) {
+    console.error('[cattle companies] rollup:', err.message);
+    res.status(500).json({ error: 'Could not load the company totals.' });
   }
 });
 

@@ -27,6 +27,7 @@ async function apiFetch(path, opts = {}) {
 async function apiGet(path)       { return (await apiFetch(path)).json(); }
 async function apiPost(path, d)   { return (await apiFetch(path, { method: 'POST',  headers: {'Content-Type':'application/json'}, body: JSON.stringify(d) })).json(); }
 async function apiPatch(path, d)  { return (await apiFetch(path, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(d) })).json(); }
+async function apiPut(path, d)    { return (await apiFetch(path, { method: 'PUT',   headers: {'Content-Type':'application/json'}, body: JSON.stringify(d) })).json(); }
 async function apiDelete(path)    { return apiFetch(path, { method: 'DELETE' }); }
 
 /* ── TOAST ─────────────────────────────────────────────────── */
@@ -115,6 +116,10 @@ const S = {
   /* Newest first by default — the batch you bought this week is the one you
      came to look at. */
   cycleFilter: { search: '', company: '', status: '', sort: 'newest' },
+  /* The batches whose animals do not all answer to one company, fetched
+     once for the whole list rather than per card. */
+  mixedCycles: new Set(),
+  companyRollup: [],
   /* Batch ids ticked on the cycles list. A Set, and it survives a re-render —
      typing in the search box re-renders, and a selection that emptied itself
      every keystroke would be unusable on a list of 138. */
@@ -867,7 +872,10 @@ function _filteredCycles() {
   return _sortCycles(hits, S.cycleFilter.sort || 'newest');
 }
 
-function renderCyclesView() {
+/* isRedraw: the rollup has just arrived and the cards are being drawn
+   again so their Mixed badges are right. Fetching it again from here is
+   how that becomes a loop. */
+function renderCyclesView(isRedraw) {
   const el = document.getElementById('view-cycles');
   if (!el) return;
   const companies = [...new Set(S.cycles.map(c => c.company).filter(Boolean))].sort();
@@ -893,6 +901,8 @@ function renderCyclesView() {
       <div class="stat-item"><div class="stat-item-label">Total Capital</div><div class="stat-item-value">${fmt.zar(totalCapital)}</div></div>
       <div class="stat-item"><div class="stat-item-label">Total Sale Revenue</div><div class="stat-item-value green">${fmt.zar(totalSale)}</div></div>
     </div>
+
+    <div id="companyRollup" style="margin-bottom:14px"></div>
 
     <div class="filter-bar">
       <div class="search-box">
@@ -923,6 +933,8 @@ function renderCyclesView() {
 
     ${filtered.length === 0 ? `<div class="empty-state"><i class="fa-solid fa-cow"></i><h3>No cycles found</h3><p>Import data or adjust filters</p></div>` : filtered.map(c => renderCycleCard(c)).join('')}
   `;
+  if (!isRedraw) loadCompanyRollup();
+  else renderCompanyRollup(S.companyRollup || []);
 }
 
 /* ── Selection ─────────────────────────────────────────────────────────────
@@ -1172,6 +1184,9 @@ function renderCycleCard(cycle) {
           <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${escapeHtml(cycle.company||'')} &nbsp;·&nbsp; ${escapeHtml(cycle.cycle_no||'')} &nbsp;·&nbsp; INV ${escapeHtml(cycle.inv_no||'—')}</div>
         </div>
         <span class="badge ${statusMap[cycle.status]||'badge-grey'}">${(cycle.status||'—').toUpperCase()}</span>
+        ${S.mixedCycles && S.mixedCycles.has(cycle.id)
+          ? '<span class="badge badge-blue" title="This batch holds more than one company\'s cattle — open it to see the split">MIXED</span>'
+          : ''}
         <button class="btn btn-secondary btn-xs" onclick="event.stopPropagation();openEditCycleModal('${escapeHtml(cycle.id)}')"><i class="fa-solid fa-pen"></i></button>
         <button class="btn btn-xs" style="background:#fff3cd;color:#856404" onclick="event.stopPropagation();deleteCycle('${escapeHtml(cycle.id)}')"><i class="fa-solid fa-trash"></i></button>
       </div>
@@ -2180,6 +2195,7 @@ function openCycleDetail(id, keepAnimals = false) {
         <div><div style="font-size:10px;color:rgba(255,255,255,.5);margin-bottom:3px">NAV vs. COST</div><div style="font-size:20px;font-weight:800;color:${nav.navPct>=0?'#74c69d':'#ff6b6b'}">${nav.navPct>=0?'+':''}${nav.navPct.toFixed(2)}%</div></div>
       </div>
     </div>
+    <div id="cycleOwners" style="margin-bottom:18px"></div>
     <div class="grid-2" style="margin-bottom:16px">
       <div><div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Cycle Details</div><div class="info-grid">
         <div class="info-row"><div class="info-row-label">Start Date</div><div class="info-row-value">${fmt.date(cycle.cycle_start_date)}</div></div>
@@ -2215,6 +2231,167 @@ function openCycleDetail(id, keepAnimals = false) {
      several hundred animals after every row they touched. */
   if (keepAnimals && S.cycleAnimals && S.cycleAnimals.cycleId === id) renderCycleAnimals();
   else loadCycleAnimals(id);
+  loadCycleOwners(id);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   WHO OWNS THE CATTLE IN THIS BATCH
+
+   A batch carries one company in its header and some batches hold more
+   than one company's cattle — which there was nowhere to say, so the
+   header said one thing and the herd was two.
+
+   The split lives on the animals. An animal with no company of its own
+   belongs to the batch's, so a single-owner batch needs no allocation at
+   all and shows exactly what it always did.
+
+   ALLOCATION IS A TOTAL, not an increment. "Company A: 120" means this
+   batch holds 120 head of theirs, whatever it held a moment ago, so the
+   same press twice leaves 120 rather than 240.
+   ══════════════════════════════════════════════════════════════ */
+
+/* What every company owns, across every batch.
+ *
+ * Separate from the cycles list because it answers a different question:
+ * the list is "what is in each batch" and this is "what does each company
+ * hold", which no screen could answer before — a batch carried one company
+ * and that was the end of it.
+ *
+ * PURCHASE VALUE IS SUMMED PER BATCH, not from a blended cost: a company
+ * holding fifty head of a cheap batch and fifty of an expensive one has not
+ * bought a hundred average animals.
+ */
+async function loadCompanyRollup() {
+  const host = document.getElementById('companyRollup');
+  if (!host) return;
+  try {
+    const res = await apiGet('cattle/companies');
+    S.mixedCycles   = new Set(res.mixedCycles || []);
+    S.companyRollup = res.data || [];
+    renderCompanyRollup(S.companyRollup);
+    /* The badge depends on what just arrived, so the cards are redrawn —
+       but only if this is still the view the operator is looking at. */
+    if (document.getElementById('companyRollup')) renderCyclesView(true);
+  } catch (_) {
+    host.innerHTML = '';
+  }
+}
+
+function renderCompanyRollup(rows) {
+  const host = document.getElementById('companyRollup');
+  if (!host) return;
+  if (rows.length < 2) { host.innerHTML = ''; return; }   // one owner is not a split
+  host.innerHTML = `
+    <div style="background:var(--surface-2);border-radius:10px;padding:12px 14px">
+      <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;
+                  letter-spacing:.6px;margin-bottom:8px">Head by company</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px">
+        ${rows.map(r => `
+          <div style="border:1px solid var(--border);border-radius:9px;padding:9px 11px">
+            <div style="font-size:13px;font-weight:800">${escapeHtml(r.company)}</div>
+            <div style="font-size:19px;font-weight:800;margin:2px 0">${fmt.num(r.head)} <span style="font-size:12px;font-weight:600;color:var(--text-muted)">head</span></div>
+            <div style="font-size:11px;color:var(--text-muted)">
+              ${fmt.num(r.live)} live · ${fmt.num(r.sold)} sold · ${fmt.num(r.mortalities)} dead
+              &nbsp;·&nbsp; ${fmt.num(r.batches)} batch${r.batches === 1 ? '' : 'es'}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+              Cost ${fmt.zar(r.purchaseValue)}${r.realisedValue ? ` · Realised ${fmt.zar(r.realisedValue)}` : ''}</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+async function loadCycleOwners(cycleId) {
+  const host = document.getElementById('cycleOwners');
+  if (!host) return;
+  host.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Loading ownership…</div>';
+  try {
+    const res = await apiGet(`cattle/cycles/${encodeURIComponent(cycleId)}/companies`);
+    renderCycleOwners(cycleId, res.data || [], !!res.mixed);
+  } catch (err) {
+    host.innerHTML = `<div style="font-size:12px;color:var(--red)">Could not load ownership: ${escapeHtml(err.message || '')}</div>`;
+  }
+}
+
+function renderCycleOwners(cycleId, split, mixed) {
+  const host = document.getElementById('cycleOwners');
+  if (!host) return;
+  const cycle = S.cycles.find(c => c.id === cycleId) || {};
+  const total = split.reduce((n, s) => n + s.head, 0);
+  const others = [...new Set(S.cycles.map(c => c.company).filter(Boolean))]
+    .filter(c => c !== cycle.company).sort();
+
+  if (!total) {
+    host.innerHTML = `<div style="background:var(--surface-2);border-radius:10px;padding:12px 14px;
+        font-size:12px;color:var(--text-muted)">
+        No individual animals are recorded against this batch, so there is nothing to
+        allocate. Import the animals first and the split can be set here.</div>`;
+    return;
+  }
+
+  const row = s => `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;
+         border-bottom:1px solid var(--border)">
+      <div style="flex:1;font-size:13px;font-weight:700">${escapeHtml(s.company || '—')}${
+        s.company === cycle.company
+          ? '<span style="font-weight:500;color:var(--text-muted);font-size:11px"> · the batch\'s own</span>'
+          : ''}</div>
+      <div style="font-size:13px;font-weight:800">${fmt.num(s.head)} head</div>
+      <div style="font-size:11px;color:var(--text-muted);min-width:150px;text-align:right">
+        ${fmt.num(s.live)} live · ${fmt.num(s.sold)} sold · ${fmt.num(s.mortalities)} dead</div>
+    </div>`;
+
+  host.innerHTML = `
+    <div style="background:var(--surface-2);border-radius:10px;padding:14px 16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--text-muted);
+                    text-transform:uppercase;letter-spacing:.6px">Ownership</div>
+        ${mixed ? '<span class="badge badge-blue" style="font-size:10px">MIXED</span>' : ''}
+        <div style="margin-left:auto;font-size:11px;color:var(--text-muted)">${fmt.num(total)} head recorded</div>
+      </div>
+      ${split.map(row).join('')}
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:12px">
+        <div>
+          <label style="display:block;font-size:10px;color:var(--text-muted);
+                        text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Company</label>
+          <input list="ownerCompanyList" id="ownerCompany" class="filter-select"
+                 style="min-width:180px" placeholder="Company name" />
+          <datalist id="ownerCompanyList">
+            ${others.map(c => `<option value="${escapeHtml(c)}"></option>`).join('')}
+          </datalist>
+        </div>
+        <div>
+          <label style="display:block;font-size:10px;color:var(--text-muted);
+                        text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Head</label>
+          <input type="number" id="ownerHead" class="filter-select" min="0" step="1"
+                 style="width:110px" placeholder="0" />
+        </div>
+        <button class="btn btn-secondary btn-xs" style="height:34px"
+                onclick="setCycleOwner('${escapeHtml(cycleId)}')">Set</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px;line-height:1.5">
+        This is a TOTAL, not an addition — setting 120 twice leaves 120, and setting 0
+        gives them back to ${escapeHtml(cycle.company || 'the batch')}. The animals are
+        chosen in tag order; which particular head is arbitrary, and every allocated tag
+        can be listed.
+      </div>
+    </div>`;
+}
+
+async function setCycleOwner(cycleId) {
+  const company = (document.getElementById('ownerCompany') || {}).value || '';
+  const headRaw = (document.getElementById('ownerHead') || {}).value || '';
+  if (!company.trim()) { CToast.show('Name the company first.', 'error'); return; }
+  if (headRaw === '')  { CToast.show('How many head?', 'error'); return; }
+  try {
+    const res = await apiPut(`cattle/cycles/${encodeURIComponent(cycleId)}/companies`,
+      { company: company.trim(), head: parseInt(headRaw, 10) });
+    CToast.show(res.moved    ? `${company.trim()} now owns ${res.now} head (+${res.moved}).`
+        : res.released ? `${company.trim()} now owns ${res.now} head (${res.released} released).`
+        : `${company.trim()} already owned ${res.now} head.`);
+    renderCycleOwners(cycleId, res.data || [], !!res.mixed);
+    loadCycles();
+  } catch (err) {
+    CToast.show(err.message || 'Could not change the allocation.', 'error');
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════

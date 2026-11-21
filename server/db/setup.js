@@ -455,10 +455,29 @@ CREATE TABLE IF NOT EXISTS cattle_animals (
   mortality BOOLEAN DEFAULT false, mortality_date DATE, mortality_report TEXT,
   sale_value NUMERIC(18,2),
   sold BOOLEAN DEFAULT false, sale_batch TEXT, sale_date DATE,
+  /* Whose animal this is, when it is not the batch's own company.
+   *
+   * A batch carries one company and some batches hold cattle belonging to
+   * more than one, which there was nowhere to record: the header said one
+   * thing and the truth was two.
+   *
+   * NULL MEANS "THE BATCH'S COMPANY", not "unknown". Every animal already
+   * in the table belongs to whoever its batch says, so a null needs no
+   * backfill and the totals are right the moment this ships. Allocating
+   * stamps the exceptions; releasing them sets the column back to null.
+   */
+  company TEXT,
+  company_set_at TIMESTAMPTZ,
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS cattle_animals_cycle_idx ON cattle_animals(cycle_id);
+ALTER TABLE cattle_animals ADD COLUMN IF NOT EXISTS company        TEXT;
+ALTER TABLE cattle_animals ADD COLUMN IF NOT EXISTS company_set_at TIMESTAMPTZ;
+/* Only the allocated ones are ever looked up by company — the rest answer
+   through their batch — so the index carries only those. */
+CREATE INDEX IF NOT EXISTS cattle_animals_company_idx
+  ON cattle_animals(company) WHERE company IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS employees (
   id TEXT PRIMARY KEY, first_name TEXT NOT NULL, last_name TEXT NOT NULL,
