@@ -20987,10 +20987,20 @@ function _renderIntlInterest(data) {
     return;
   }
   body.innerHTML = data.map(r => {
-    const contacted = r.status === 'contacted';
+    /* notified_at, not a status enum. This read r.status === 'contacted'
+       and markIntlContacted PATCHed a `status` column that has never
+       existed on international_waitlist — so the button always failed and
+       the badge could never be green. One column answers the only question
+       anybody asks of this list: have we told them yet? It is stamped by
+       the announcement itself, and by hand for somebody reached another
+       way. */
+    const contacted = !!r.notified_at;
+    const when = contacted
+      ? new Date(r.notified_at).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short' })
+      : '';
     const statusBadge = contacted
-      ? `<span style="background:rgba(100,237,0,0.15);color:#65ed00;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700"><i class="fa-solid fa-check"></i> Contacted</span>`
-      : `<span style="background:rgba(254,194,79,0.15);color:#fec24f;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">New</span>`;
+      ? `<span style="background:rgba(100,237,0,0.15);color:#65ed00;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700"><i class="fa-solid fa-check"></i> Told ${_esc(when)}</span>`
+      : `<span style="background:rgba(254,194,79,0.15);color:#fec24f;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">Not told yet</span>`;
     return `<tr>
       <td style="font-weight:600;color:#e8edf2">${_esc(r.full_name || '—')}</td>
       <td><a href="mailto:${_esc(r.email)}" style="color:#fec24f;text-decoration:none">${_esc(r.email)}</a></td>
@@ -21009,13 +21019,53 @@ function _renderIntlInterest(data) {
 }
 
 async function markIntlContacted(id) {
+  const stamp = new Date().toISOString();
   try {
-    await API._fetch('PATCH', `tables/international_waitlist/${id}`, { status: 'contacted' });
+    await API._fetch('PATCH', `tables/international_waitlist/${id}`, { notified_at: stamp });
     const rec = _intlData.find(r => r.id === id);
-    if (rec) rec.status = 'contacted';
+    if (rec) rec.notified_at = stamp;
     _renderIntlInterest(_intlData);
-    Toast.success('Marked as contacted');
-  } catch (e) { Toast.error('Failed to update status'); }
+    Toast.success('Marked as told');
+  } catch (e) { Toast.error('Could not mark that one'); }
+}
+
+/* Tell everybody who has not been told that they can now open an account.
+ *
+ * The count is named BEFORE the confirm, because this leaves the building:
+ * it is real email to real people who asked to hear from us once. The
+ * server refuses to send twice, so the number quoted here is the number
+ * that will actually go. */
+async function announceIntlSignupOpen() {
+  const untold = (_intlData || []).filter(r => !r.notified_at);
+  if (!untold.length) {
+    Toast.success('Everybody on the list has already been told.');
+    return;
+  }
+  const countries = [...new Set(untold.map(r => r.country).filter(Boolean))];
+  const confirmed = await Confirm.ask('Tell them registration is open?', {
+    body: `${untold.length} ${untold.length === 1 ? 'person' : 'people'} across `
+        + `${countries.length} ${countries.length === 1 ? 'country' : 'countries'} `
+        + `will be emailed.\n\nThe email says they can now open an account, links to `
+        + `the sign-up page, and tells them investments are in rands and that we cannot `
+        + `accept US persons.\n\nAnybody already told is skipped. This cannot be unsent.`,
+    confirmLabel: `Email ${untold.length}`,
+  });
+  if (!confirmed) return;
+
+  const btn = document.getElementById('ii-announce');
+  const orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending…'; }
+  try {
+    const out = await API._fetch('POST', 'waitlist/international/announce', {});
+    Toast.success(out.failed
+      ? `Sent to ${out.sent} of ${out.total}. ${out.failed} could not be delivered.`
+      : `Sent to ${out.sent}.`);
+    await loadIntlInterest();
+  } catch (err) {
+    Toast.error((err && err.message) || 'Could not send the announcement.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+  }
 }
 
 function filterIntlInterest(q) {

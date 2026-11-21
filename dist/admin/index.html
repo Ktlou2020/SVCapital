@@ -586,10 +586,21 @@
                       <h2 style="color:#e8edf2;font-size:1.05rem;font-weight:700;margin:0">International Interest</h2>
                       <p style="color:#7a92a8;font-size:0.8rem;margin:4px 0 0">Prospects from outside South Africa who have expressed interest in investing.</p>
                     </div>
-                    <button class="btn btn--secondary btn--sm" onclick="exportIntlInterestCSV()">
-                      <i class="fa-solid fa-file-csv"></i> Export CSV
-                    </button>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap">
+                      <button class="btn btn--primary btn--sm" id="ii-announce"
+                              onclick="announceIntlSignupOpen()">
+                        <i class="fa-solid fa-paper-plane"></i> Tell them they can sign up
+                      </button>
+                      <button class="btn btn--secondary btn--sm" onclick="exportIntlInterestCSV()">
+                        <i class="fa-solid fa-file-csv"></i> Export CSV
+                      </button>
+                    </div>
                   </div>
+                  <p style="color:#7a92a8;font-size:0.76rem;margin:-6px 0 14px;line-height:1.5">
+                    International registration is open, so these people can now open an account
+                    themselves. The button emails everybody who has not already been told, with a
+                    link to the sign-up page. Nobody is emailed twice.
+                  </p>
           
                   <div class="stats-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px" id="intlInterestStats">
                     <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('intlinterest',document.querySelector('[data-view=intlinterest]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-earth-africa"></i></div></div><div class="stat-card__value" id="ii-total">—</div><div class="stat-card__label">Total Registrations</div></div>
@@ -5451,7 +5462,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=31"></script>
 <script src="../js/investor-documents.js?v=9"></script>
-<script src="js/admin.js?v=239"></script>
+<script src="js/admin.js?v=240"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

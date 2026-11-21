@@ -1089,6 +1089,49 @@ function sendInternationalWaitlistConfirmation({ full_name, email, country }) {
   });
 }
 
+/* ── The waitlist is over: registration is open where they are ───
+ *
+ * The one message the international waitlist was collected for. It is not a
+ * marketing send: these people asked to be told when they could open an
+ * account, and this is that. It says the one thing they are waiting for in
+ * the first line, and the two conditions that would waste their time — rands
+ * only, and no US persons — before they start, rather than after four steps
+ * of a form.
+ */
+function sendInternationalSignupOpen({ full_name, email, country }) {
+  const first = (full_name || '').split(' ')[0] || 'there';
+  const signup = `${BASE_URL}/signup`;
+  return _send({
+    to: email,
+    subject: 'You can now open your SV Capital account',
+    type: 'waitlist',
+    html: _wrap(`
+      <h2>International registration is open 🌍</h2>
+      <p>Hi ${escHtml(first)},</p>
+      <p>You asked us to let you know when you could invest with SV Capital from
+         <strong>${escHtml(country || 'outside South Africa')}</strong>. You can now open an
+         account yourself — there is no waiting list any more.</p>
+      <p style="text-align:center;margin:26px 0">
+        <a href="${signup}" class="btn">Open your account</a></p>
+      <div class="box">
+        <div class="row"><span class="lbl">What you will need</span><span class="val">Your passport, proof of address and proof of your source of funds</span></div>
+        <div class="row"><span class="lbl">How long</span><span class="val">Documents are reviewed individually, usually 1–3 business days</span></div>
+      </div>
+      <p><strong>Two things worth knowing before you start.</strong> Investments are made in
+         South African rands, and you convert on your side — we cannot accept other
+         currencies. And we are not able to accept US citizens or US persons, including
+         dual citizens, green-card holders and US residents.</p>
+      <p>If you would rather not hear from us again, just reply and say so.</p>
+    `),
+    text: `Hi ${first},\n\nInternational registration is open — you can now open an SV Capital `
+        + `account yourself: ${signup}\n\nYou will need your passport, proof of address and `
+        + `proof of source of funds. Documents are reviewed individually, usually within 1-3 `
+        + `business days.\n\nInvestments are made in South African rands, and we are not able `
+        + `to accept US citizens or US persons.\n\nReply to this email if you would rather not `
+        + `hear from us again.`,
+  });
+}
+
 /* ── Maturity instruction confirmed (investor) ───────────────── */
 function sendMaturityInstructionConfirmed(investor, { poolName, endDate, instruction, onBehalf = false }) {
   const { email, first_name } = investor;
@@ -1509,6 +1552,7 @@ module.exports = {
   sendKycDocumentReceived,
   sendAlert,
   sendInternationalWaitlistConfirmation,
+  sendInternationalSignupOpen,
   sendWithdrawalAlert,
   sendMaturityInstructionConfirmed,
   sendChangeRequestSummary,

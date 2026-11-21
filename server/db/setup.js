@@ -2037,8 +2037,14 @@ CREATE TABLE IF NOT EXISTS international_waitlist (
   email      TEXT NOT NULL,
   country    TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
+  /* When this person was told that registration had opened. The list is
+     collected for exactly one message, and the one way to get that message
+     wrong is to send it twice — so who has had it is a column rather than
+     something somebody keeps in a spreadsheet. */
+  notified_at TIMESTAMPTZ,
   UNIQUE (email)
 );
+ALTER TABLE international_waitlist ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS gifts (
   id              TEXT PRIMARY KEY,
