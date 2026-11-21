@@ -800,13 +800,31 @@ function _isIncomeTxn(t) {
   return ['return', 'interest'].includes(String(t && t.type || ''));
 }
 
+/* WHICH WAY THE MONEY WENT — the one answer, for every list on every
+   screen. These two lists are server/services/ledger.js CASH_CREDIT_TYPES
+   and CASH_DEBIT_TYPES, plus the few types only the client ever renders
+   (reward, refund); keep them in step.
+ *
+ * THERE WERE FOUR OF THESE. The statement had this one, and the
+ * transactions table, the overview list and the mobile card each carried
+ * their own `!['withdrawal','fee','investment','reinvestment','gift_sent']`
+ * — a list of what goes OUT, written as a list of exceptions, so every type
+ * added since was a credit by default. A client who paid R60 000 into their
+ * stokvel saw it on their own transactions as +R 60 000,00 in green.
+ *
+ * A list of exceptions is the wrong shape for this: money leaving is the
+ * thing that must never be got wrong, and it should have to be named. */
 function _stmtDirection(t) {
   /* transfer_in/out move between a client's main wallet and one of their
      sub-accounts. Absent from both lists they fell through to the amount
      sign below, and amounts are stored positive — so a transfer OUT drew
-     itself as a credit. */
-  const CREDIT = ['deposit', 'return', 'payout', 'referral_bonus', 'gift_received', 'reward', 'interest', 'refund', 'transfer_in'];
-  const DEBIT  = ['withdrawal', 'investment', 'reinvestment', 'platform_fee', 'fee', 'gift_sent', 'transfer_out'];
+     itself as a credit. The stokvel pair is the same story: a contribution
+     INTO a group is this wallet's money leaving it. */
+  const CREDIT = ['deposit', 'return', 'payout', 'referral_bonus', 'gift_received', 'reward',
+                  'interest', 'refund', 'transfer_in', 'matured_funds',
+                  'stokvel_contribution_received', 'fee_reversal'];
+  const DEBIT  = ['withdrawal', 'investment', 'reinvestment', 'platform_fee', 'fee', 'gift_sent',
+                  'transfer_out', 'stokvel_contribution', 'reversal'];
   const type = String(t && t.type || '');
   if (CREDIT.includes(type)) return 'credit';
   if (DEBIT.includes(type))  return 'debit';
@@ -814,6 +832,23 @@ function _stmtDirection(t) {
   if (amt < 0) return 'debit';
   if (amt > 0) return 'credit';
   return 'none';
+}
+
+/* The sign and the colour a row is drawn with. Anything not known to be
+   money leaving is drawn as money arriving, which is the old behaviour and
+   the safe way round for an unrecognised type — but every type that DOES
+   leave is now named in the list above rather than left to a list of
+   exceptions. */
+function _txnIsCredit(t) {
+  return _stmtDirection(t) !== 'debit';
+}
+
+/* WHOSE ROW IT IS. A sub-account's transactions carry the holder's
+   investor_id as well as the account's, because that is who placed them —
+   so every personal list has to say so or it shows the group's money as
+   the member's. The group's own screens show the group. */
+function _isOwnTxn(t) {
+  return !(t && t.sub_account_id);
 }
 
 function _stmtLabel(t) {
@@ -1913,7 +1948,12 @@ function renderPortfolioTrendChart() {
     return 0;
   };
 
-  for (const t of (PORTAL.transactions || [])) {
+  /* THE HOLDER'S OWN VALUE. A group's payout and returns carry the
+     member's investor_id too, so the group's money was drawn as a rise in
+     theirs. (What a contribution INTO a group does to a member's portfolio
+     value is a separate question this chart does not answer: it scores
+     zero, as it did before.) */
+  for (const t of (PORTAL.transactions || []).filter(_isOwnTxn)) {
     const d = new Date(Utils.txnDate(t) || 0);
     if (isNaN(d.getTime())) continue;
     for (const b of buckets) {
@@ -2327,8 +2367,9 @@ function _switchTxnTab(tab, btn) {
 function _renderReturnHistory() {
   const el = document.getElementById('txnReturnsTab');
   if (!el) return;
-  const returns = [...PORTAL.transactions]
-    .filter(t => ['return','payout','referral_bonus'].includes(t.type) && t.status !== 'rejected')
+  const returns = PORTAL.transactions
+    .filter(t => _isOwnTxn(t)
+                 && ['return','payout','referral_bonus'].includes(t.type) && t.status !== 'rejected')
     .sort((a,b) => new Date(b.transaction_date||b.created_at) - new Date(a.transaction_date||a.created_at));
 
   if (!returns.length) {
@@ -2588,7 +2629,7 @@ async function loadWallet() {
    * sub-account are its own screen's business, and a transfer either way is
    * this wallet's. */
   const walletTxns = [...PORTAL.transactions]
-    .filter(t => !t.sub_account_id)
+    .filter(_isOwnTxn)
     .filter(t => ['deposit', 'return', 'payout', 'referral_bonus', 'withdrawal',
                   'gift_sent', 'gift_received', 'transfer_out', 'transfer_in'].includes(t.type))
     .sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0))
@@ -11633,7 +11674,7 @@ function _renderMonthlyReturnsChart() {
      investor_id, so interest earned by a group was charted as the
      chairperson's own earnings — money that is not theirs, divided among
      the members by share. The group's own screens chart the group. */
-  const txns = PORTAL.transactions.filter(t => !t.sub_account_id
+  const txns = PORTAL.transactions.filter(t => _isOwnTxn(t)
                                             && _isIncomeTxn(t) && _stmtCounts(t));
 
   const monthly = {};

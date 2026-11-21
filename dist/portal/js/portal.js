@@ -930,14 +930,14 @@ function renderOverviewInvestments() {
 function renderOverviewTxns() {
   const body = document.getElementById('overviewTxnBody');
   if (!body) return;
-  const recent = [...PORTAL.transactions].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0)).slice(0, 5);
+  const recent = PORTAL.transactions.filter(_isOwnTxn)
+    .sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0)).slice(0, 5);
   const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', matured_funds: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
 
   if (!recent.length) { body.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:24px">No transactions yet</td></tr>'; return; }
 
-  const _txnIsPositive = t => !['withdrawal', 'fee', 'investment', 'reinvestment', 'gift_sent'].includes(t.type);
   body.innerHTML = recent.map(t => {
-    const pos = _txnIsPositive(t);
+    const pos = _txnIsCredit(t);
     return `<tr>
       <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${(t.type?.replace(/_/g, ' ') || '').replace(/^\w/, c => c.toUpperCase())}</span></td>
       <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
@@ -968,7 +968,12 @@ async function loadMyTransactions() {
 function renderMyTxnTable() {
   const body = document.getElementById('myTxnBody');
   const filter = document.getElementById('myTxnTypeFilter').value;
-  const items = filter ? PORTAL.transactions.filter(t => t.type === filter) : PORTAL.transactions;
+  /* MY transactions. A sub-account's rows carry the holder's investor_id as
+     well as the account's, so this listed the group's contributions and
+     payouts as the member's own. _isOwnTxn is the same predicate the wallet
+     list and the statement use. */
+  const mine = PORTAL.transactions.filter(_isOwnTxn);
+  const items = filter ? mine.filter(t => t.type === filter) : mine;
   const sorted = [...items].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0));
 
   const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', matured_funds: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
@@ -986,9 +991,13 @@ function renderMyTxnTable() {
     return;
   }
 
-  const _isPosTxn = t => !['withdrawal', 'fee', 'investment', 'reinvestment', 'gift_sent'].includes(t.type);
   body.innerHTML = sorted.map(t => {
-    const pos = _isPosTxn(t);
+    /* _txnIsCredit, from portal-core: one definition of which way the money
+       went, kept in step with server/services/ledger.js. The list that was
+       here named five types as outgoing and treated everything else as
+       money arriving, so a contribution paid INTO a stokvel drew itself as
+       +R 60 000,00 in green on the member's own transactions. */
+    const pos = _txnIsCredit(t);
     return `<tr>
       <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${(t.type?.replace(/_/g, ' ') || '').replace(/^\w/, c => c.toUpperCase())}</span></td>
       <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>

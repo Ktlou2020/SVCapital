@@ -45,15 +45,140 @@ const ok = (name, cond, detail) => {
 /* ── The same decision, on the screens ────────────────────────────────
    A comment that explains the fix quotes the thing it warns about, so the
    source is read with comments stripped. */
-const CORE = fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8')
-  .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
+/* A comment that explains a fix quotes the thing it warns about, so every
+   source read here strips them first. */
+const strip = src => String(src).replace(/\/\*[\s\S]*?\*\//g, ' ')
+                                .replace(/^\s*\/\/.*$/gm, ' ');
+const CORE = strip(fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8'));
+
+/* ── Which way the money went, and whose row it is ───────────────────
+   REPORTED FROM THE LIVE PORTAL: a member's own transactions showed the
+   group's contributions as theirs, and the R60 000 they had paid INTO the
+   group as +R 60 000,00 in green.
+
+   Two faults, one shape. The scope one is the same decision as the
+   statement above, applied to a list that was missed. The sign one is that
+   four separate screens each carried their own
+   `!['withdrawal','fee','investment','reinvestment','gift_sent']` — a list
+   of what goes OUT written as a list of exceptions, so every type added
+   since was money arriving by default.
+
+   These are RUN, not read: the answer for a given type is the thing that
+   was wrong. */
+console.log('\nand which way the money went is one answer, not four');
+{
+  const vm = require('vm');
+  const ctx = { window: {}, document: { getElementById: () => null },
+                location: { search: '' },
+                localStorage: { getItem: () => null, setItem() {} },
+                sessionStorage: { getItem: () => null, setItem() {} },
+                Utils: { rand: n => 'R ' + Number(n).toFixed(2) }, encodeURIComponent };
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(
+    path.join(ROOT, 'js', 'portal-core.js'), 'utf8'), ctx);
+
+  const dir = type => ctx._stmtDirection({ type, amount: 100 });
+  ok('MONEY PAID INTO A GROUP IS MONEY LEAVING',
+     dir('stokvel_contribution') === 'debit',
+     `${dir('stokvel_contribution')} — a client saw the R60 000 they paid into `
+     + 'their stokvel as +R 60 000,00 in green on their own transactions');
+  ok('and the group receiving it is money arriving, on the group’s side',
+     dir('stokvel_contribution_received') === 'credit', dir('stokvel_contribution_received'));
+  ok('AND THE SIGN IS DRAWN FROM THAT, not from a list of exceptions',
+     ctx._txnIsCredit({ type: 'stokvel_contribution' }) === false
+     && ctx._txnIsCredit({ type: 'deposit' }) === true,
+     'the four lists each named five or six outgoing types and treated '
+     + 'everything else as arriving');
+
+  /* CLAUDE.md: a fee displays as negative in all transaction lists and
+     statements. Both spellings, because both are written. */
+  ok('a fee is still negative, both ways it is spelled',
+     dir('fee') === 'debit' && dir('platform_fee') === 'debit');
+  ok('and so is every other way money leaves',
+     ['withdrawal', 'investment', 'reinvestment', 'gift_sent', 'transfer_out', 'reversal']
+       .every(t => dir(t) === 'debit'),
+     JSON.stringify(['withdrawal', 'investment', 'reinvestment', 'gift_sent',
+                     'transfer_out', 'reversal'].map(t => [t, dir(t)])));
+  ok('and money arriving is not drawn as leaving',
+     ['deposit', 'return', 'payout', 'referral_bonus', 'gift_received', 'matured_funds',
+      'transfer_in', 'fee_reversal'].every(t => dir(t) === 'credit'),
+     JSON.stringify(['deposit', 'return', 'payout', 'referral_bonus', 'gift_received',
+                     'matured_funds', 'transfer_in', 'fee_reversal'].map(t => [t, dir(t)])));
+
+  /* THE LIST MUST MATCH THE SERVER'S. Two definitions of what moves cash
+     is how a screen and a statement come to disagree about a balance. */
+  const LED = strip(fs.readFileSync(
+    path.join(ROOT, 'server', 'services', 'ledger.js'), 'utf8'));
+  const listOf = name => {
+    const m = LED.match(new RegExp(name + '\\s*=\\s*\\[([\\s\\S]*?)\\]'));
+    return m ? m[1].match(/'[a-z_]+'/g).map(x => x.slice(1, -1)) : [];
+  };
+  const missingCredit = listOf('CASH_CREDIT_TYPES').filter(t => dir(t) !== 'credit');
+  const missingDebit  = listOf('CASH_DEBIT_TYPES').filter(t => dir(t) !== 'debit');
+  ok('EVERY TYPE THE SERVER CALLS A CREDIT IS ONE HERE TOO',
+     missingCredit.length === 0, JSON.stringify(missingCredit));
+  ok('and every type it calls a debit', missingDebit.length === 0, JSON.stringify(missingDebit));
+
+  ok('and whose row it is has one answer as well',
+     ctx._isOwnTxn({ id: 'a' }) === true && ctx._isOwnTxn({ sub_account_id: 'SA-1' }) === false);
+}
+
+console.log('\nand every personal list on the screens uses both');
+{
+  const files = { 'portal/js/portal.js': null, 'mobile/src/js/portal.js': null };
+  for (const f of Object.keys(files)) {
+    files[f] = strip(fs.readFileSync(path.join(ROOT, f), 'utf8'));
+  }
+  /* PER FUNCTION, NOT PER FILE. The first version of this searched the
+     whole file for PORTAL.transactions.filter(_isOwnTxn) — and both
+     renderers live in it, so unscoping one of them left the other to
+     satisfy the assertion. A pattern that matches the file is not a
+     pattern that checks the function. */
+  const fnIn = (src, name) => {
+    const from = src.indexOf(`function ${name}(`);
+    if (from < 0) return '';
+    const next = src.indexOf('\nfunction ', from + 1);
+    return src.slice(from, next < 0 ? src.length : next);
+  };
+
+  for (const [f, src] of Object.entries(files)) {
+    for (const fn of ['renderMyTxnTable', 'renderOverviewTxns']) {
+      const body = fnIn(src, fn);
+      ok(`${f} ${fn}: it exists to be checked`, !!body,
+         'renamed or moved — this assertion is about a function that is gone');
+      ok(`${f} ${fn}: SCOPED TO THE HOLDER`,
+         /PORTAL\.transactions\s*\n?\s*\.filter\(_isOwnTxn\)|PORTAL\.transactions\.filter\(_isOwnTxn\)/.test(body),
+         'this is the list the client was looking at when they reported it: '
+         + body.slice(0, 240));
+      /* The app draws a card and passes the builder by reference —
+         map(_txnCardHTML) — so a pattern requiring a call misses it. */
+      ok(`${f} ${fn}: and signs rows from the shared definition`,
+         /_txnIsCredit\(/.test(body) || /_txnCardHTML\b/.test(body),
+         body.slice(0, 240));
+    }
+    ok(`${f}: AND CARRIES NO LIST OF ITS OWN`,
+       !/\['withdrawal',\s*'fee'/.test(src),
+       'four screens each had one, and every type added since any of them '
+       + 'was written was money arriving by default');
+  }
+  /* The app draws a card rather than a row, so its sign comes through
+     _txnCardHTML — which must itself use the shared answer. */
+  ok('the app’s transaction card signs from the shared definition too',
+     /_txnIsCredit\(t\)/.test(fnIn(files['mobile/src/js/portal.js'], '_txnCardHTML'))
+     || /_txnIsPositive\(t\)/.test(fnIn(files['mobile/src/js/portal.js'], '_txnCardHTML')),
+     fnIn(files['mobile/src/js/portal.js'], '_txnCardHTML').slice(0, 200));
+}
 
 console.log('\nand the wallet screen answers the same question');
 {
   const list = CORE.slice(CORE.indexOf('const walletTxns'),
                           CORE.indexOf('if (!walletTxns.length)'));
+  /* The spelling moved from an inline `!t.sub_account_id` to the named
+     _isOwnTxn once four more lists needed the same question answered.
+     Asserting the NAME is the stronger claim: it ties this screen to the
+     one definition rather than to a predicate that happens to match. */
   ok('THE WALLET LISTS ITS OWN ROWS',
-     /\.filter\(t => !t\.sub_account_id\)/.test(list),
+     /\.filter\(_isOwnTxn\)/.test(list),
      'a sub-account\u2019s rows carry the holder\u2019s investor_id, so the eight '
      + 'most recent movements on a client\u2019s wallet were often the group\u2019s: '
      + list.slice(0, 200));
@@ -68,7 +193,7 @@ console.log('\nand the wallet screen answers the same question');
   const chart = CORE.slice(CORE.indexOf('const txns = PORTAL.transactions.filter'),
                            CORE.indexOf('const monthly = {};'));
   ok('AND THE INCOME CHART CHARTS THEIR OWN INCOME',
-     /!t\.sub_account_id/.test(chart),
+     /_isOwnTxn\(t\)/.test(chart),
      'interest earned by a group, which is divided among its members by share, '
      + 'was charted as the chairperson\u2019s own earnings: ' + chart.slice(0, 200));
   ok('and still only what counts as income',

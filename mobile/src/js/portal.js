@@ -1056,7 +1056,11 @@ const _TXN_ICON = {
   gift_received:  { icon: 'fa-envelope-open-text', color: '#22c55e' },
   reward:         { icon: 'fa-star',               color: '#fec24f' },
 };
-const _txnIsPositive = t => !['withdrawal', 'fee', 'platform_fee', 'investment', 'reinvestment', 'gift_sent'].includes(t.type);
+/* _txnIsCredit, from portal-core.js, is the one definition — kept in step
+   with server/services/ledger.js. What was here named six types as outgoing
+   and treated everything else as money arriving, so a contribution paid
+   INTO a stokvel drew itself as +R 60 000,00 in green. */
+const _txnIsPositive = t => _txnIsCredit(t);
 
 // Type groups for the filter pills — maps each pill value to all DB types it covers
 const _TXN_TYPE_GROUPS = {
@@ -1097,7 +1101,7 @@ function _txnCardHTML(t) {
 function renderOverviewTxns() {
   const body = document.getElementById('overviewTxnBody');
   if (!body) return;
-  const recent = [...PORTAL.transactions]
+  const recent = PORTAL.transactions.filter(_isOwnTxn)
     .sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0))
     .slice(0, 5);
   if (!recent.length) {
@@ -1141,7 +1145,11 @@ function renderMyTxnTable() {
   if (!body) return;
   const filter = _txnFilterType;
   const matchTypes = filter ? (_TXN_TYPE_GROUPS[filter] || [filter]) : null;
-  const items = matchTypes ? PORTAL.transactions.filter(t => matchTypes.includes(t.type)) : PORTAL.transactions;
+  /* MY transactions. A sub-account's rows carry the holder's investor_id as
+     well as the account's, so this listed the group's money as the
+     member's own. */
+  const mine = PORTAL.transactions.filter(_isOwnTxn);
+  const items = matchTypes ? mine.filter(t => matchTypes.includes(t.type)) : mine;
   const sorted = [...items].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0));
 
   if (!sorted.length) {
