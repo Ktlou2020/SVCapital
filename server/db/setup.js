@@ -6430,6 +6430,29 @@ async function autoSetup() {
       if (rowCount) console.log('✅ Announced the facility-derived rate.');
     });
 
+    await step("45. Announce the pasted roster and the year-end pack", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'portal','everyone','fa-users', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['stokvel-roster-and-pack-2026-11',
+         'A whole roster can be invited at once, and the group can print its year',
+         'A stokvel that already exists arrives with its members written down somewhere — a '
+         + 'WhatsApp group, a book, the treasurer’s notes. The committee can now paste that '
+         + 'list, one person a line in any order, read it back as a table with anything wrong '
+         + 'marked on its own line, and send every invitation in one go. Up to fifty at a time, '
+         + 'and one bad line no longer stops the others.\n\n'
+         + 'The group’s statement is now the document itself rather than a summary of one: what '
+         + 'each member paid over the period, every member’s share at the closing date with the '
+         + 'proof that the shares add up to what the group holds, and the register of which '
+         + 'signatories approved each movement — with a button to print it or save it as a PDF. '
+         + 'This is the pack to table at an AGM.',
+         'My Groups → open the group → People → Invite someone → “Invite several at once”. The '
+         + 'year-end pack: the Records tab → Statement, choose the dates, Build it.']);
+      if (rowCount) console.log('✅ Announced the roster and the year pack.');
+    });
+
     await step("44. Announce that a group can send an approved withdrawal to the bank", async () => {
       const { rowCount } = await pool.query(
         `INSERT INTO feature_announcements

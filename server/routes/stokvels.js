@@ -352,6 +352,89 @@ router.post('/:id/invites', async (req, res) => {
   }
 });
 
+/* ─── POST /api/stokvels/:id/invites/bulk ────────────────────────────
+ *
+ * A STOKVEL ARRIVES WITH A ROSTER. It has existed for nine years; the
+ * members are in a WhatsApp group or a book. Asking a committee to type
+ * twenty invitations one at a time, each with a name, an email and a cell
+ * number, is the difference between "we did it at the meeting" and "we will
+ * do it sometime", and sometime does not come.
+ *
+ * EACH ROW IS ITS OWN TRANSACTION, deliberately. One duplicate or one
+ * malformed address in a pasted list must not roll back the nineteen that
+ * were fine — the committee would have no way to tell which had been sent
+ * and would paste the lot again. Every row comes back as sent or as
+ * skipped with the reason, in the order given, so the screen can show what
+ * happened line by line.
+ *
+ * NO SIGNATORY NOMINATIONS HERE. One at a time, a nomination is a
+ * deliberate act with the founding state checked in front of the person
+ * doing it; twenty at a time it is a checkbox nobody read. The committee
+ * nominates signatories individually, which is also how the mandate screen
+ * already works.
+ */
+router.post('/:id/invites/bulk', async (req, res) => {
+  const me = callerInvestorId(req);
+  const client = await pool.connect();
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    if (!invites.mayInvite(group)) {
+      return res.status(403).json({ error: 'Only the committee can invite members.' });
+    }
+
+    const rows = Array.isArray(req.body && req.body.people) ? req.body.people : null;
+    if (!rows || !rows.length) return res.status(400).json({ error: 'Give at least one person.' });
+    /* A cap, not a page. Fifty is larger than any stokvel we have seen and
+       small enough that a mistaken paste cannot send a thousand. */
+    if (rows.length > 50) {
+      return res.status(400).json({ error: 'Fifty at a time is the most. Send the rest after these.' });
+    }
+
+    const sent = [], skipped = [];
+    for (let i = 0; i < rows.length; i += 1) {
+      const p = rows[i] || {};
+      try {
+        await client.query('BEGIN');
+        const out = await invites.create(client, group, me, {
+          name:  p.name  || '',
+          email: p.email || '',
+          cell:  p.cell  || '',
+          asSignatory: false,
+        });
+        if (out.error) {
+          await client.query('ROLLBACK');
+          skipped.push({ at: i, name: p.name || '', reason: out.error });
+          continue;
+        }
+        await client.query('COMMIT');
+        sent.push({ at: i, id: out.invite.id, invitee_name: out.invite.invitee_name,
+                    contact: invites.maskContact(out.invite),
+                    already_on_the_platform: !!out.matched });
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        skipped.push({ at: i, name: p.name || '', reason: 'Could not send this one.' });
+        console.error('[stokvels] bulk invite row failed:', e.message);
+      }
+    }
+
+    /* After every commit, as the single invite does: an invitation that is
+       recorded is never one nobody was told about. */
+    const n = notify();
+    if (n) for (const s of sent) {
+      n.invited({ inviteId: s.id }).catch(e => console.warn('[stokvels] notify failed:', e.message));
+    }
+
+    return res.status(sent.length ? 201 : 400).json({ data: { sent, skipped } });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] bulk invite failed:', err.message);
+    return res.status(500).json({ error: 'Could not send those invitations.' });
+  } finally {
+    client.release();
+  }
+});
+
 /* ─── GET /api/stokvels/:id/invites ──────────────────────────────────
    Who has been asked, visible to every member. The same reason the
    contribution list is: a group that cannot see who was invited cannot see

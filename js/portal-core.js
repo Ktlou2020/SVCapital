@@ -13236,7 +13236,148 @@ function inviteToStokvel(groupId) {
     submit: `submitStokvelInvite('${_esc(groupId)}')`,
     submitIcon: 'fa-paper-plane',
     submitLabel: 'Send the invitation',
+    extra: `<button class="btn btn--ghost btn--sm" style="margin-top:10px"
+        onclick="inviteManyToStokvel('${_esc(groupId)}')">
+        <i class="fa-solid fa-users"></i> Invite several at once</button>`,
   });
+}
+
+/* ─── A roster, pasted ─────────────────────────────────────────────
+ *
+ * A stokvel arrives with its members already written down somewhere — a
+ * WhatsApp group, a book, the treasurer's notes. Twenty invitations typed
+ * one at a time, three fields each, is why a committee leaves the meeting
+ * meaning to do it later.
+ *
+ * READ, THEN SEND. The paste is turned into a table the committee reads
+ * before anything is sent, because a list full of mistakes sending twenty
+ * invitations is worse than typing them. What cannot be read is shown as a
+ * problem on its own line rather than quietly dropped.
+ *
+ * THE PARSER IS DELIBERATELY FORGIVING about shape and strict about
+ * substance. Commas, tabs, semicolons and pipes all separate; the email is
+ * whichever piece has an @ in it, the cell is whichever is a run of digits
+ * long enough to be one, and whatever is left is the name. That is what a
+ * pasted list actually looks like — nobody exports a tidy CSV from a
+ * WhatsApp group.
+ */
+function _svParseRoster(text) {
+  const out = [];
+  const lines = String(text == null ? '' : text).split(/\r?\n/);
+  for (let i = 0; i < lines.length; i += 1) {
+    const raw = lines[i].trim();
+    if (!raw) continue;
+    const parts = raw.split(/[,;\t|]+/).map(s => s.trim()).filter(Boolean);
+    let email = '', cell = '';
+    const rest = [];
+    for (const p of parts) {
+      if (!email && p.indexOf('@') > 0) { email = p; continue; }
+      const digits = p.replace(/[^0-9]/g, '');
+      /* A South African cell is ten digits, or eleven with the 27. Nine is
+         the floor so a short number is a problem rather than a name. */
+      if (!cell && digits.length >= 9 && digits.length <= 15
+          && p.replace(/[0-9+()\s-]/g, '') === '') { cell = p; continue; }
+      rest.push(p);
+    }
+    const name = rest.join(' ').replace(/\s+/g, ' ').trim();
+    const row = { line: i + 1, raw, name, email, cell, problem: '' };
+    if (!email && !cell) {
+      row.problem = 'No email address or cell number on this line.';
+    } else if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      row.problem = 'That email address does not look right.';
+    } else if (!name) {
+      row.problem = 'No name on this line.';
+    }
+    out.push(row);
+  }
+  /* The same person twice in one paste is a copy-and-paste slip, not a
+     decision. The second one is shown as a duplicate rather than sent — the
+     server would refuse it anyway, and saying so before it is sent is the
+     difference between a tidy list and twenty rows of red. */
+  const seen = new Set();
+  for (const r of out) {
+    if (r.problem) continue;
+    /* BOTH, not whichever is there. One row carrying a name and a cell and
+       another carrying the same cell with an email is the same person
+       pasted twice from two places, which is exactly how a roster kept in
+       two places arrives. */
+    const keys = [];
+    if (r.email) keys.push('e:' + r.email.toLowerCase());
+    if (r.cell)  keys.push('c:' + r.cell.replace(/[^0-9]/g, '').replace(/^27/, '0'));
+    if (keys.some(k => seen.has(k))) { r.problem = 'This person is on the list twice.'; continue; }
+    for (const k of keys) seen.add(k);
+  }
+  return out;
+}
+
+function inviteManyToStokvel(groupId) {
+  _svFormShell(groupId, {
+    icon: 'fa-users',
+    title: 'Invite several at once',
+    intro: `One person a line, in any order &mdash; <strong>name, email address, cell
+      number</strong>, separated by commas. Paste it straight from wherever the group keeps
+      its list. Nothing is sent until you have read it back.`,
+    fields: `<textarea id="svRoster" class="form-input" rows="8"
+        style="width:100%;font-family:ui-monospace,monospace;font-size:0.82rem"
+        placeholder="Bongani Zulu, bongani@example.co.za, 082 999 0002
+Nomsa Dlamini, 083 444 1234
+Thabo Mokoena, thabo@example.co.za"></textarea>
+      <div id="svRosterRead" style="margin-top:10px"></div>`,
+    submit: `_svRosterPreview('${_esc(groupId)}')`,
+    submitIcon: 'fa-list-check',
+    submitLabel: 'Read the list',
+  });
+}
+
+function _svRosterPreview(groupId) {
+  const rows = _svParseRoster(_svVal('svRoster'));
+  const host = document.getElementById('svRosterRead');
+  if (!host) return;
+  if (!rows.length) { _svFormError('There is nobody on that list.'); return; }
+  if (typeof window !== 'undefined') window.__svRoster = { id: groupId, rows };
+
+  const good = rows.filter(r => !r.problem);
+  host.innerHTML = `
+    <table class="data-table" style="font-size:0.8rem"><tbody>
+      ${rows.map(r => `<tr>
+        <td style="width:26px;color:var(--text-muted);font-size:0.74rem">${r.line}</td>
+        <td>${r.problem ? `<span style="color:var(--text-muted)">${_esc(r.raw)}</span>`
+                        : `<strong>${_esc(r.name)}</strong>`}</td>
+        <td style="font-size:0.76rem;color:var(--text-muted)">${_esc(r.email || r.cell)}</td>
+        <td class="text-right" style="font-size:0.74rem;color:${r.problem ? '#ef4444' : '#22c55e'}">
+          ${r.problem ? _esc(r.problem) : 'Ready'}</td>
+      </tr>`).join('')}
+    </tbody></table>
+    <div style="font-size:0.78rem;color:var(--text-muted);margin:10px 0">
+      ${good.length} ready${rows.length - good.length
+        ? ` · ${rows.length - good.length} will not be sent` : ''}.
+      ${good.length ? 'Each person gets their own invitation and accepts it themselves.' : ''}
+    </div>
+    ${good.length ? `<button class="btn btn--primary btn--sm" onclick="submitStokvelRoster('${_esc(groupId)}')">
+      <i class="fa-solid fa-paper-plane"></i> Send ${good.length} invitation${good.length === 1 ? '' : 's'}
+    </button>` : ''}`;
+}
+
+async function submitStokvelRoster(groupId) {
+  const held = (typeof window !== 'undefined' && window.__svRoster) || null;
+  if (!held || held.id !== groupId) { _svFormError('Read the list again.'); return; }
+  const people = held.rows.filter(r => !r.problem)
+    .map(r => ({ name: r.name, email: r.email, cell: r.cell }));
+  if (!people.length) { _svFormError('There is nobody on that list to invite.'); return; }
+
+  let data;
+  try {
+    const res = await API._fetch('POST', `stokvels/${groupId}/invites/bulk`, { people });
+    data = (res && res.data) || {};
+  } catch (err) {
+    return _svFormError(err.message || 'Could not send those invitations.');
+  }
+  if (typeof window !== 'undefined') window.__svRoster = null;
+  const sent = (data.sent || []).length, skipped = (data.skipped || []).length;
+  _svToast(skipped
+    ? `${sent} sent. ${skipped} could not be — see the invitations list.`
+    : `${sent} invitation${sent === 1 ? '' : 's'} sent.`, skipped ? 'info' : 'success');
+  await _svRenderHub(groupId, 'members');
 }
 
 async function submitStokvelInvite(groupId) {
@@ -14454,6 +14595,7 @@ function _svFormShell(gid, opts) {
         </button>
         <button class="btn btn--ghost btn--sm" onclick="_svRenderHub('${_esc(gid)}',null,{cached:true})">Cancel</button>
       </div>
+      ${opts.extra || ''}
     </div>`;
   const first = body.querySelector('input, select, textarea');
   if (first) first.focus();
@@ -15307,27 +15449,168 @@ async function svOpenStatement(id) {
     const res = await API._fetch('GET', 'statements/account-statement', null,
                                  { from, to, sub_account_id: id });
     const d = (res && res.data) || res || {};
-    const sv = d.stokvel || {};
     if (!out) return;
-    out.innerHTML = `
-      <div style="border:1px solid var(--border);border-radius:12px;padding:14px">
-        <div style="font-weight:800">${_esc(sv.name || 'Statement')}</div>
-        <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">${_esc(from)} to ${_esc(to)}</div>
-        <div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0">
-          <span style="color:var(--text-muted)">Opening</span><strong>${Utils.rand(d.opening_balance)}</strong></div>
-        <div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0">
-          <span style="color:var(--text-muted)">Closing</span><strong>${Utils.rand(d.closing_balance)}</strong></div>
-        <div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0">
-          <span style="color:var(--text-muted)">Movements</span><strong>${(d.transactions || []).length}</strong></div>
-        ${sv.approvals ? `<div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0">
-          <span style="color:var(--text-muted)">Approvals in the period</span><strong>${sv.approvals.length}</strong></div>` : ''}
-        <div style="font-size:0.76rem;color:var(--text-muted);margin-top:10px">
-          Contributions, shares and the approvals register are included in the document itself.
-        </div>
-      </div>`;
+    /* The whole pack, not four lines and a promise. */
+    out.innerHTML = _svYearPack(d, from, to);
+    return;
   } catch (err) {
     if (out) out.innerHTML = `<div style="color:#ef4444;font-size:0.85rem">${_esc(err.message || 'Could not build it.')}</div>`;
   }
+}
+
+
+/* ─── The year, as a document to table ─────────────────────────────
+ *
+ * A STOKVEL HAS AN AGM AND THE TREASURER HAS TO ACCOUNT. The platform
+ * held every number that meeting needs — what each member paid, what the
+ * group spent, what each share came to, which two signatories approved
+ * each movement — and the screen printed four summary lines and the
+ * sentence "included in the document itself" about a document that did
+ * not exist. The numbers were built and thrown away.
+ *
+ * EVERY SECTION TIES TO THE ONE ABOVE IT, and says so. A member adding up
+ * the members' column and finding it comes to the pot is the whole point
+ * of handing it out; a pack whose own figures disagree is worse at an AGM
+ * than no pack, because somebody will check it in the room.
+ *
+ * PURE. It takes the statement payload and gives back HTML, so what the
+ * meeting reads can be checked without a browser.
+ */
+function _svYearPack(payload, from, to) {
+  /* An answer the screen did not expect must not leave the treasurer
+     looking at nothing. A pack with no numbers in it still says which
+     group and which period, which is enough to tell somebody what went
+     wrong. */
+  const d  = payload || {};
+  const sv = d.stokvel || {};
+  const money = n => Utils.rand(Number(n) || 0);
+  const esc = v => _esc(v == null ? '' : v);
+
+  /* Contributions, gathered per member rather than per period: at an AGM
+     the question is "what did Nomsa pay this year", not "what did period
+     2026-07 collect". */
+  const byMember = new Map();
+  for (const c of (sv.contributions || [])) {
+    const k = c.investor_id;
+    if (!byMember.has(k)) byMember.set(k, { name: c.name || k, due: 0, paid: 0, periods: 0 });
+    const m = byMember.get(k);
+    m.due  += Number(c.due)  || 0;
+    m.paid += Number(c.paid) || 0;
+    m.periods += 1;
+  }
+  const contribRows = [...byMember.values()].sort((a, b) => b.paid - a.paid);
+  const totDue  = contribRows.reduce((n, r) => n + r.due, 0);
+  const totPaid = contribRows.reduce((n, r) => n + r.paid, 0);
+
+  const shares = (sv.shares && sv.shares.members) || [];
+  const shareSum = shares.reduce((n, r) => n + (Number(r.share) || 0), 0);
+  const netAssets = Number(sv.shares && sv.shares.net_assets) || 0;
+  /* Rounding a split across members leaves cents; the tie line says so
+     rather than pretending to a precision the split cannot have. */
+  const ties = Math.abs(shareSum - netAssets) < 0.05;
+
+  const section = (title, inner) => `<div style="margin-top:22px">
+    <div style="font-size:0.74rem;text-transform:uppercase;letter-spacing:.6px;
+                color:var(--text-muted);margin-bottom:8px">${esc(title)}</div>${inner}</div>`;
+  const line = (label, value, strong) => `<div style="display:flex;justify-content:space-between;
+      font-size:0.86rem;padding:5px 0;${strong ? 'border-top:1px solid var(--border);font-weight:700' : ''}">
+      <span${strong ? '' : ' style="color:var(--text-muted)"'}>${esc(label)}</span><span>${value}</span></div>`;
+
+  return `<div id="svPack" style="border:1px solid var(--border);border-radius:12px;padding:18px">
+    <div style="font-size:1.05rem;font-weight:800">${esc(sv.name || 'The group')}</div>
+    <div style="font-size:0.78rem;color:var(--text-muted)">
+      ${sv.registration ? esc(sv.registration) + ' &middot; ' : ''}${esc(from)} to ${esc(to)}
+    </div>
+
+    ${section('The money', `
+      ${line('Opening balance', money(d.opening_balance))}
+      ${line('Closing balance', money(d.closing_balance))}
+      ${line('Movements in the period', String((d.transactions || []).length))}`)}
+
+    ${section('What each member paid', contribRows.length ? `
+      <table class="data-table" style="font-size:0.82rem"><tbody>
+        ${contribRows.map(r => `<tr>
+          <td>${esc(r.name)}</td>
+          <td class="text-right" style="color:var(--text-muted)">${r.periods} period${r.periods === 1 ? '' : 's'}</td>
+          <td class="text-right">${money(r.due)}</td>
+          <td class="text-right"><strong>${money(r.paid)}</strong></td>
+          <td class="text-right" style="color:${r.due - r.paid > 0.005 ? '#ef4444' : 'var(--text-muted)'}">
+            ${r.due - r.paid > 0.005 ? money(r.due - r.paid) + ' owing' : 'paid up'}</td>
+        </tr>`).join('')}
+      </tbody></table>
+      ${line('Due in the period', money(totDue))}
+      ${line('Paid in the period', money(totPaid), true)}`
+      : `<div style="font-size:0.84rem;color:var(--text-muted)">No contributions fell due in this period.</div>`)}
+
+    ${sv.shares ? section('Each member’s share at the closing date', `
+      <table class="data-table" style="font-size:0.82rem"><tbody>
+        ${shares.map(r => `<tr>
+          <td>${esc(r.name)}</td>
+          <td class="text-right"><strong>${money(r.share)}</strong></td>
+          <td class="text-right" style="color:var(--text-muted);font-size:0.76rem">
+            ${Number(r.arrears) > 0.005 ? 'owes ' + money(r.arrears) : ''}</td>
+        </tr>`).join('')}
+      </tbody></table>
+      ${line('The members’ shares add up to', money(shareSum))}
+      ${line('and the group holds', money(netAssets), true)}
+      <div style="font-size:0.76rem;color:${ties ? 'var(--text-muted)' : '#ef4444'};margin-top:6px">
+        ${ties
+          ? 'Those two figures are the same, which is what makes the split fair: every rand the group holds belongs to somebody in this list.'
+          : 'These two do not agree. Do not table this pack — tell SV Capital.'}
+      </div>
+      <div style="font-size:0.76rem;color:var(--text-muted);margin-top:4px">
+        ${money(sv.shares.wallet)} in the wallet, ${money(sv.shares.invested)} invested${
+          Number(sv.shares.owed_to_former_members) > 0
+            ? `, less ${money(sv.shares.owed_to_former_members)} still owed to members who have left` : ''}.
+      </div>`) : ''}
+
+    ${section('Who approved the money that moved', (sv.approvals || []).length ? `
+      <table class="data-table" style="font-size:0.8rem"><tbody>
+        ${(sv.approvals || []).map(a => `<tr>
+          <td>${esc(a.kind || 'withdrawal')}</td>
+          <td class="text-right">${money(a.amount)}</td>
+          <td style="font-size:0.76rem;color:var(--text-muted)">
+            ${esc((a.votes || []).filter(v => v.decision !== 'reject')
+                   .map(v => v.name).filter(Boolean).join(', ') || 'no signatories recorded')}</td>
+          <td class="text-right" style="font-size:0.74rem;color:var(--text-muted)">
+            ${esc(String(a.at || a.created_at || '').slice(0, 10))}</td>
+        </tr>`).join('')}
+      </tbody></table>
+      <div style="font-size:0.76rem;color:var(--text-muted);margin-top:6px">
+        Not that enough people agreed, but which people — that is what a register is for.
+      </div>`
+      : `<div style="font-size:0.84rem;color:var(--text-muted)">Nothing needed the signatories in this period.</div>`)}
+
+    <div style="font-size:0.72rem;color:var(--text-muted);margin-top:20px;line-height:1.5">
+      Prepared by SV Capital from the group&rsquo;s own records on ${esc(new Date().toISOString().slice(0, 10))}.
+      Every member of this group can produce the same document.
+    </div>
+  </div>
+  <button class="btn btn--secondary btn--sm" style="margin-top:12px" onclick="_svPrintPack()">
+    <i class="fa-solid fa-print"></i> Print it or save it as a PDF
+  </button>`;
+}
+
+/* The pack on its own page, so printing gives the meeting the document
+   rather than the whole portal around it. */
+function _svPrintPack() {
+  const el = document.getElementById('svPack');
+  if (!el) return;
+  const w = typeof window !== 'undefined' && window.open ? window.open('', '_blank') : null;
+  if (!w) {
+    /* No new window — the app, or a blocker. Printing the page is still
+       better than nothing, and saying why is better than a dead button. */
+    _svToast('Your browser would not open a new window. Use the web portal to print it.', 'info');
+    return;
+  }
+  w.document.write(`<!doctype html><meta charset="utf-8"><title>Group statement</title>
+    <style>body{font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;margin:32px;color:#1a1a1a}
+      table{width:100%;border-collapse:collapse;margin:4px 0}
+      td{padding:4px 6px;border-bottom:1px solid #eee}
+      .text-right{text-align:right}</style>${el.innerHTML}`);
+  w.document.close();
+  w.focus();
+  w.print();
 }
 
 function _svHeader(g, shareRes) {
