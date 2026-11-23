@@ -1031,6 +1031,40 @@ router.get('/:id/shares', async (req, res) => {
               (d.amount_owed - d.amount_paid) AS owed
          FROM stokvel_exit_debts d JOIN investors i ON i.id = d.investor_id
         WHERE d.sub_account_id = $1 AND d.status = 'owing'`, [group.id]);
+
+    /* ── MONEY THE SIGNATORIES HAVE ALREADY RELEASED ──────────────────
+     *
+     * An authority that is approved and not yet spent is money promised.
+     * It is still in the wallet, so every figure on every screen counted
+     * it as the group's to spend again — and the payout request asked the
+     * signatories to pay out a pot that already owed R2 000 to a funeral.
+     * Approving the same rand twice is not a thing a mandate should allow.
+     *
+     * ONLY 'approved'. A pending request is a question, not a commitment;
+     * showing it as committed would make an unanswered request shrink the
+     * pot, which is the opposite error.
+     *
+     * THE FEE IS PART OF THE COMMITMENT for anything that pays one. An
+     * investment of R10 000 takes R10 100 out of the wallet, and a
+     * commitment that understates itself is the one direction that lets
+     * the wallet go short.
+     *
+     * PAYOUT AND EXIT ARE LEFT OUT, on purpose. A payout's amount IS the
+     * whole pot, so counting it would net the pot against itself; an
+     * exit's figure is what the member's share stood at when it was
+     * raised, settled at whatever it comes to on the day. Both are
+     * reported separately rather than folded in as a number. */
+    const { rows: [cm] } = await client.query(
+      `SELECT COALESCE(SUM(amount), 0) AS plain,
+              COALESCE(SUM(amount) FILTER (WHERE kind IN ('investment','notice_deposit')), 0) AS feebearing,
+              COUNT(*) AS n
+         FROM stokvel_withdrawal_requests
+        WHERE sub_account_id = $1
+          AND status = 'approved'
+          AND kind IN ('withdrawal', 'investment', 'notice_deposit')`, [group.id]);
+    const { PLATFORM_FEE_PCT } = require('../services/poolFees');
+    const committed = Math.round(
+      (Number(cm.plain) + Number(cm.feebearing) * PLATFORM_FEE_PCT) * 100) / 100;
     await client.query('COMMIT');
 
     const byId = new Map(names.map(n => [n.investor_id, n]));
@@ -1041,6 +1075,12 @@ router.get('/:id/shares', async (req, res) => {
         wallet: out.assets.wallet,
         invested: out.assets.invested,
         owed_to_former_members: out.assets.owed,
+        /* Approved and not yet carried out — see above. `uncommitted` is
+           what the group may still decide to spend, and it is the figure a
+           payout should be raised for. */
+        committed,
+        committed_count: Number(cm.n) || 0,
+        uncommitted: Math.round((Number(out.assets.total) - committed) * 100) / 100,
         my_share: (out.shares.find(x => x.investor_id === me) || {}).share || 0,
         shares: out.shares.map(x => ({
           investor_id: x.investor_id,

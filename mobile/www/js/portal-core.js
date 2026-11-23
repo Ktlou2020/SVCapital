@@ -15767,7 +15767,17 @@ async function cancelStokvelPayout(groupId, payoutId) {
 async function requestStokvelPayout(groupId, payoutId, label) {
   try {
     const sh = await API._fetch('GET', `stokvels/${groupId}/shares`);
-    const pot = (sh && sh.data && sh.data.net_assets) || 0.01;
+    const d = (sh && sh.data) || {};
+    /* WHAT IS LEFT TO PAY OUT, not what is in the pot. Money the
+       signatories have already released and nobody has sent yet is still
+       sitting in the wallet — so raising the payout for the whole pot asked
+       them to approve paying out a rand they had already promised to a
+       funeral. `uncommitted` is net assets less those approvals. */
+    const pot = (d.uncommitted != null ? d.uncommitted : d.net_assets) || 0.01;
+    if (Number(d.committed) > 0 && !await _svConfirm(
+        `${Utils.rand(d.committed)} is already approved and waiting to be sent, so the payout `
+        + `is raised for ${Utils.rand(pot)} rather than the full ${Utils.rand(d.net_assets)}.`,
+        { title: 'Some of the pot is spoken for', confirmLabel: `Ask for ${Utils.rand(pot)}` })) return;
     await API._fetch('POST', `stokvels/${groupId}/withdrawal-requests`, {
       kind: 'payout', payout_id: payoutId, amount: pot,
       /* Concatenated rather than interpolated, and deliberately so: this is
@@ -15840,6 +15850,17 @@ function _svShares(res, gid) {
       <div style="display:flex;justify-content:space-between;font-size:0.9rem;border-top:1px solid var(--border);padding-top:6px;margin-top:6px">
         <span style="font-weight:700">The pot</span><strong>${Utils.rand(d.net_assets)}</strong>
       </div>
+      ${Number(d.committed) > 0 ? `<div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-top:6px">
+        <span style="color:var(--text-muted)">Approved, waiting to be sent</span>
+        <strong style="color:#f59e0b">−${Utils.rand(d.committed)}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:0.84rem;border-top:1px solid var(--border);padding-top:6px;margin-top:6px">
+        <span style="font-weight:700">Left to decide on</span><strong>${Utils.rand(d.uncommitted)}</strong>
+      </div>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45">
+        The signatories have released that money and it has not left yet, so it is still in the
+        wallet above. The group cannot spend it twice.
+      </div>` : ''}
     </div>
     <table class="data-table" style="font-size:0.8rem"><tbody>
     ${rows.map(r => `<tr${r.is_me ? ' style="background:rgba(237,165,255,0.08)"' : ''}>
@@ -16028,6 +16049,16 @@ function _svWithdrawals(res, meIsSignatory, gid, ctx) {
           <button class="btn btn--primary btn--sm" onclick="settleStokvelExit('${_esc(gid)}','${_esc(r.id)}')">
             <i class="fa-solid fa-door-open"></i> Settle this exit
           </button>
+        </div>` : ''}
+      ${(!r.kind || r.kind === 'withdrawal') && _svAuthorityReady(r) ? `
+        <div style="margin-top:10px">
+          <button class="btn btn--primary btn--sm" onclick="payOutStokvelWithdrawal('${_esc(gid)}','${_esc(r.id)}')">
+            <i class="fa-solid fa-paper-plane"></i> Send it to the bank
+          </button>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:5px">
+            ${Utils.rand(r.amount)} to ${_esc(r.bank_name || 'the approved account')}, approved.
+            It leaves the pot now and SV Capital pays it over — 1–2 business days.
+          </div>
         </div>` : ''}
       ${r.kind === 'investment' && _svAuthorityReady(r) ? `
         <div style="margin-top:10px">
@@ -16549,6 +16580,68 @@ async function submitStokvelWithdrawal(groupId) {
     _svToast('Request raised. The signatories have been asked to approve it.', 'success');
   } catch (err) {
     return _svFormError(err.message || 'Could not raise that request.');
+  }
+  await _svRenderHub(groupId, 'approvals');
+}
+
+/* ─── Sending an approved withdrawal to the bank ───────────
+ *
+ * THE SAME PROCESS AS A PERSON'S OWN WITHDRAWAL, deliberately: it posts to
+ * withdrawals/request, which writes a PENDING withdrawal transaction, debits
+ * the wallet and reconciles the share ledger — so the group's payment lands
+ * in the same finance queue, is paid by the same people, in the same window,
+ * and is reconciled by the same screens. A second payout path for groups
+ * would be a second set of numbers to agree.
+ *
+ * WHAT MAKES IT A GROUP'S WITHDRAWAL rather than the chairperson's is the
+ * authority id. The route matches it on kind, on the amount AND on the
+ * destination account — approving a sum and letting whoever presses the
+ * button choose where it lands is not a mandate — and consumes it in the
+ * same transaction, so one approval cannot fund two payments.
+ *
+ * THE FIGURES COME OFF THE AUTHORITY, never off this screen. A member does
+ * not retype what the signatories agreed to; they press the thing that
+ * carries out exactly what is written on the request. */
+async function payOutStokvelWithdrawal(groupId, requestId) {
+  let r = null;
+  try {
+    const res = await API._fetch('GET', `stokvels/${groupId}/withdrawal-requests`);
+    r = ((res && res.data) || []).find(x => x.id === requestId) || null;
+  } catch (err) {
+    _svToast(err.message || 'Could not check that approval.', 'error');
+    return;
+  }
+  /* Read again rather than trusted from the render: between the screen
+     being drawn and the button being pressed somebody else may have sent
+     the same payment, and the authority is then spent. */
+  if (!r) { _svToast('That request is no longer there.', 'error'); return; }
+  if (!_svAuthorityReady(r)) {
+    _svToast(r.status === 'used'
+      ? 'That payment has already been sent.'
+      : 'The signatories have not approved that yet.', 'error');
+    await _svRenderHub(groupId, 'approvals');
+    return;
+  }
+
+  const where = [r.bank_name, r.bank_account_number].filter(Boolean).join(' · ');
+  if (!await _svConfirm(
+      `${Utils.rand(r.amount)} leaves the group wallet now and SV Capital pays it over to `
+      + `${where || 'the approved account'}, normally within 1–2 business days. `
+      + 'The approval is spent — sending it again would need the signatories again.',
+      { title: `Send ${Utils.rand(r.amount)} to the bank?`,
+        confirmLabel: 'Send it', confirmClass: 'btn--primary' })) return;
+
+  try {
+    await API._fetch('POST', 'withdrawals/request', {
+      amount: Number(r.amount),
+      sub_account_id: groupId,
+      bank_account_number: r.bank_account_number || undefined,
+      bank_name: r.bank_name || undefined,
+      authority_id: r.id,
+    });
+    _svToast('Sent. It is with our finance team and every member can see it on the group’s statement.', 'success');
+  } catch (err) {
+    _svToast(err.message || 'Could not send that payment.', 'error');
   }
   await _svRenderHub(groupId, 'approvals');
 }

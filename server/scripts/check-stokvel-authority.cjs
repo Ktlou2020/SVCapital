@@ -203,6 +203,42 @@ console.log('\nand it is listed as live, not as history');
      + 'name — an approval to move R 2 000 is not an approval to close the '
      + 'group: ' + notADissolve.slice(0, 240));
 
+  /* ── THE BANK PAYOUT, which runs the individual's own process ────
+   *
+   * routes/withdrawals.js already carried a group's withdrawal properly —
+   * mandate matched on amount AND destination, authority consumed, a
+   * PENDING withdrawal transaction written into the same finance queue a
+   * person's withdrawal lands in, the pot debited, the share ledger
+   * reconciled. The portal simply never sent an authority_id, so the
+   * server refused every time with "needs an approved authority". */
+  const payable = P._svWithdrawals(
+    { data: [REQ({ id: 'SWR-B', kind: 'withdrawal', status: 'approved', satisfied: true,
+                   amount: 2000, bank_name: 'FNB', bank_account_number: '62001234567' })] },
+    true, 'SA-1', { g: { stokvel_quorum: 2 }, signatories: 2, canPropose: true });
+  ok('AN APPROVED WITHDRAWAL OFFERS TO SEND IT TO THE BANK',
+     payable.includes('Send it to the bank')
+     && /payOutStokvelWithdrawal\('SA-1','SWR-B'\)/.test(payable),
+     'approved, and nothing anywhere could pay it: ' + payable.slice(0, 240));
+  ok('and names the destination the signatories agreed to',
+     /FNB/.test(payable), payable.slice(0, 240));
+
+  /* A kind-less row is a withdrawal: the column defaults to it, and older
+     rows pre-date the column. Left out, those became unpayable. */
+  const legacy = P._svWithdrawals(
+    { data: [{ id: 'SWR-L', amount: 500, status: 'approved', satisfied: true,
+               approvals: 2, required: 2, votes: [], bank_name: 'Capitec' }] },
+    true, 'SA-1', { g: { stokvel_quorum: 2 }, signatories: 2 });
+  ok('and a row with no kind counts as a withdrawal',
+     legacy.includes('Send it to the bank'),
+     'kind defaults to withdrawal on the server: ' + legacy.slice(0, 200));
+
+  const unapproved = P._svWithdrawals(
+    { data: [REQ({ kind: 'withdrawal', status: 'pending', satisfied: false, bank_name: 'FNB' })] },
+    true, 'SA-1', { g: { stokvel_quorum: 2 }, signatories: 2 });
+  ok('and one the signatories have not carried offers nothing',
+     !unapproved.includes('Send it to the bank'),
+     'the mandate is the control: ' + unapproved.slice(0, 200));
+
   /* The badge on the Decisions tab counts what there is to do. */
   const badge = html => (String(html).match(/aria-label="(\d+) waiting"/) || [])[1];
   const tabs = rows => P._svWsTabs('SA-1', 'overview',
@@ -264,6 +300,72 @@ console.log('\nand an approved investment can actually be placed');
     ok('and an approval into another pool does not release this one',
        !!elsewhere.error && /approve it first/.test(elsewhere.error),
        'an authority is for a named pool: ' + JSON.stringify(elsewhere));
+
+    /* ══ 4b. Sending the approved withdrawal, driven ═══════════════ */
+    console.log('\nand sending it posts what the signatories approved');
+    {
+      const W = portal();
+      const sent = [];
+      W._svConfirm = async () => true;
+      W._svToast = () => {};
+      W._svRenderHub = async () => {};
+      const ROW = { id: 'SWR-B', kind: 'withdrawal', status: 'approved', satisfied: true,
+                    approvals: 2, required: 2, amount: 2000,
+                    bank_name: 'FNB', bank_account_number: '62001234567', votes: [] };
+      W.API = { _fetch: async (method, path, body) => {
+        if (method === 'GET') return { data: [ROW] };
+        sent.push({ method, path, body });
+        return { success: true };
+      } };
+      await W.payOutStokvelWithdrawal('SA-1', 'SWR-B');
+      const post = sent.find(s => s.method === 'POST') || null;
+      ok('IT POSTS TO THE SAME ROUTE A PERSON’S WITHDRAWAL USES',
+         !!post && post.path === 'withdrawals/request',
+         'a second payout path for groups is a second set of numbers to '
+         + 'reconcile: ' + JSON.stringify(sent));
+      ok('AND CARRIES THE AUTHORITY, which is the whole point',
+         !!post && post.body.authority_id === 'SWR-B',
+         'without it the server answers "needs an approved authority" about '
+         + 'the approval it is holding: ' + JSON.stringify(post && post.body));
+      ok('and the amount and destination come off the authority, not the screen',
+         !!post && post.body.amount === 2000
+         && post.body.bank_account_number === '62001234567'
+         && post.body.bank_name === 'FNB'
+         && post.body.sub_account_id === 'SA-1',
+         'the server matches all three against the authority and refuses a '
+         + 'mismatch: ' + JSON.stringify(post && post.body));
+
+      /* Read again at the moment of pressing: somebody else may have sent it. */
+      const W2 = portal();
+      const tried = [];
+      W2._svConfirm = async () => true;
+      W2._svToast = () => {};
+      W2._svRenderHub = async () => {};
+      W2.API = { _fetch: async (method, path, body) => {
+        if (method === 'GET') return { data: [Object.assign({}, ROW, { status: 'used' })] };
+        tried.push({ method, path, body });
+        return { success: true };
+      } };
+      await W2.payOutStokvelWithdrawal('SA-1', 'SWR-B');
+      ok('AND AN AUTHORITY SPENT SINCE THE SCREEN WAS DRAWN SENDS NOTHING',
+         tried.length === 0,
+         'two members on the same screen both pressing is the ordinary case, '
+         + 'not the unlikely one: ' + JSON.stringify(tried));
+
+      const W3 = portal();
+      const refused = [];
+      W3._svConfirm = async () => false;
+      W3._svToast = () => {};
+      W3._svRenderHub = async () => {};
+      W3.API = { _fetch: async (method, path, body) => {
+        if (method === 'GET') return { data: [ROW] };
+        refused.push({ method, path, body });
+        return { success: true };
+      } };
+      await W3.payOutStokvelWithdrawal('SA-1', 'SWR-B');
+      ok('and saying no at the dialog sends nothing',
+         refused.length === 0, JSON.stringify(refused));
+    }
 
     /* ══ 5. The payout panel, where a member actually looks ═════════ */
     console.log('\nand the payouts panel says where the payout has got to');

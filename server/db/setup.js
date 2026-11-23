@@ -6430,6 +6430,27 @@ async function autoSetup() {
       if (rowCount) console.log('✅ Announced the facility-derived rate.');
     });
 
+    await step("44. Announce that a group can send an approved withdrawal to the bank", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'portal','everyone','fa-paper-plane', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['stokvel-bank-payout-2026-11',
+         'A group can now send an approved withdrawal to its bank account',
+         'Once the signatories have approved a withdrawal, any member can send it. It goes '
+         + 'through exactly the same process as a person’s own withdrawal — the same finance '
+         + 'queue, the same people, the same 1–2 business days — and the amount and the '
+         + 'destination come off the approval rather than off the screen, so nobody can send a '
+         + 'different figure to a different account. The group’s share ledger is reconciled in '
+         + 'the same step. Money that has been approved and not yet sent is now shown as '
+         + '“approved, waiting to be sent” against the pot, and a payout is raised for what is '
+         + 'left rather than for the whole pot — a group cannot promise the same rand twice.',
+         'My Groups → open the group → Decisions, on the approved request. The committed figure '
+         + 'is on the Money tab under Shares.']);
+      if (rowCount) console.log('✅ Announced the group bank payout.');
+    });
+
     await step("43. Announce that an approved decision can now be carried out", async () => {
       const { rowCount } = await pool.query(
         `INSERT INTO feature_announcements
