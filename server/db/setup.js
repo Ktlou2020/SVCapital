@@ -1698,6 +1698,63 @@ CREATE INDEX IF NOT EXISTS stokvel_exit_debt_open_idx
   ON stokvel_exit_debts(sub_account_id) WHERE status = 'owing';
 
 
+/* CASH, WHICH IS HOW A STOKVEL ACTUALLY COLLECTS.
+
+   A stokvel meets, and money changes hands in the room. Until now a member
+   could only pay from their own SV Capital wallet, so a fifteen-year-old
+   burial society could not move onto the platform without converting every
+   member to a card on day one — which is never day one. Mama Dlamini put
+   R500 on the table and nothing could record it: her row stayed overdue,
+   the arrears list lied to the committee, the reminder chased a woman who
+   had paid, and her share was understated at the payout.
+
+   A RECEIPT IS A RECORD, NOT A CREDIT. Recording one moves no money and
+   changes no share. The platform does not hold that R500 yet — it is in the
+   treasurer's hands — and a share ledger that counted money SV Capital does
+   not hold would be false in the one way this ledger must never be false.
+   So the member's row says "recorded, waiting for the deposit", with who
+   recorded it and when, visible to every member rather than to the
+   committee alone.
+
+   IT SETTLES WHEN THE MONEY ARRIVES, against a named deposit into the
+   group's wallet, and never for more than that deposit. Settling calls
+   stokvelShares.attribute, which says whose an already-banked amount was
+   without inventing any: it takes the amount back from everybody on the
+   proportions it was shared out on and gives it to the member it belonged
+   to, so the sum of the shares does not move and the invariant holds.
+
+   THE CONTROL IS THAT EVERYBODY SEES IT. A treasurer who can record a
+   receipt can record a false one — exactly as the treasurer of any stokvel
+   can write a false line in the book. What makes the book work is that the
+   meeting reads it. So every receipt names who recorded it, the whole group
+   can see it, and one that has not settled can be cancelled by any of the
+   committee. */
+CREATE TABLE IF NOT EXISTS stokvel_cash_receipts (
+  id              TEXT PRIMARY KEY,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  investor_id     TEXT NOT NULL REFERENCES investors(id)    ON DELETE CASCADE,
+  amount          NUMERIC(18,2) NOT NULL CHECK (amount > 0),
+  received_on     DATE NOT NULL,
+  method          TEXT NOT NULL DEFAULT 'cash' CHECK (method IN ('cash','eft','other')),
+  note            TEXT,
+  recorded_by     TEXT NOT NULL REFERENCES investors(id),
+  status          TEXT NOT NULL DEFAULT 'recorded'
+                    CHECK (status IN ('recorded','settled','cancelled')),
+  /* The deposit this receipt was settled out of. One deposit cannot settle
+     more than it brought in, and this is what makes that checkable. */
+  deposit_reference TEXT,
+  settled_at      TIMESTAMPTZ,
+  cancelled_by    TEXT REFERENCES investors(id),
+  cancelled_at    TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS stokvel_cash_open_idx
+  ON stokvel_cash_receipts(sub_account_id) WHERE status = 'recorded';
+CREATE INDEX IF NOT EXISTS stokvel_cash_member_idx
+  ON stokvel_cash_receipts(sub_account_id, investor_id);
+
+
 /* THE DAY THE GROUP PAYS ITSELF OUT.
    
    Shares answered "what is mine"; this answers "and when do we get it".
@@ -6428,6 +6485,89 @@ async function autoSetup() {
          'Console → Groups (Stokvels) → the 30-day notice fund panel → “From the trading '
          + 'facility”, beside the rate boxes.']);
       if (rowCount) console.log('✅ Announced the facility-derived rate.');
+    });
+
+    await step("48. Announce the switch for the notice account", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'admin','staff','fa-hourglass-half', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['notice-fund-switch-2026-11',
+         'The notice account can now be offered to groups, or taken away, from the console',
+         'Every group-facing notice-account route is gated on one setting, and the panel told '
+         + 'you for months that it lived in “Settings → notice_fund_live” — a screen that did '
+         + 'not exist. The flag could only be changed by writing to the database by hand, so '
+         + 'the product could not be switched on without a developer and, more to the point, '
+         + 'could not be switched off in a hurry either. The panel now has the button. It is '
+         + 'off everywhere until somebody presses it, it asks before it offers the account to '
+         + 'every group, and who turned it on is recorded. Turning it off stops new money; it '
+         + 'does not touch money already in the fund or a withdrawal already asked for.\n\n'
+         + 'The Agriculture Notice Account itself now exists as an account — 30 days’ notice, '
+         + 'no minimum — and is waiting behind that switch.',
+         'Console → Investments → 30-day notice fund, the button beside “Not offered to groups”.']);
+      if (rowCount) console.log('✅ Announced the notice-account switch.');
+    });
+
+    await step("47. Announce recording what a member paid in the room", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'portal','everyone','fa-hand-holding-dollar', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['stokvel-cash-receipts-2026-11',
+         'A group can record what a member paid in cash at the meeting',
+         'A stokvel collects in a room, and until now a member could pay only from their own '
+         + 'SV Capital wallet — so a member who put R500 on the table stayed marked as overdue, '
+         + 'the arrears list was wrong, and the reminder chased somebody who had paid. The '
+         + 'committee can now record it: who paid, how much, when, and how.\n\n'
+         + 'Recording it moves no money and changes nobody’s share, because the money is still '
+         + 'in the treasurer’s hands — the row says “waiting for the deposit” instead of '
+         + '“overdue”, and the whole group can see it with the name of whoever recorded it. '
+         + 'When the group banks the takings, the committee matches the deposit to what was '
+         + 'recorded; the payments then count against what each member owed, oldest first, and '
+         + 'never for more than the deposit actually brought in.',
+         'My Groups → open the group → Money → “Paid in the room”. Recording and matching are '
+         + 'the committee’s; every member can see what has been recorded.']);
+      if (rowCount) console.log('✅ Announced cash receipts.');
+    });
+
+    await step("46. The Agriculture Notice Account exists, switched off", async () => {
+      /* THE ACCOUNT, as a row. notice_fund_live is what decides whether any
+         group is offered it, and that is a deliberate act per environment
+         with a name against it — see routes/settings.js. This step only
+         makes sure there is something to offer.
+
+         ON CONFLICT DO NOTHING on both, so a redeploy never reopens a fund
+         somebody closed, never renames one somebody renamed, and above all
+         never turns the switch back on. */
+      const { rows: [existing] } = await pool.query(
+        `SELECT id FROM notice_funds ORDER BY created_at ASC LIMIT 1`);
+      if (!existing) {
+        await pool.query(
+          `INSERT INTO notice_funds (id, name, notice_days, min_deposit, description, status, created_by)
+           VALUES ('NF-AGRI-30','Agriculture Notice Account',30,0,$1,'draft','setup')
+           ON CONFLICT (id) DO NOTHING`,
+          /* DRAFT, NOT OPEN, and that is not timidity. noticeFund.openFund
+             takes the OLDEST OPEN fund, so a fund planted open by setup
+             would shadow any fund anybody sets up afterwards: a group
+             would be offered this one and its rates rather than theirs,
+             and nobody would be able to see why. Opening it is the panel's
+             own button, beside the one that offers it to groups. The
+             account exists and is not taking money — which is exactly the
+             state it should arrive in. */
+          ['Maize trading and other short-term agricultural opportunities. Thirty days’ '
+           + 'notice to take money out. The monthly return is declared before each month '
+           + 'and the actual is posted once the month ends.']);
+        console.log('✅ Agriculture Notice Account created (not yet offered to groups).');
+      }
+      /* The switch itself, recorded as off so the console can read and show
+         it without inventing a default. */
+      await pool.query(
+        `INSERT INTO platform_settings (key, value, description, updated_at)
+         VALUES ('notice_fund_live','false',$1,NOW())
+         ON CONFLICT (key) DO NOTHING`,
+        ['true offers the 30-day notice account to groups. Off by default.']);
     });
 
     await step("45. Announce the pasted roster and the year-end pack", async () => {

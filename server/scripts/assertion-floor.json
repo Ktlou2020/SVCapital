@@ -1,6 +1,6 @@
 {
   "note": "What each check asserted when this was last written. run-checks refuses a check that asserts fewer. Raise it with node server/scripts/run-checks.cjs --update-floor",
-  "total": 11520,
+  "total": 11586,
   "checks": {
     "check-apply-android.cjs": 20,
     "check-shared-api.cjs": 22,
@@ -67,7 +67,7 @@
     "check-switch-target-options.cjs": 29,
     "check-tab-load-guards.cjs": 46,
     "check-transaction-dates.cjs": 21,
-    "check-utils-calls.cjs": 1794,
+    "check-utils-calls.cjs": 1798,
     "check-account-closure.cjs": 39,
     "check-account-statement.cjs": 13,
     "check-action-centre.cjs": 22,
@@ -181,6 +181,7 @@
     "check-nationality.cjs": 35,
     "check-nav-fits.cjs": 12,
     "check-notice-fund-rate.cjs": 23,
+    "check-notice-fund-switch.cjs": 23,
     "check-notice-fund.cjs": 64,
     "check-null-safe-status.cjs": 9,
     "check-password-rule.cjs": 32,
@@ -228,6 +229,7 @@
     "check-stokvel-admin.cjs": 21,
     "check-stokvel-authority.cjs": 54,
     "check-stokvel-autopay.cjs": 29,
+    "check-stokvel-cash.cjs": 39,
     "check-stokvel-committed.cjs": 23,
     "check-stokvel-contributions.cjs": 49,
     "check-stokvel-dissolve.cjs": 22,

@@ -23034,7 +23034,11 @@ async function loadNoticeFundAdmin() {
     </div>`;
   host.innerHTML = `<div class="card" style="margin-top:16px">
     <div class="card__header"><h3 class="card__title"><i class="fa-solid fa-hourglass-half"></i> 30-day notice fund</h3>
-      <span style="font-size:0.78rem;color:${live ? '#22c55e' : 'var(--text-muted)'}">${live ? 'Offered to groups' : 'Not offered to groups (Settings \u2192 notice_fund_live)'}</span></div>
+      <span style="font-size:0.78rem;display:flex;align-items:center;gap:10px;color:${live ? '#22c55e' : 'var(--text-muted)'}">
+        ${live ? 'Offered to groups' : 'Not offered to groups'}
+        <button class="btn btn--sm ${live ? 'btn--ghost' : 'btn--primary'}" onclick="setNoticeFundLive(${live ? 'false' : 'true'})">
+          ${live ? 'Stop offering it' : 'Offer it to groups'}</button>
+      </span></div>
     <div style="padding:14px">
       ${funds.length ? funds.map(fund).join('') : '<div class="text-muted" style="margin-bottom:10px">No fund set up yet.</div>'}
       <div class="text-muted" style="font-size:0.74rem;margin-bottom:8px">Money in is charged the 1% platform fee on top, as on the pools.</div>
@@ -23120,6 +23124,34 @@ async function createNoticeFund() {
       min_deposit: document.getElementById('nfNewMin').value });
     Toast.show('Fund created in draft. Declare this month\u2019s projected rate, then open it.', 'success');
   } catch (err) { Toast.show(err.message || 'Could not create the fund.', 'error'); }
+  loadNoticeFundAdmin();
+}
+
+/* OFFERING IT, OR NOT. This is the switch every group-facing notice-fund
+   route is gated on. The panel has told staff for months that it lives in
+   "Settings → notice_fund_live", and there was no such screen: the flag
+   could only be changed by writing to the database by hand. A kill switch
+   nobody present can reach is not a kill switch.
+
+   Turning it ON is the moment the account becomes something a group can be
+   sold, so it asks plainly and the server audits who did it. Turning it OFF
+   stops new money; it does not touch money already in the fund or a
+   withdrawal already asked for — those are the fund's own status, above. */
+async function setNoticeFundLive(enabled) {
+  const ask = enabled
+    ? 'Offer the 30-day notice account to groups?\n\nEvery group will see it on their '
+      + 'Investments tab and will be able to ask their signatories to move money into it. '
+      + 'Make sure a rate is declared for this month and that compliance has signed off.'
+    : 'Stop offering it to groups?\n\nMoney already in the fund stays in it and withdrawals '
+      + 'already asked for are still paid. Groups simply cannot put new money in.';
+  if (!confirm(ask)) return;
+  try {
+    await API._fetch('PUT', 'settings/notice-fund-live', { enabled });
+    Toast.show(enabled ? 'The notice account is now offered to groups.'
+                       : 'No longer offered to groups.', 'success');
+  } catch (err) {
+    Toast.show(err.message || 'Could not change that.', 'error');
+  }
   loadNoticeFundAdmin();
 }
 

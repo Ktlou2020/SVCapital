@@ -37,6 +37,7 @@ const proposals     = require('../services/stokvelProposals');
 const groupDocs     = require('../services/stokvelDocuments');
 const schedules     = require('../services/stokvelSchedule');
 const noticeFund    = require('../services/noticeFund');
+const cash          = require('../services/stokvelCash');
 const { actorFromRequest } = require('../services/ledger');
 const audit = require('../services/audit');
 /* Lazily required, and never awaited in a way that can fail a request: a
@@ -347,6 +348,131 @@ router.post('/:id/invites', async (req, res) => {
     await client.query('ROLLBACK').catch(() => {});
     console.error('[stokvels] invite failed:', err.message);
     return res.status(500).json({ error: 'Could not send that invitation.' });
+  } finally {
+    client.release();
+  }
+});
+
+/* ─── Cash, recorded at the meeting ──────────────────────────────────
+ *
+ * See services/stokvelCash.js for why this is two steps and why recording
+ * one moves nothing. In short: the money is in the treasurer's hands, not
+ * in the group's account, and a share ledger that counted it would be
+ * false in the one way this ledger must never be false.
+ *
+ * RECORDING IS THE COMMITTEE'S, and SETTLING is too — but settling is
+ * bounded by a real deposit, so the committee cannot conjure a share out
+ * of it. Reading is every member's: a receipt the group cannot see is a
+ * treasurer's private note, which is the thing this replaces.
+ */
+router.get('/:id/cash', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    return res.json({ data: await cash.list(pool, group.id),
+                      can_record: invites.mayInvite(group) });
+  } catch (err) {
+    console.error('[stokvels] cash list failed:', err.message);
+    return res.status(500).json({ error: 'Could not load what has been recorded.' });
+  }
+});
+
+router.post('/:id/cash', async (req, res) => {
+  const me = callerInvestorId(req);
+  const client = await pool.connect();
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    if (!invites.mayInvite(group)) {
+      return res.status(403).json({ error: 'Only the committee can record a payment.' });
+    }
+    await client.query('BEGIN');
+    const out = await cash.record(client, {
+      subAccount: group,
+      investorId: (req.body && req.body.investor_id) || '',
+      amount: req.body && req.body.amount,
+      receivedOn: (req.body && req.body.received_on) || '',
+      method: (req.body && req.body.method) || 'cash',
+      note: (req.body && req.body.note) || '',
+      recordedBy: me,
+    });
+    if (out.error) { await client.query('ROLLBACK'); return res.status(400).json({ error: out.error }); }
+    await client.query('COMMIT');
+    await audit.log({
+      actorId: req.user && req.user.id, actorEmail: req.user && req.user.email,
+      actorRole: req.user && req.user.role,
+      action: 'stokvel.cash_recorded',
+      entityType: 'stokvel_cash_receipts', entityId: out.receipt.id,
+      description: `Recorded R${Number(out.receipt.amount).toFixed(2)} received from `
+                 + `${req.body.investor_id} for ${group.id} on ${out.receipt.received_on}`,
+    }).catch(() => {});
+    return res.status(201).json({ data: out.receipt });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] cash record failed:', err.message);
+    return res.status(500).json({ error: 'Could not record that payment.' });
+  } finally {
+    client.release();
+  }
+});
+
+router.delete('/:id/cash/:cid', async (req, res) => {
+  const me = callerInvestorId(req);
+  const client = await pool.connect();
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    if (!invites.mayInvite(group)) {
+      return res.status(403).json({ error: 'Only the committee can call a record back.' });
+    }
+    await client.query('BEGIN');
+    const out = await cash.cancel(client, { subAccount: group, receiptId: req.params.cid, by: me });
+    if (out.error) { await client.query('ROLLBACK'); return res.status(400).json({ error: out.error }); }
+    await client.query('COMMIT');
+    return res.json({ data: out });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] cash cancel failed:', err.message);
+    return res.status(500).json({ error: 'Could not call that record back.' });
+  } finally {
+    client.release();
+  }
+});
+
+/* The money has arrived. Match what was recorded to it, oldest first, and
+   never for more than the deposit brought in. */
+router.post('/:id/cash/settle', async (req, res) => {
+  const me = callerInvestorId(req);
+  const client = await pool.connect();
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    if (!invites.mayInvite(group)) {
+      return res.status(403).json({ error: 'Only the committee can settle against a deposit.' });
+    }
+    await client.query('BEGIN');
+    const out = await cash.settle(client, {
+      subAccount: group,
+      reference: (req.body && req.body.reference) || '',
+      actor: [req.user && req.user.firstName, req.user && req.user.lastName]
+               .filter(Boolean).join(' ') || 'the committee',
+    });
+    if (out.error) { await client.query('ROLLBACK'); return res.status(400).json({ error: out.error }); }
+    await client.query('COMMIT');
+    await audit.log({
+      actorId: req.user && req.user.id, actorEmail: req.user && req.user.email,
+      actorRole: req.user && req.user.role,
+      action: 'stokvel.cash_settled',
+      entityType: 'sub_accounts', entityId: group.id,
+      description: `Settled ${out.settled.length} recorded payment(s) totalling `
+                 + `R${Number(out.total).toFixed(2)} against deposit ${out.deposit.reference}`,
+    }).catch(() => {});
+    return res.json({ data: out });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] cash settle failed:', err.message);
+    return res.status(500).json({ error: 'Could not settle those payments.' });
   } finally {
     client.release();
   }

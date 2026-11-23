@@ -302,14 +302,33 @@ async function payIn(client, { subAccount, investorId, amount, note, actor }) {
     reference: ref, periodLabel: null,
   });
 
-  /* Oldest first, so paying in clears what is actually outstanding rather
-     than leaving arrears beside a credit. */
-  let left = want;
+  const { settled } = await settleDue(client, subAccount.id, investorId, want);
+  return { paid: want, settled, reference: ref };
+}
+
+/* ─── What this money clears, oldest first ─────────────────────────
+ *
+ * Money arriving for a member settles what they actually owe, starting with
+ * the oldest, rather than sitting beside their arrears as a credit. A fine
+ * rides on the same table as a contribution, so it settles in its turn.
+ *
+ * ONE DEFINITION, two front doors. A member paying in from their wallet and
+ * a treasurer's cash receipt being matched to a deposit both arrive here.
+ * Two copies of "oldest first" is how one screen comes to disagree with
+ * another about what somebody owes.
+ *
+ * Returns how much of the amount found something to settle: the rest is
+ * money in hand against nothing owed, which is not an error — a member who
+ * pays ahead is a member paying ahead.
+ */
+async function settleDue(client, subAccountId, investorId, amount) {
+  let left = round2(amount);
+  if (!(left > 0)) return { settled: 0 };
   const { rows: due } = await client.query(
     `SELECT id, amount_due, amount_paid FROM stokvel_contributions
       WHERE sub_account_id = $1 AND investor_id = $2 AND status = 'due'
         AND (amount_due - amount_paid) > 0
-      ORDER BY due_date ASC FOR UPDATE`, [subAccount.id, investorId]);
+      ORDER BY due_date ASC FOR UPDATE`, [subAccountId, investorId]);
   for (const c of due) {
     if (round2(left) <= 0) break;
     const outstanding = round2(Number(c.amount_due) - Number(c.amount_paid));
@@ -324,8 +343,7 @@ async function payIn(client, { subAccount, investorId, amount, note, actor }) {
       [c.id, nowPaid, nowPaid >= round2(Number(c.amount_due)) ? 'paid' : 'due']);
     left = round2(left - put);
   }
-
-  return { paid: want, settled: round2(want - left), reference: ref };
+  return { settled: round2(round2(amount) - left) };
 }
 
-module.exports = { periodFor, openPeriod, pay, payIn };
+module.exports = { periodFor, openPeriod, pay, payIn, settleDue };

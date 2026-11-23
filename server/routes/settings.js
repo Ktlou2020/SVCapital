@@ -142,4 +142,63 @@ router.put('/email-toggle', requireAuth, requireRole('admin', 'director'), async
   }
 });
 
+/* ─── Whether the notice account is offered to groups ────────────────
+ *
+ * noticeFund.isLive reads platform_settings.notice_fund_live, and every
+ * notice-fund route for a group is gated on it. The console's own panel
+ * has told staff for months that the switch is in "Settings →
+ * notice_fund_live" — and there was no such screen. The flag could only be
+ * changed by writing to the database by hand, which meant the product had
+ * a kill switch nobody present could reach, in either direction.
+ *
+ * OFF IS THE DEFAULT AND STAYS THE DEFAULT. The read upserts 'false', so
+ * an environment that has never been asked does not start offering a
+ * financial product because somebody opened a settings page. Turning it on
+ * is a deliberate act by an admin or a director, and it is audited, because
+ * it is the moment the account becomes something a group can be sold.
+ */
+const NOTICE_KEY  = 'notice_fund_live';
+const NOTICE_DESC = 'true offers the 30-day notice account to groups. Off by default.';
+
+router.get('/notice-fund-live', requireAuth, requireRole('admin', 'director'), async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      INSERT INTO platform_settings (key, value, description, updated_at)
+      VALUES ($1, 'false', $2, NOW())
+      ON CONFLICT (key) DO UPDATE SET updated_at = platform_settings.updated_at
+      RETURNING value
+    `, [NOTICE_KEY, NOTICE_DESC]);
+    res.json({ enabled: String(rows[0] && rows[0].value).trim() === 'true' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.put('/notice-fund-live', requireAuth, requireRole('admin', 'director'), async (req, res) => {
+  const { enabled } = req.body || {};
+  if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be boolean' });
+  try {
+    await db.query(`
+      INSERT INTO platform_settings (key, value, description, updated_at)
+      VALUES ($1, $2, $3, NOW())
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+    `, [NOTICE_KEY, enabled ? 'true' : 'false', NOTICE_DESC]);
+    /* Audited by name: this is the switch that makes a financial product
+       available to clients, and "who turned it on, and when" is the first
+       question anybody will ask about it afterwards. */
+    require('../services/audit').log({
+      actorId: req.user && req.user.id, actorEmail: req.user && req.user.email,
+      actorRole: req.user && req.user.role,
+      action: enabled ? 'notice_fund.offered' : 'notice_fund.withdrawn',
+      entityType: 'platform_settings', entityId: NOTICE_KEY,
+      description: enabled
+        ? 'The 30-day notice account is now offered to groups'
+        : 'The 30-day notice account is no longer offered to groups',
+    }).catch(() => {});
+    res.json({ ok: true, enabled });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;

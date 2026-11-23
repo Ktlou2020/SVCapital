@@ -13242,6 +13242,180 @@ function inviteToStokvel(groupId) {
   });
 }
 
+/* ─── Cash, recorded at the meeting ────────────────────────────────
+ *
+ * A stokvel collects in a room. Until now a member could pay only from
+ * their own wallet, so Mama Dlamini putting R500 on the table could not be
+ * recorded at all: her row stayed overdue, the arrears list lied to the
+ * committee, the reminder chased a woman who had paid.
+ *
+ * RECORDING MOVES NOTHING — see services/stokvelCash.js. The money is in
+ * the treasurer's hands, not in the group's account, so what changes is
+ * what the row SAYS. It settles when the takings are banked, against a
+ * named deposit.
+ *
+ * THE WHOLE GROUP READS IT, which is the control. A treasurer who can
+ * record a payment can record a false one, exactly as the treasurer of any
+ * stokvel can write a false line in the book; what makes the book work is
+ * that the meeting reads it. So this panel is shown to every member, with
+ * who recorded each one.
+ */
+async function _svCash(gid) {
+  let d = null, can = false;
+  try {
+    const res = await API._fetch('GET', `stokvels/${gid}/cash`);
+    d = (res && res.data) || [];
+    can = !!(res && res.can_record);
+  } catch (_) {
+    /* A group on an older server has no cash panel rather than an error
+       under its contributions. */
+    return '';
+  }
+  const waiting = d.filter(r => r.status === 'recorded');
+  const done    = d.filter(r => r.status === 'settled').slice(0, 5);
+  if (!d.length && !can) return '';
+
+  const money = n => Utils.rand(n);
+  const how = m => m === 'eft' ? 'EFT' : m === 'other' ? 'Payment' : 'Cash';
+  const row = r => `<tr>
+      <td>${_esc(r.name)}</td>
+      <td class="text-right"><strong>${money(r.amount)}</strong></td>
+      <td style="font-size:0.74rem;color:var(--text-muted)">
+        ${_esc(how(r.method))} &middot; ${_esc(String(r.received_on).slice(0, 10))}
+        &middot; recorded by ${_esc(r.recorded_by_name)}
+        ${r.note ? '<br>' + _esc(r.note) : ''}
+      </td>
+      <td class="text-right">${r.status === 'recorded'
+        ? `<span style="font-size:0.72rem;color:#f59e0b">waiting for the deposit</span>${
+            can ? `<br><button class="btn btn--ghost btn--sm" style="margin-top:4px"
+              onclick="cancelStokvelCash('${_esc(gid)}','${_esc(r.id)}')">Call it back</button>` : ''}`
+        : `<span style="font-size:0.72rem;color:#22c55e">settled</span>`}</td>
+    </tr>`;
+
+  const total = waiting.reduce((n, r) => n + (parseFloat(r.amount) || 0), 0);
+
+  return `<div style="margin-top:26px">
+    <div class="sa-section-title"><i class="fa-solid fa-hand-holding-dollar"></i> Paid in the room</div>
+    <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px;line-height:1.55">
+      What members handed over in cash or paid the treasurer directly. Recording it
+      <strong>moves no money</strong> &mdash; it says what was received. It counts towards a
+      member&rsquo;s contributions once the group banks the takings and the deposit is matched to it.
+    </div>
+    ${waiting.length ? `<div style="border:1px solid #f59e0b;border-radius:10px;padding:10px 12px;
+        background:rgba(245,158,11,0.06);font-size:0.82rem;margin-bottom:10px">
+        <strong>${money(total)}</strong> recorded and waiting to be banked, from
+        ${waiting.length} payment${waiting.length === 1 ? '' : 's'}.
+        ${can ? ' Once it is in the group&rsquo;s account, match the deposit to it.' : ''}
+      </div>` : ''}
+    ${d.length ? `<table class="data-table" style="font-size:0.8rem"><tbody>
+      ${waiting.map(row).join('')}${done.map(row).join('')}
+    </tbody></table>` : `<div style="font-size:0.82rem;color:var(--text-muted)">
+      Nothing has been recorded yet.</div>`}
+    ${can ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn btn--secondary btn--sm" onclick="recordStokvelCash('${_esc(gid)}')">
+        <i class="fa-solid fa-plus"></i> Record a payment</button>
+      ${waiting.length ? `<button class="btn btn--primary btn--sm" onclick="matchStokvelDeposit('${_esc(gid)}')">
+        <i class="fa-solid fa-link"></i> The takings are banked</button>` : ''}
+    </div>` : ''}
+  </div>`;
+}
+
+function recordStokvelCash(groupId) {
+  const cached = _svCache(groupId) || {};
+  const roster = ((cached.members && cached.members.data) || []).filter(m => m.status === 'active');
+  if (!roster.length) { _svToast('The roster has not loaded yet.', 'error'); return; }
+  const name = m => _esc(`${m.first_name || ''} ${m.last_name || ''}`.trim() || 'A member');
+  _svFormShell(groupId, {
+    icon: 'fa-hand-holding-dollar',
+    title: 'Record a payment',
+    intro: `For money a member handed over &mdash; cash at the meeting, or an EFT to the
+      treasurer. <strong>This moves no money and changes nobody&rsquo;s share.</strong> It records
+      what was received, for the whole group to see, and counts once the takings are banked
+      into the group&rsquo;s account and you match the deposit to it.`,
+    fields: `<label for="svCaWho" style="display:block;font-size:0.74rem;text-transform:uppercase;
+          letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Who paid</label>
+        <select id="svCaWho" class="form-input" style="width:100%;margin-bottom:12px">
+          ${roster.map(m => `<option value="${_esc(m.investor_id)}">${name(m)}</option>`).join('')}
+        </select>`
+      + _svField('svCaAmount', 'How much', 'number', '', 'min="0" step="0.01" inputmode="decimal"')
+      + _svField('svCaDate', 'When it was received', 'date', '',
+                 `value="${_esc(new Date().toISOString().slice(0, 10))}"`)
+      + `<label for="svCaHow" style="display:block;font-size:0.74rem;text-transform:uppercase;
+          letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">How</label>
+        <select id="svCaHow" class="form-input" style="width:100%;margin-bottom:12px">
+          <option value="cash">Cash</option><option value="eft">EFT to the treasurer</option>
+          <option value="other">Another way</option>
+        </select>`
+      + _svField('svCaNote', 'A note (optional)', 'text',
+                 'Everybody in the group sees this.', 'maxlength="200"'),
+    submit: `submitStokvelCash('${_esc(groupId)}')`,
+    submitIcon: 'fa-check',
+    submitLabel: 'Record it',
+  });
+}
+
+async function submitStokvelCash(groupId) {
+  const amount = parseFloat(_svVal('svCaAmount'));
+  if (!(amount > 0)) return _svFormError('How much was handed over?');
+  try {
+    await API._fetch('POST', `stokvels/${groupId}/cash`, {
+      investor_id: _svVal('svCaWho'), amount,
+      received_on: _svVal('svCaDate'), method: _svVal('svCaHow'),
+      note: _svVal('svCaNote'),
+    });
+  } catch (err) {
+    return _svFormError(err.message || 'Could not record that payment.');
+  }
+  _svToast('Recorded. It counts once the takings are banked and matched.', 'success');
+  await _svRenderHub(groupId, 'contributions');
+}
+
+async function cancelStokvelCash(groupId, receiptId) {
+  if (!await _svConfirm('The record goes away and the member goes back to owing it. '
+      + 'Everybody in the group can see that it was called back.',
+      { title: 'Call this record back?', confirmLabel: 'Call it back' })) return;
+  try {
+    await API._fetch('DELETE', `stokvels/${groupId}/cash/${receiptId}`);
+    _svToast('Called back.', 'success');
+  } catch (err) {
+    _svToast(err.message || 'Could not call that record back.', 'error');
+  }
+  await _svRenderHub(groupId, 'contributions');
+}
+
+function matchStokvelDeposit(groupId) {
+  _svFormShell(groupId, {
+    icon: 'fa-link',
+    title: 'The takings are banked',
+    intro: `Give the reference the deposit arrived under in the group&rsquo;s account. What was
+      recorded is matched to it, oldest first, and <strong>never for more than the deposit
+      brought in</strong> &mdash; so a payment can only count once the money behind it is
+      really here. Anything the deposit cannot cover waits for the next one.`,
+    fields: _svField('svCaRef', 'The deposit reference', 'text',
+      'As it appears on the group&rsquo;s transactions.', 'maxlength="80"'),
+    submit: `submitStokvelCashMatch('${_esc(groupId)}')`,
+    submitIcon: 'fa-link',
+    submitLabel: 'Match it',
+  });
+}
+
+async function submitStokvelCashMatch(groupId) {
+  const reference = _svVal('svCaRef').trim();
+  if (!reference) return _svFormError('Which deposit? Give the reference it arrived under.');
+  let d;
+  try {
+    const res = await API._fetch('POST', `stokvels/${groupId}/cash/settle`, { reference });
+    d = (res && res.data) || {};
+  } catch (err) {
+    return _svFormError(err.message || 'Could not match that deposit.');
+  }
+  _svToast(d.not_settled
+    ? `${d.settled.length} settled. One more needs ${Utils.rand(d.not_settled.short)} before it can be.`
+    : `${d.settled.length} payment${d.settled.length === 1 ? '' : 's'} settled.`, 'success');
+  await Promise.all([loadSubAccounts(), loadStokvels()]);
+  await _svRenderHub(groupId, 'contributions');
+}
+
 /* ─── A roster, pasted ─────────────────────────────────────────────
  *
  * A stokvel arrives with its members already written down somewhere — a
@@ -14315,7 +14489,8 @@ async function _svRenderHub(id, tab, opts) {
   const section = async key => {
     let out = '';
     switch (key) {
-    case 'contributions': out = _svContributions(contributions, mine, id, g); break;
+    case 'contributions': out = _svContributions(contributions, mine, id, g)
+                              + (await _svCash(id)); break;
     case 'approvals':     out = _svWithdrawals(requests, meIsSignatory, id, {
                               g, canPropose: _svCanProposeMandate(g, meIsSignatory),
                               signatories: ((members && members.data) || [])
