@@ -101,10 +101,27 @@ console.log('\nand what it renders is escaped');
 {
   /* Interpolations of values that came from a person. The roster is other
      members' names; the requests carry a reason somebody typed. */
-  const hub = CORE.slice(CORE.indexOf('function _svHeader'), CORE.indexOf('async function payStokvelContribution'));
+  /* THE SLICE USED TO START AT 'function _svHeader', WHICH MATCHED NOTHING.
+     There is no such function — the header is _svWsHeader — so indexOf
+     returned -1, slice(-1, …) took the last character, and this assertion
+     has been reading one character of the file and finding nothing wrong
+     with it. It only came to light when a function called _svHeaderFigures
+     was added and the slice suddenly covered two thousand lines, which it
+     immediately found things in. An assertion that cannot fail is worse
+     than no assertion: it reads as cover. */
+  const from = CORE.indexOf('function _svWsHeader');
+  const to   = CORE.indexOf('async function payStokvelContribution');
+  ok('the escaping sweep looks at the hub, and not at nothing',
+     from > 0 && to > from && (to - from) > 20000,
+     `from ${from} to ${to} — ${to - from} characters`);
+  const hub = CORE.slice(from, to);
   const raw = [...hub.matchAll(/\$\{([^}]+)\}/g)].map(m => m[1].trim())
     .filter(x => /\b(name|reason|role|label|status|bank_name|requested_by_name|period_label)\b/.test(x))
-    .filter(x => !/_esc\(|Utils\.rand\(|\?|&&|\.length|===|!==/.test(x));
+    .filter(x => !/_esc\(|Utils\.rand\(|\?|&&|\.length|===|!==/.test(x))
+    /* A value handed to a function is that function's to escape, and a
+       lookup into a literal map returns the map's value, never the key. */
+    .filter(x => !/^[A-Za-z_$][\w$]*\(/.test(x))
+    .filter(x => !/^[A-Za-z_$][\w$]*\[/.test(x));
   ok('every person-typed value goes through _esc', raw.length === 0, raw.join(' | '));
   ok('and the hub never builds HTML from an unescaped id',
      !/\$\{(?:r|m|c|s)\.id\}/.test(hub), 'ids are interpolated into onclick handlers');
@@ -225,8 +242,14 @@ console.log('\nand the workspace behaves like one');
      /_svScrollTabIntoView/.test(CORE),
      'a tab bar that scrolls and hides where you are is worse than one that does not');
   const phone = ws.slice(ws.indexOf('@media (max-width: 760px)'));
+  /* THIS MATCHED THE WRONG ${label}. The slice runs from _svCache to
+     _svOverview and caught a label inside the HEADER's stat helper, not the
+     tab bar's — so escaping that unrelated helper broke an assertion about
+     tabs. What it means to say is that a tab still carries its name, which
+     is the translated label on the button itself. */
+  const tabBtn = ws.slice(ws.indexOf('function _svWsTabs'));
   ok('the labels stay at phone width',
-     /\$\{label\}/.test(ws) && !/display\s*:\s*none/.test(phone),
+     /_svT\('tab\.' \+ g\.key, g\.label\)/.test(tabBtn) && !/display\s*:\s*none/.test(phone),
      'nine unnamed icons is a guessing game; the bar scrolls instead');
 
   ok('nothing is collected through a prompt box any more',

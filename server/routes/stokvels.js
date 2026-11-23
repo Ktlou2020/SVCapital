@@ -1409,7 +1409,7 @@ router.get('/:id/contributions', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT c.id, c.investor_id, c.period_label, c.amount_due, c.amount_paid,
               c.due_date, c.status, c.paid_at, c.kind, c.note,
-              i.first_name, i.last_name,
+              i.first_name, i.last_name, i.phone,
               (c.investor_id = $2) AS is_me,
               (c.status = 'due' AND c.due_date < CURRENT_DATE) AS overdue
          FROM stokvel_contributions c
@@ -1420,14 +1420,28 @@ router.get('/:id/contributions', async (req, res) => {
       [group.id, me]
     );
 
-    /* Arrears per member, which is the number anybody actually wants. */
+    /* Arrears per member, which is the number anybody actually wants.
+     *
+     * THE NUMBER TO CHASE ON GOES TO THE COMMITTEE ONLY. The platform sends
+     * one reminder per obligation and no more, deliberately — the rest is
+     * the treasurer's conversation (see jobs/stokvelContributionCron). It
+     * was a conversation they had to go and find a number for, so the phone
+     * rides along with the arrears for whoever may chase.
+     *
+     * Not for everybody: a member's cell handed to all nine people in a
+     * group is a different thing from one handed to the treasurer, and the
+     * same test that says who may invite says who may chase. */
+    const mayChase = invites.mayInvite(group);
     const arrears = {};
     for (const r of rows) {
       if (r.status !== 'due') continue;
       const owed = Math.round((Number(r.amount_due) - Number(r.amount_paid)) * 100) / 100;
       if (owed <= 0) continue;
       const k = r.investor_id;
-      arrears[k] = arrears[k] || { investor_id: k, name: r.first_name, owed: 0, periods: 0 };
+      arrears[k] = arrears[k] || {
+        investor_id: k, name: r.first_name, owed: 0, periods: 0,
+        phone: mayChase && !r.is_me ? (r.phone || null) : null,
+      };
       arrears[k].owed = Math.round((arrears[k].owed + owed) * 100) / 100;
       arrears[k].periods += 1;
     }

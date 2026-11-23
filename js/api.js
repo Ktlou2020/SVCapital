@@ -452,7 +452,14 @@ async function _svcEndSession(apiBase, onNative, onWeb) {
         const err = await r.json();
         errMsg = err.error || errMsg;
       } catch (_) {}
-      throw new Error(errMsg);
+      /* THE STATUS RIDES WITH THE ERROR. Every caller had only the
+         message, so telling a rate limit from a missing record from a
+         refusal meant matching on English text — and a screen that cannot
+         tell them apart tells the client the wrong thing about all three.
+         The message is unchanged; this is beside it. */
+      const e = new Error(errMsg);
+      e.status = r.status;
+      throw e;
     }
 
     // 204 No Content

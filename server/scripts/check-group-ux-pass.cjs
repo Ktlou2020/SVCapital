@@ -237,5 +237,192 @@ console.log('\nand the tab bar does not cut its own labels');
      /scrollIntoView/.test(scroll), scroll.slice(0, 160));
 }
 
+/* ── 5. The shortfall has a way out ───────────────────────────────── */
+console.log('\nand a member who is short is shown the way out');
+{
+  const pay = CORE.slice(CORE.indexOf('async function _svOfferTopUp'),
+                         CORE.indexOf('function raiseStokvelWithdrawal'));
+  ok('THE WALLET IS CHECKED BEFORE SHE CONFIRMS',
+     /wallet \+ 0\.0001 < want/.test(pay),
+     'she used to confirm, wait for a round trip, and be told then: ' + pay.slice(0, 200));
+  ok('and told what she is short, not just that she is',
+     /you are \$\{Utils\.rand\(short\)\} short/.test(pay), pay.slice(0, 300));
+  ok('AND OFFERED THE TOP-UP, PRE-FILLED WITH THE SHORTFALL',
+     /openTopUpModal\(null, null, short\)/.test(pay),
+     'openTopUpModal already takes a shortfall and fills itself in — it was '
+     + 'built for this on the invest modal and the contribution never asked it');
+  ok('and the server saying short gets the same offer, not a wall',
+     /not enough/i.test(pay) && /_svOfferTopUp\(want, avail, due\)/.test(pay),
+     'the wallet figure on screen can be a minute old');
+  ok('and the way out survives a surface with no top-up modal',
+     /navigate\('wallet'/.test(pay), pay.slice(-400));
+}
+
+/* ── 6. Nothing lands on top of a group ───────────────────────────── */
+console.log('\nand nothing full-screen lands on top of a group');
+{
+  ok('there is one question both ask', /function _svcOnDashboard\(\)/.test(CORE), 'js/portal-core.js');
+  const prompt = CORE.slice(CORE.indexOf('async function checkFirstDepositPrompt'),
+                            CORE.indexOf('function dismissDepositPrompt'));
+  ok('THE DEPOSIT PROMPT ASKS WHERE THE PERSON IS, AT THE MOMENT IT FIRES',
+     /setTimeout\(\(\) => \{\s*if \(!_svcOnDashboard\(\)\) return;/.test(prompt),
+     'it fired 2.5 seconds after boot with no idea where they had got to, and a '
+     + 'deep link opens a group inside those 2.5 seconds: ' + prompt.slice(-300));
+  /* The snooze is written by dismissDepositPrompt, which only runs when
+     somebody dismisses it. What matters is that the skip writes nothing —
+     a prompt skipped because they were reading their group is still owed
+     to them the next time they are on the dashboard. */
+  const fired = prompt.slice(prompt.indexOf('setTimeout('));
+  ok('and skipping it spends nothing',
+     !/setItem|dismissDepositPrompt/.test(fired),
+     'the skip must not burn the snooze it never showed: ' + fired.slice(0, 240));
+
+  const tour = CORE.slice(CORE.indexOf('function _checkAutoStartTour'),
+                          CORE.indexOf('function _checkAutoStartTour') + 900);
+  ok('AND THE TOUR DOES TOO',
+     /if \(!_svcOnDashboard\(\)\) return;/.test(tour), tour.slice(0, 300));
+  ok('and does not mark itself done when it skips',
+     tour.indexOf('_svcOnDashboard') < tour.indexOf("svc_tour_done', '1'"),
+     'the tour still owes them a tour');
+}
+
+/* ── 7. A group with no money says what it is waiting for ─────────── */
+console.log('\nand a group with no money says what it needs');
+{
+  const vm2 = require('vm');
+  const ctx = { window: {}, document: { getElementById: () => null, querySelector: () => null },
+                location: { search: '' },
+                localStorage: { getItem: () => null, setItem() {} },
+                sessionStorage: { getItem: () => null, setItem() {} },
+                Utils: { rand: n => 'R ' + Number(n || 0).toFixed(2) }, encodeURIComponent };
+  vm2.createContext(ctx);
+  vm2.runInContext(read('js/portal-core.js'), ctx);
+  ctx._esc = v => String(v == null ? '' : v);
+  const stat = (l, v) => `<i>${l}:${v}</i>`;
+
+  const fresh = ctx._svHeaderFigures({ name: 'New', wallet_balance: 0, total_invested: 0 }, null, stat);
+  ok('FOUR ZEROS ARE NOT A HEADLINE',
+     !/R 0\.00/.test(fresh),
+     'a group made a minute ago reported The pot, In the wallet, Invested and '
+     + 'Your share as R 0,00 — the boldest thing on the screen, saying nothing: ' + fresh);
+  ok('it says what the group is waiting for instead',
+     /Nothing in the pot yet/.test(fresh), fresh.slice(0, 200));
+  ok('and which thing, depending on whether it is verified',
+     /Finish the steps/.test(fresh)
+     && /ready for its first contribution/.test(
+          ctx._svHeaderFigures({ name: 'V', kyc_status: 'approved', wallet_balance: 0, total_invested: 0 }, null, stat)),
+     fresh);
+
+  const running = ctx._svHeaderFigures({ name: 'R', wallet_balance: 8400 },
+                                       { net_assets: 8400, wallet: 8400, invested: 0, my_share: 2800 }, stat);
+  ok('AND A GROUP WITH MONEY STILL GETS ITS FIGURES',
+     /The pot:R 8400\.00/.test(running) && /Your share/.test(running), running.slice(0, 240));
+  ok('and a group with nothing in the wallet but money invested keeps them too',
+     /The pot/.test(ctx._svHeaderFigures({ name: 'I', wallet_balance: 0, total_invested: 25000 }, null, stat)),
+     'the pot is not only what is liquid');
+}
+
+/* ── 8. Chasing the member who is behind ──────────────────────────── */
+console.log('\nand the treasurer can chase without going to find a number');
+{
+  const vm3 = require('vm');
+  const ctx = { window: {}, document: { getElementById: () => null, querySelector: () => null },
+                location: { search: '' },
+                localStorage: { getItem: () => null, setItem() {} },
+                sessionStorage: { getItem: () => null, setItem() {} },
+                Utils: { rand: n => 'R ' + Number(n || 0).toFixed(2) }, encodeURIComponent };
+  vm3.createContext(ctx);
+  vm3.runInContext(read('js/portal-core.js'), ctx);
+  ctx._esc = v => String(v == null ? '' : v);
+
+  const link = ctx._svChaseLink({ name: 'Nomsa', owed: 500, periods: 1, phone: '0821110003' }, 'Ubuntu');
+  ok('IT IS A CONVERSATION, NOT ANOTHER NOTIFICATION',
+     /wa\.me/.test(link),
+     'the platform sends ONE reminder per obligation on purpose; the rest is the '
+     + 'treasurer talking to them, and this is that, one tap shorter');
+  ok('the number is dialable from anywhere',
+     /wa\.me\/27821110003/.test(link), link.slice(0, 160));
+  ok('and the message carries the group, the amount and the name',
+     /Nomsa/.test(link) && /Ubuntu/.test(link) && /500/.test(link), link.slice(0, 300));
+  ok('AND THERE IS NOTHING TO PRESS WITHOUT A NUMBER',
+     ctx._svChaseLink({ name: 'N', owed: 500, periods: 1, phone: null }, 'G') === '',
+     'an ordinary member is not given one, so the button must not be there either');
+  ok('and a number too short to dial is not offered',
+     ctx._svChaseLink({ name: 'N', owed: 5, periods: 1, phone: '12345' }, 'G') === '');
+
+  const ROUTE = strip(read('server/routes/stokvels.js'));
+  ok('THE NUMBER ONLY GOES TO WHOEVER MAY CHASE',
+     /const mayChase = invites\.mayInvite\(group\)/.test(ROUTE)
+     && /mayChase && !r\.is_me \? \(r\.phone \|\| null\) : null/.test(ROUTE),
+     'a member\u2019s cell handed to all nine people in a group is a different '
+     + 'thing from one handed to the treasurer');
+}
+
+/* ── 9. A rate limit is not a broken group ────────────────────────── */
+console.log('\nand being rate limited does not read as being locked out');
+{
+  const API = strip(read('js/api.js'));
+  ok('an API error carries its status', /e\.status = r\.status/.test(API),
+     'every caller had only the message, so telling a rate limit from a missing '
+     + 'record meant matching on English');
+  ok('AND THE WORKSPACE TELLS THEM APART',
+     /err && err\.status === 429/.test(CORE), 'js/portal-core.js _svRenderHub');
+  ok('and says it is temporary and not their doing',
+     /Nothing is wrong with your group/.test(CORE),
+     '"Could not load this group. Too many requests" reads as being locked out '
+     + 'of your own savings');
+  ok('and the ordinary failure still says what went wrong',
+     /Could not load this group\. \$\{_esc\(err\.message/.test(CORE), 'the other branch');
+}
+
+/* ── 10. Two things a second pass turned up ───────────────────────
+   Found by driving the whole journey — create a group, invite somebody,
+   have them accept, set the contribution — as two people. */
+console.log('\nand the setup checklist keeps up with what the product does');
+{
+  const step = CORE.slice(CORE.indexOf("{ key: 'schedule'"), CORE.indexOf("{ key: 'documents'"));
+  ok('THE STEP DOES NOT SAY MONTHLY ANY MORE',
+     !/monthly/i.test(step),
+     'a group can collect every month, every second week or every week since '
+     + 'the cadences shipped, and this step still said "Set the monthly '
+     + 'contribution" \u2014 to the committee and to every member: ' + step.slice(0, 200));
+  ok('and asks the question the form actually asks',
+     /how often/i.test(step), step.slice(0, 300));
+  ok('and a group that has set one still sees what it set',
+     /sched\.label/.test(step), 'the sentence the server builds');
+}
+
+console.log('\nand a set schedule does not read as no schedule');
+{
+  /* RUN, NOT READ. Grepping the source for the sentence passed against a
+     branch made unreachable — the string was still there. What matters is
+     which sentence comes out for which group. */
+  const vm4 = require('vm');
+  const ctx = { window: {}, document: { getElementById: () => null, querySelector: () => null },
+                location: { search: '' },
+                localStorage: { getItem: () => null, setItem() {} },
+                sessionStorage: { getItem: () => null, setItem() {} },
+                Utils: { rand: n => 'R ' + Number(n || 0).toFixed(2) }, encodeURIComponent };
+  vm4.createContext(ctx);
+  vm4.runInContext(read('js/portal-core.js'), ctx);
+  ctx._esc = v => String(v == null ? '' : v);
+
+  const empty = { data: [], arrears: [] };
+  const scheduled = ctx._svContributions(empty, [], 'G1', {
+    name: 'Ikhaya', setup: { schedule: { amount: 250, label: 'R 250,00 a month', from: 'December 2026' } } });
+  ok('NOTHING OWED YET IS NOT THE SAME AS NOTHING SCHEDULED',
+     /The first one opens on December 2026/.test(scheduled)
+     && !/No contributions have been scheduled yet/.test(scheduled),
+     '"No contributions have been scheduled yet" sat directly under '
+     + '"R 250,00 a month, due on day 1 of the month", because the first period '
+     + 'opens on the nightly run \u2014 two true sentences reading as a '
+     + 'contradiction, on the screen the committee lands on after setting it up');
+
+  const none = ctx._svContributions(empty, [], 'G1', { name: 'Ikhaya', setup: {} });
+  ok('and a group with no schedule still says there is none',
+     /No contributions have been scheduled yet/.test(none)
+     && !/The first one opens/.test(none), none.slice(-300));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

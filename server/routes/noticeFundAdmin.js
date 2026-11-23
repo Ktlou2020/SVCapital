@@ -20,6 +20,7 @@ const crypto = require('crypto');
 const pool   = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const noticeFund = require('../services/noticeFund');
+const noticeFundRate = require('../services/noticeFundRate');
 
 router.use(requireAuth, requireRole('admin', 'director', 'fund_manager'));
 
@@ -108,6 +109,27 @@ router.patch('/:id', async (req, res) => {
   } catch (err) {
     console.error('[notice-funds] status failed:', err.message);
     return res.status(500).json({ error: 'Could not change the fund.' });
+  }
+});
+
+/* WHAT THE MAIZE BOOK EARNED, as a rate this fund could declare.
+ *
+ * Read-only on purpose. It works the figure out and shows the arithmetic;
+ * declaring it is still the POST below, pressed by a person. The loads come
+ * from a spreadsheet somebody maintains by hand, and stl_facilities says in
+ * its own header that such a document must not move what a client is paid —
+ * so it does not, on its own. */
+router.get('/:id/facility-rate', async (req, res) => {
+  try {
+    const out = await noticeFundRate.facilityMonth(pool, {
+      facilityId: req.query && req.query.facility_id,
+      month: req.query && req.query.month,
+    });
+    if (out.error) return res.status(400).json(out);
+    return res.json({ data: out, facilities: await noticeFundRate.candidates(pool) });
+  } catch (err) {
+    console.error('[notice-funds] facility rate failed:', err.message);
+    return res.status(500).json({ error: 'Could not work out a rate from the facility.' });
   }
 });
 

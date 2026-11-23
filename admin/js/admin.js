@@ -22996,6 +22996,23 @@ async function loadNoticeFundAdmin() {
         </div>
       </div>
       <div class="text-muted" style="font-size:0.74rem;margin-top:6px">A projection can be amended for this month and months ahead, until the month&rsquo;s actual is posted; money already dealt keeps its price. Once a month ends, post what it actually earned: it replaces the projection in every price and is final.</div>
+      <!-- WHAT THE MAIZE BOOK EARNED, offered rather than applied. The
+           figure is worked out from the trading facility and capped at
+           1.5%; a person reads it and presses the button. The loads come
+           from a spreadsheet maintained by hand, which must not move a
+           client's money on its own. -->
+      <div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:rgba(237,165,255,0.07);border:1px solid rgba(237,165,255,0.25)">
+        <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+          <div><label class="text-muted" style="font-size:0.75rem;display:block">From the trading facility</label>
+            <input type="month" id="nfFacMonth-${_esc(f.id)}" class="input input--sm"></div>
+          <button class="btn btn--secondary btn--sm" onclick="readFacilityRate('${_esc(f.id)}')">
+            <i class="fa-solid fa-calculator"></i> Work out the rate</button>
+        </div>
+        <div id="nfFacOut-${_esc(f.id)}" style="font-size:0.78rem;margin-top:8px;color:var(--text-muted)">
+          Reads what our share of the maize loads came to that month, over the capital in the
+          facility, capped at 1.5%. Nothing is declared until you press a Declare or Post button.
+        </div>
+      </div>
       ${(f.rates || []).length ? `<table class="data-table" style="margin-top:8px;font-size:0.8rem;max-width:520px"><thead><tr>
           <th>Month</th><th class="text-right">Projected</th><th class="text-right">Actual</th><th class="text-right">Difference</th></tr></thead><tbody>
         ${f.rates.map(r => `<tr><td>${_esc(r.month)}</td>
@@ -23029,6 +23046,71 @@ async function loadNoticeFundAdmin() {
           <button class="btn btn--secondary btn--sm" onclick="createNoticeFund()">Create in draft</button>
         </div></details>
     </div></div>`;
+}
+
+/* Read the facility's month and show the arithmetic. It fills nothing in
+   by itself beyond the two rate boxes, and declares nothing: the Declare
+   and Post buttons are still the only things that write a rate. */
+async function readFacilityRate(fundId) {
+  const month = (document.getElementById('nfFacMonth-' + fundId) || {}).value || '';
+  const out = document.getElementById('nfFacOut-' + fundId);
+  if (!out) return;
+  if (!month) { out.innerHTML = '<span style="color:#f59e0b">Choose the month first.</span>'; return; }
+  out.textContent = 'Reading the facility…';
+  let res;
+  try {
+    res = await API._fetch('GET', `admin/notice-funds/${fundId}/facility-rate`, null, { month });
+  } catch (err) {
+    out.innerHTML = `<span style="color:#ef4444">${_esc(err.message || 'Could not read the facility.')}</span>`;
+    return;
+  }
+  const d = (res && res.data) || {};
+  const pct = v => `${Math.round(Number(v) * 1e6) / 1e4}%`;
+  /* Both figures, so a capped month is visible as a capped month rather
+     than as a quiet 1.5%. */
+  const capNote = d.cap_applied
+    ? `<div style="margin-top:4px;color:#f59e0b"><i class="fa-solid fa-scissors"></i>
+         The book made <strong>${pct(d.raw)}</strong>; capped to <strong>${pct(d.rate)}</strong>.</div>`
+    : `<div style="margin-top:4px">Under the 1.5% cap, so the rate is the figure itself.</div>`;
+  out.innerHTML = `
+    <div><strong>${_esc(d.facility && d.facility.name)}</strong> — ${_esc(d.month)}</div>
+    <div style="margin-top:4px">${Utils.rand(d.realised)} our share across ${d.loads} settled load${d.loads === 1 ? '' : 's'},
+      on ${Utils.rand(d.capital)} of capital.</div>
+    ${capNote}
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <strong style="font-size:1.05rem;color:var(--text)">${pct(d.rate)}</strong>
+      <button class="btn btn--secondary btn--sm" onclick="useFacilityRate('${_esc(fundId)}','projected',${Number(d.rate)},'${_esc(d.month)}')">Use as the projection</button>
+      <button class="btn btn--secondary btn--sm" onclick="useFacilityRate('${_esc(fundId)}','actual',${Number(d.rate)},'${_esc(d.month)}')">Use as the actual</button>
+    </div>
+    <div style="margin-top:6px;font-size:0.72rem">Basis: ${_esc(d.basis || '')}. Nothing has been declared.</div>`;
+}
+
+/* Fill the figure into the box it belongs in. Still not declared — the
+   person presses Declare or Post, having seen where the number came
+   from. */
+function useFacilityRate(fundId, which, rate, month) {
+  const pct = Math.round(Number(rate) * 1e6) / 1e4;
+  if (which === 'projected') {
+    const m = document.getElementById('nfMonth-' + fundId);
+    const r = document.getElementById('nfRate-' + fundId);
+    if (m) m.value = String(month).slice(0, 7);
+    if (r) { r.value = String(pct); r.focus(); }
+    Toast.show(`${pct}% filled in. Press Declare or amend to publish it.`, 'info');
+    return;
+  }
+  const sel = document.getElementById('nfActMonth-' + fundId);
+  const inp = document.getElementById('nfAct-' + fundId);
+  const want = String(month).slice(0, 7);
+  /* The actual can only be posted for a month that has ended and is
+     waiting for one, so say so rather than filling a box that is disabled. */
+  const can = sel && [...sel.options].some(o => String(o.value).slice(0, 7) === want);
+  if (!can) {
+    Toast.show(`${want} is not waiting for an actual. Post it once the month has ended.`, 'error');
+    return;
+  }
+  sel.value = [...sel.options].find(o => String(o.value).slice(0, 7) === want).value;
+  if (inp) { inp.disabled = false; inp.value = String(pct); inp.focus(); }
+  Toast.show(`${pct}% filled in. Press Post actual to make it final.`, 'info');
 }
 
 async function createNoticeFund() {

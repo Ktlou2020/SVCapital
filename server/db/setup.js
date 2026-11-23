@@ -6409,6 +6409,48 @@ async function autoSetup() {
       if (rowCount) console.log('✅ Announced the AML hold.');
     });
 
+    await step("41. Announce the notice-account rate from the maize book", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'admin','staff','fa-calculator', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['notice-fund-facility-rate-2026-11',
+         'The notice account’s monthly rate can be worked out from the trading facility',
+         'Pick a month and the console reads what our share of the maize loads came to in it, '
+         + 'over the capital in the facility, and shows the rate that follows — capped at 1.5%. '
+         + 'Below the cap, the rate is the figure itself; above it, you see both: what the book '
+         + 'actually made and the 1.5% it was cut to. One button fills it into the projection, '
+         + 'another into the actual. It declares nothing on its own: the Declare and Post buttons '
+         + 'are still the only things that publish a rate, because the loads come from a '
+         + 'spreadsheet maintained by hand and a hand-edited document must not move what a client '
+         + 'is paid. Declaring a rate by hand works exactly as it did.',
+         'Console → Groups (Stokvels) → the 30-day notice fund panel → “From the trading '
+         + 'facility”, beside the rate boxes.']);
+      if (rowCount) console.log('✅ Announced the facility-derived rate.');
+    });
+
+    await step("42. Announce the group screen changes", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'portal','everyone','fa-people-group', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['group-workspace-ux-2026-11',
+         'A member who is short can now top up and pay in one go, and the treasurer can chase',
+         'Paying a contribution with too little in your wallet used to end at “Not enough in '
+         + 'your wallet” and nothing else. It now says how much more is needed and opens the '
+         + 'top-up with that amount already filled in. The committee sees a Remind button beside '
+         + 'anyone behind, which opens WhatsApp with the group, the period and the amount in the '
+         + 'message — nothing is sent by us, and the number is shown to the committee only. '
+         + 'A group with no money in it yet says what it is waiting for instead of showing four '
+         + 'zeros. And the tour and the top-up prompt no longer appear on top of a group you '
+         + 'opened from a notification.',
+         'My Groups → open the group. Paying: the Money tab. Chasing: “Who is behind” on '
+         + 'the Overview or in Money, for the chairperson, secretary and treasurer.']);
+      if (rowCount) console.log('✅ Announced the group screen changes.');
+    });
+
     await step("40. Announce weekly and fortnightly contributions", async () => {
       const { rowCount } = await pool.query(
         `INSERT INTO feature_announcements

@@ -7254,6 +7254,12 @@ function _checkAutoStartTour() {
   // button manually if the topbar button is visible.
   if (window.__SVC_NATIVE__) return;
   if (localStorage.getItem('svc_tour_done')) return;
+  /* NOT OVER SOMETHING THEY ASKED FOR. A deep link from a notification has
+     already opened a group by this point, and a ten-step tour of the
+     personal portal thrown over it is the first thing a member sees after
+     being told their signature is needed. Not marked done either, so the
+     tour still happens the next time they arrive at the dashboard. */
+  if (!_svcOnDashboard()) return;
   const inv = PORTAL.investor;
   if (!inv || (!inv.first_name && !inv.last_name && !inv.email)) return;
   // Mark as done BEFORE starting so that closing the browser tab during the
@@ -7577,8 +7583,16 @@ async function checkFirstDepositPrompt() {
     }
   } catch (_) {}
 
-  // Show with a short delay so overview loads first
+  /* Shown after a short delay so the overview loads first — and ONLY if
+     the person is still looking at the overview when it fires. A deep link
+     from a notification opens a group inside those 2.5 seconds, and this
+     used to land on top of it: a prompt about their own wallet over a
+     screen about their group's money.
+
+     Nothing is recorded when it is skipped, so it is shown the next time
+     they are on the dashboard rather than silently spent. */
   setTimeout(() => {
+    if (!_svcOnDashboard()) return;
     const m = document.getElementById('depositPromptModal');
     if (m) { m.style.display = 'flex'; m.classList.add('open'); }
   }, 2500);
@@ -13552,6 +13566,61 @@ function _svToast(message, type) {
  * rather than assume it. Falls back to confirm() where there is none, so a
  * surface that loads core alone still asks before it acts — a dialog that
  * cannot be drawn must never become a silent yes. */
+/* IS THE PERSON STILL ON THE DASHBOARD?
+ *
+ * Two full-screen things fire on a timer after the portal boots: the
+ * ten-step tour, and the first-deposit prompt 2.5 seconds in. Neither
+ * asked where the person had got to in those 2.5 seconds — and
+ * svcInitDeepLinks runs BEFORE both, so a member who tapped "your group
+ * needs your approval" watched their group open and then had a prompt to
+ * fund their PERSONAL wallet thrown over it.
+ *
+ * The one question both should have asked. Unknown or absent view counts
+ * as the dashboard, so a surface without these views still behaves as it
+ * did. */
+/* CHASING THE MEMBER WHO IS BEHIND, the way a treasurer actually does it.
+ *
+ * The group knows who owes what and shows it in three places, and there was
+ * nothing to do about it on any of them. The platform deliberately sends
+ * ONE reminder per obligation and no more — see jobs/stokvelContributionCron:
+ * a platform that chases somebody daily about R500 is one they mute, and
+ * then the message that mattered is muted too. The rest is the treasurer's
+ * conversation.
+ *
+ * So this is not another notification. It is that conversation, opened for
+ * them on WhatsApp with the figures already in it, which is where a
+ * committee runs its business anyway. The number comes with the arrears for
+ * the committee alone; for anybody else there is nothing to render.
+ *
+ * The text is theirs to change before they send it — nothing is sent by us. */
+function _svChaseLink(a, groupName) {
+  const digits = String((a && a.phone) || '').replace(/\D/g, '');
+  if (!digits) return '';
+  /* 082… is a South African number typed the South African way; wa.me wants
+     it in full. Anything already carrying a country code is left alone. */
+  const wa = digits.length === 10 && digits[0] === '0' ? '27' + digits.slice(1)
+           : digits.length === 9 ? '27' + digits
+           : digits;
+  if (wa.length < 10) return '';
+  const msg = `Hi ${a.name || 'there'}, your contribution to ${groupName || 'the group'} `
+            + `of ${Utils.rand(a.owed)} is still outstanding`
+            + `${a.periods > 1 ? ` (${a.periods} periods)` : ''}. `
+            + 'You can pay it in the app.';
+  return `<a href="https://wa.me/${encodeURIComponent(wa)}?text=${encodeURIComponent(msg)}"
+      target="_blank" rel="noopener" class="btn btn--secondary btn--sm"
+      style="font-size:0.72rem;padding:3px 10px;white-space:nowrap"
+      aria-label="Remind ${_esc(a.name || 'this member')} on WhatsApp">
+      <i class="fa-brands fa-whatsapp"></i> Remind</a>`;
+}
+
+function _svcOnDashboard() {
+  try {
+    const el = document.querySelector('.view.active');
+    if (!el || !el.id) return true;
+    return el.id === 'view-overview';
+  } catch (_) { return true; }
+}
+
 async function _svConfirm(message, opts) {
   const o = opts || {};
   try {
@@ -13623,6 +13692,8 @@ function _svDict() {
       'hdr.myshare': 'Isabelo sakho',
       'hdr.back': 'I-akhawunti yami',
       'hdr.member': 'Ilungu',
+      'hdr.nomoney.ready': 'Ayikho imali esikhwameni okwamanje. Iqembu selilungele umnikelo walo wokuqala.',
+      'hdr.nomoney.setup': 'Ayikho imali esikhwameni okwamanje. Qedela izinyathelo ezingezansi bese iqembu liyaqala ukuqoqa.',
       'ap.title': 'Izimvume zabasayinayo',
       'ap.intro': 'Imali yeqembu iyahamba kuphela uma abasayinayo abanele beyivumile — iya e-akhawunti yasebhange noma ekutshalweni kwemali. Akekho ilungu elilodwa elingakwenza lodwa, futhi lonke iqembu liyabona ukuthi ubani uvume ini.',
       'ap.mustapprove': 'abasayinayo kumele bavume',
@@ -13714,6 +13785,8 @@ function _svDict() {
       'hdr.myshare': 'Karolo ya hao',
       'hdr.back': 'Akhaonto ya ka',
       'hdr.member': 'Setho',
+      'hdr.nomoney.ready': 'Ha ho chelete ka sekgwameng hajoale. Sehlopha se se loketse monehelo wa sona wa pele.',
+      'hdr.nomoney.setup': 'Ha ho chelete ka sekgwameng hajoale. Qeta mehato e ka tlase mme sehlopha se ka qala ho bokella.',
       'ap.title': 'Ditumello tsa basaeni',
       'ap.intro': 'Tjhelete ya sehlopha e tsamaya feela ha basaeni ba lekaneng ba e dumeletse — e ya akhaontong ya banka kapa letseteng. Ha ho setho se le seng se ka e etsa se le seng, mme sehlopha kaofela se bona hore na ke mang ya dumetseng eng.',
       'ap.mustapprove': 'basaeni ba tlameha ho dumela',
@@ -14060,8 +14133,21 @@ async function _svRenderHub(id, tab, opts) {
       API._fetch('GET', `stokvels/${id}/payouts`),
     ]);
   } catch (err) {
-    if (body) body.innerHTML =
-      `<div class="empty-state"><p>Could not load this group. ${_esc(err.message || '')}</p></div>`;
+    /* A RATE LIMIT IS NOT A BROKEN GROUP. "Could not load this group. Too
+       many requests — please try again in 15 minutes." reads, to the
+       member it happens to, as being locked out of their own savings: the
+       limit is counted per connection, so the one who trips it is often
+       not the one who caused it. Said as the temporary, not-your-fault
+       thing it is, with the group's name kept off the apology. */
+    const busy = err && err.status === 429;
+    if (body) body.innerHTML = busy
+      ? `<div class="empty-state">
+           <p><strong>Too busy to load this just now.</strong></p>
+           <p style="font-size:0.84rem;color:var(--text-muted)">Nothing is wrong with your group
+              and nothing has been lost. This happens when a lot of requests come from one
+              connection at once. Try again in a few minutes.</p>
+         </div>`
+      : `<div class="empty-state"><p>Could not load this group. ${_esc(err.message || '')}</p></div>`;
     return;
   }
   _svCache(id, { group, members, contributions, requests, invitations, shareData, payoutData });
@@ -14162,7 +14248,7 @@ function _svWsHeader(g, shareRes, id) {
   const meta = (typeof SA_TYPE_META !== 'undefined' && SA_TYPE_META.stokvel) || { bg: '#064e1e', icon: 'fa-people-group' };
   const d = (shareRes && shareRes.data) || null;
   const stat = (label, value, colour) => `<div>
-      <div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">${label}</div>
+      <div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">${_esc(label)}</div>
       <div style="font-size:1.3rem;font-weight:800;color:${colour || '#fff'}">${value}</div>
     </div>`;
 
@@ -14190,13 +14276,36 @@ function _svWsHeader(g, shareRes, id) {
         <i class="fa-solid fa-arrow-left"></i> ${_esc(_svT('hdr.back', 'My account'))}
       </button>
     </div>
-    <div style="display:flex;gap:24px;margin-top:16px;flex-wrap:wrap">
-      ${stat(_esc(_svT('hdr.pot', 'The pot')), Utils.rand(d ? d.net_assets : g.wallet_balance))}
-      ${stat(_esc(_svT('hdr.wallet', 'In the wallet')), Utils.rand(d ? d.wallet : g.wallet_balance))}
-      ${stat(_esc(_svT('hdr.invested', 'Invested')), Utils.rand(d ? d.invested : g.total_invested))}
-      ${d ? stat(_esc(_svT('hdr.myshare', 'Your share')), Utils.rand(d.my_share), '#eda5ff') : ''}
-    </div>
+    ${_svHeaderFigures(g, d, stat)}
   </div>`;
+}
+
+/* FOUR ZEROS SAY NOTHING. A group created a minute ago has no pot, nothing
+   in the wallet, nothing invested and no share, and the banner reported all
+   four as R 0,00 — the largest, boldest thing on the screen, saying nothing,
+   above a checklist doing the actual work of getting the group going.
+ *
+ * So until there is money, the banner carries the state instead: what the
+ * group is waiting on. Once a cent has moved it is the figures, for good —
+ * a banner that keeps changing shape is worse than one that starts plain. */
+function _svHeaderFigures(g, d, stat) {
+  const pot = Number((d && d.net_assets) != null ? d.net_assets : g.wallet_balance) || 0;
+  const invested = Number((d && d.invested) != null ? d.invested : g.total_invested) || 0;
+  if (pot <= 0 && invested <= 0) {
+    const verified = String(g.kyc_status || '') === 'approved';
+    const line = verified
+      ? _svT('hdr.nomoney.ready', 'Nothing in the pot yet. The group is ready for its first contribution.')
+      : _svT('hdr.nomoney.setup', 'Nothing in the pot yet. Finish the steps below and the group can start collecting.');
+    return `<div style="margin-top:16px;font-size:0.88rem;color:rgba(255,255,255,0.92);max-width:520px">
+      <i class="fa-solid fa-seedling" style="margin-right:6px"></i>${_esc(line)}
+    </div>`;
+  }
+  return `<div style="display:flex;gap:24px;margin-top:16px;flex-wrap:wrap">
+      ${stat(_esc(_svT('hdr.pot', 'The pot')), Utils.rand(pot))}
+      ${stat(_esc(_svT('hdr.wallet', 'In the wallet')), Utils.rand(d ? d.wallet : g.wallet_balance))}
+      ${stat(_esc(_svT('hdr.invested', 'Invested')), Utils.rand(invested))}
+      ${d ? stat(_esc(_svT('hdr.myshare', 'Your share')), Utils.rand(d.my_share), '#eda5ff') : ''}
+    </div>`;
 }
 
 /* The sections, with a count on the two that can be waiting on somebody. */
@@ -14379,7 +14488,7 @@ function _svSetupSteps(id, ctx, d) {
   const pot     = d ? Number(d.net_assets) : Number(g.wallet_balance) || 0;
   const committee = !!g.i_opened_it || ['chairperson', 'secretary', 'treasurer'].includes(g.my_role);
   const btn = (label, onclick, icon) => `<button class="btn btn--secondary btn--sm" onclick="${onclick}">
-      ${icon ? `<i class="fa-solid ${icon}"></i> ` : ''}${label}</button>`;
+      ${icon ? `<i class="fa-solid ${icon}"></i> ` : ''}${_esc(label)}</button>`;
   const kyc = String(setup.verification || g.kyc_status || '');
   const sched = setup.schedule || null;
   const tpl = (window.__SVREL || {}).templates;
@@ -14409,12 +14518,16 @@ function _svSetupSteps(id, ctx, d) {
       action: g.i_am_nominated
         ? btn('Confirm I will sign', `svWorkspaceTab('${gid}','approvals')`, 'fa-signature')
         : (committee && ms.has_mandate ? btn('Ask somebody to sign', `svWorkspaceTab('${gid}','members')`, 'fa-user-plus') : '') },
+    /* NOT "monthly". A group can collect every month, every second week or
+       every week, and the step that sets it said monthly — in the
+       chairperson's checklist and in every member's. The sentence under it
+       is the one the server builds, which already says which. */
     { key: 'schedule', core: false, done: !!sched,
-      title: 'Set the monthly contribution',
+      title: 'Set the contribution',
       note: sched
         ? `${_esc(sched.label || `${Utils.rand(sched.amount)} each`)}.`
         : committee
-          ? 'The amount each member pays and the day of the month it is due. Every member is told when you set it or change it.'
+          ? 'What each member pays, how often, and the day it is due. Every member is told when you set it or change it.'
           : 'The chairperson, secretary or treasurer sets this. You will be told what it is.',
       action: committee ? btn('Set the contribution', `raiseStokvelSchedule('${gid}')`, 'fa-calendar-check') : '' },
     { key: 'documents', core: false, done: kyc === 'approved',
@@ -14479,7 +14592,7 @@ function _svOverview(id, ctx) {
          onmouseout="this.style.transform='none'">
       <div style="display:flex;align-items:center;gap:7px;font-size:0.7rem;
                   text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">
-        <i class="fa-solid ${icon}"></i> ${label}
+        <i class="fa-solid ${icon}"></i> ${_esc(label)}
       </div>
       <div style="font-size:1.4rem;font-weight:800;margin:6px 0 3px;color:${colour || 'inherit'}">${value}</div>
       <div style="font-size:0.77rem;color:var(--text-muted);line-height:1.45">${note}</div>
@@ -14590,6 +14703,7 @@ function _svOverview(id, ctx) {
         <td>${_esc(a.name)}</td>
         <td class="text-right" style="font-weight:700">${Utils.rand(a.owed)}</td>
         <td class="text-right" style="color:var(--text-muted)">${a.periods} period${a.periods === 1 ? '' : 's'}</td>
+        <td class="text-right">${_svChaseLink(a, ctx.g && ctx.g.name)}</td>
       </tr>`).join('')}
       </tbody></table>` : ''}
 
@@ -14801,7 +14915,7 @@ async function _svInvestments(id) {
     groups[groups.length - 1].rows.push(r);
   }
   const tile = (label, value, hint) => `<div style="min-width:140px">
-      <div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase">${label}</div>
+      <div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase">${_esc(label)}</div>
       <div style="font-size:1.3rem;font-weight:800">${value}</div>
       ${hint ? `<div style="font-size:0.7rem;color:var(--text-muted)">${hint}</div>` : ''}</div>`;
 
@@ -14865,7 +14979,12 @@ async function _svDocuments(id) {
   const ver  = String((res && res.verification) || 'pending');
   const chip = st => {
     const m = { approved: ['#22c55e', 'Approved'], pending: ['#f59e0b', 'Being checked'],
-                rejected: ['#ef4444', 'Not accepted'], missing: ['var(--text-muted)', 'Not sent'] }[st] || ['var(--text-muted)', st];
+                rejected: ['#ef4444', 'Not accepted'], missing: ['var(--text-muted)', 'Not sent'] }[st]
+             /* A status the map does not know goes to the screen as it came.
+                They are enum-ish today, but "as it came" is how a value from
+                the database ends up in innerHTML, and escaping it costs
+                nothing. */
+             || ['var(--text-muted)', _esc(st)];
     return `<span style="font-size:0.72rem;font-weight:700;border:1px solid ${m[0]};color:${m[0]};border-radius:999px;padding:1px 8px;white-space:nowrap">${m[1]}</span>`;
   };
   const head = ver === 'approved'
@@ -15286,12 +15405,13 @@ function _svContributions(res, mine, gid, g) {
 
   const arrearsBlock = arrears.length
     ? `<table class="data-table" style="font-size:0.8rem"><thead><tr>
-         <th>Member</th><th class="text-right">Owing</th><th class="text-right">Periods</th>
+         <th>Member</th><th class="text-right">Owing</th><th class="text-right">Periods</th><th></th>
        </tr></thead><tbody>
        ${arrears.map(a => `<tr>
          <td>${_esc(a.name)}</td>
          <td class="text-right" style="font-weight:700">${Utils.rand(a.owed)}</td>
          <td class="text-right">${a.periods}</td>
+         <td class="text-right">${_svChaseLink(a, g && g.name)}</td>
        </tr>`).join('')}
        </tbody></table>`
     : `<div style="font-size:0.82rem;color:var(--text-muted)">Nobody is behind.</div>`;
@@ -15338,7 +15458,16 @@ function _svContributions(res, mine, gid, g) {
     ${autopayBlock}
     <div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Who is behind</div>
     ${arrearsBlock}
-    ${rows.length ? '' : `<div style="font-size:0.82rem;color:var(--text-muted);margin-top:8px">No contributions have been scheduled yet.</div>`}`;
+    ${rows.length ? '' : `<div style="font-size:0.82rem;color:var(--text-muted);margin-top:8px">${
+      /* "No contributions have been scheduled yet" sat directly under
+         "R 250,00 a month, due on day 1 of the month", because the first
+         period has not been opened — that happens on the nightly run. Two
+         true sentences that read as a contradiction, on the screen the
+         committee lands on straight after setting it up. */
+      g && g.setup && g.setup.schedule
+        ? _esc(`Nothing is owed yet. The first one opens on ${
+            String((g.setup.schedule.from) || '').trim() || 'the day it starts'}.`)
+        : 'No contributions have been scheduled yet.'}</div>`}`;
 }
 
 /* ─── The contribution schedule ──────────────────────────────────
@@ -16236,6 +16365,34 @@ async function submitStokvelFine(groupId) {
   await _svRenderHub(groupId, 'members');
 }
 
+/* Money a member is short, and the way out of it.
+ *
+ * THE DEAD END THIS REPLACES. A member behind on her contribution saw
+ * "You owe R500,00 · Overdue · Pay R 500,00", tapped it, confirmed, and
+ * got "Not enough in your wallet. Available: R60,00" — and nothing else.
+ * No amount to aim at, no way forward. To fix it she had to work out the
+ * difference herself, find the wallet, top up, come back, find her group,
+ * find Money, and tap Pay again. It is the commonest action in a stokvel,
+ * by the member most likely to need it, ending in a sentence and a wall.
+ *
+ * openTopUpModal already takes a shortfall and pre-fills itself — it was
+ * built for exactly this on the invest modal. The contribution just never
+ * asked it. */
+async function _svOfferTopUp(want, wallet, due) {
+  const short = Math.round(Math.max(0, want - wallet) * 100) / 100;
+  const ok = await _svConfirm(
+    `Your wallet holds ${Utils.rand(wallet)}, so you are ${Utils.rand(short)} short. `
+    + 'Top up and the contribution is one tap away.',
+    { title: `Pay ${due}?`,
+      confirmLabel: `Top up ${Utils.rand(short)}`, confirmClass: 'btn--primary' });
+  if (!ok) return false;
+  if (typeof openTopUpModal === 'function') { openTopUpModal(null, null, short); return true; }
+  /* No top-up modal on this surface: the wallet screen is still better
+     than an error with nowhere to go. */
+  if (typeof navigate === 'function') navigate('wallet', document.querySelector('[data-view="wallet"]'));
+  return true;
+}
+
 async function payStokvelContribution(groupId, contributionId, amount) {
   /* The amount is in the question. "Pay this contribution from your
      wallet?" asked a member to agree to a figure the dialog did not show
@@ -16243,6 +16400,16 @@ async function payStokvelContribution(groupId, contributionId, amount) {
      behind it. */
   const due = Number(amount) > 0 && typeof Utils !== 'undefined' && Utils.rand
     ? Utils.rand(Number(amount)) : null;
+
+  /* ASKED BEFORE SHE CONFIRMS, not after. The wallet figure is already on
+     screen; there is no reason to take her through a confirmation and a
+     round trip to tell her what we could have said first. */
+  const want   = Number(amount) || 0;
+  const wallet = Number((PORTAL.investor || {}).wallet_balance) || 0;
+  if (want > 0 && due && wallet + 0.0001 < want) {
+    await _svOfferTopUp(want, wallet, due);
+    return;
+  }
   if (!await _svConfirm(
       due ? `${due} comes out of your own wallet and goes into the group's.`
           : 'It comes out of your own wallet and goes into the group\u2019s.',
@@ -16254,7 +16421,21 @@ async function payStokvelContribution(groupId, contributionId, amount) {
     await _svRenderHub(groupId);
     if (typeof loadPortalData === 'function') loadPortalData();
   } catch (err) {
-    _svToast(err.message || 'That payment did not go through.', 'error');
+    /* AND IF THE SERVER STILL SAYS SHORT — the wallet figure on screen can
+       be a minute old, and something else may have spent it in between.
+       Same offer rather than the same wall. */
+    const msg = String((err && err.message) || '');
+    if (/not enough/i.test(msg) && want > 0 && due) {
+      const avail = (() => {
+        const m = msg.match(/R\s?([\d  ,.]+)/);
+        if (!m) return wallet;
+        const n = parseFloat(m[1].replace(/[  ]/g, '').replace(',', '.'));
+        return isNaN(n) ? wallet : n;
+      })();
+      await _svOfferTopUp(want, avail, due);
+      return;
+    }
+    _svToast(msg || 'That payment did not go through.', 'error');
   }
 }
 
