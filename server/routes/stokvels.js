@@ -982,6 +982,16 @@ router.get('/:id/withdrawal-requests', async (req, res) => {
         exit_investor_id: r.exit_investor_id, exit_name: r.exit_name,
         payout_id: r.payout_id, payout_label: r.payout_label,
         change_summary: (mandateChange.changeOf(r) || {}).summary || null,
+        /* WHY THIS PERSON MAY NOT VOTE ON THIS ONE, in the words the vote
+           route would refuse them with. There is exactly one such case —
+           a signatory voting on their own removal — and the form that
+           raises the change says so in its own intro. The server enforced
+           it and the screen still drew Approve and Reject, so the person
+           being removed pressed a button and got an error about a rule the
+           product had already told her. One definition, mandateChange
+           .voteRefusal, answering both doors rather than the client
+           growing a second opinion about who may vote. */
+        vote_refusal: mandateChange.voteRefusal(r, me) || null,
         proposal_id: r.proposal_id || null,
         lock_warning: (r.kind === 'investment' && r.status === 'pending')
           ? lockDateWarning(group.withdrawal_date,

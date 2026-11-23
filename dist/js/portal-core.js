@@ -16618,10 +16618,15 @@ function _svWithdrawals(res, meIsSignatory, gid, ctx) {
           <div style="font-size:0.7rem;color:var(--text-muted)">${_esc(_svT('status.' + r.status, r.status))}</div>
         </div>
       </div>
-      ${r.status === 'pending' && meIsSignatory ? `
+      ${r.status === 'pending' && meIsSignatory && !r.vote_refusal ? `
         <div style="display:flex;gap:8px;margin-top:10px">
           <button class="btn btn--primary btn--sm" onclick="voteStokvelRequest('${_esc(gid)}','${_esc(r.id)}','approve')">${_esc(_svT('btn.approve', 'Approve'))}</button>
           <button class="btn btn--ghost btn--sm" onclick="voteStokvelRequest('${_esc(gid)}','${_esc(r.id)}','reject')">${_esc(_svT('btn.reject', 'Reject'))}</button>
+        </div>` : ''}
+      ${r.status === 'pending' && meIsSignatory && r.vote_refusal ? `
+        <div style="font-size:0.76rem;color:var(--text-muted);margin-top:10px;
+                    border-left:2px solid var(--border);padding-left:9px">
+          ${_esc(r.vote_refusal)}
         </div>` : ''}
       ${r.kind === 'payout' && _svAuthorityReady(r) ? `
         <div style="margin-top:10px">

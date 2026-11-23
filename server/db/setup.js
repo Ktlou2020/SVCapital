@@ -6511,6 +6511,24 @@ async function autoSetup() {
       if (rowCount) console.log('✅ Announced the facility-derived rate.');
     });
 
+    await step("50. Announce that a signatory is not offered a vote on their own removal", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'portal','everyone','fa-user-shield', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['stokvel-vote-refusal-2026-11',
+         'A signatory being removed is no longer shown a vote they cannot cast',
+         'A group can change who signs for its money, and a signatory cannot vote on their own '
+         + 'removal — the other signatories decide it. The rule was enforced and the form that '
+         + 'raises the change said so, but the approvals screen still showed the person being '
+         + 'removed Approve and Reject. They pressed one and got an error about a rule the app '
+         + 'had already told them. The request now says plainly that it is not theirs to vote '
+         + 'on, and offers no buttons; everybody else votes exactly as before.',
+         'My Groups → open the group → Decisions, on a request to change the mandate.']);
+      if (rowCount) console.log('✅ Announced the vote-refusal fix.');
+    });
+
     await step("49. Announce the Investments tab and that a group can be closed", async () => {
       const { rowCount } = await pool.query(
         `INSERT INTO feature_announcements

@@ -179,6 +179,39 @@ const db = new Pool({
     const self = await vote(rm.body.data.id, 'SIG2', 'reject');
     ok('the signatory being removed cannot vote it down',
        self.status === 403 && /own removal/i.test(self.body.error || ''), self.body.error);
+
+    /* ── AND THE SCREEN HAS TO KNOW IT ──────────────────────────────
+     *
+     * Driven in a browser: the server refused her, the form that raises
+     * the change says "a signatory cannot vote on their own removal" in
+     * its own intro — and the approvals panel still drew her Approve and
+     * Reject. She pressed one and got an error about a rule the product
+     * had already told her twice.
+     *
+     * The payload carries the refusal itself, in the words the vote route
+     * would use, so the screen never grows a second opinion about who may
+     * vote. */
+    {
+      const hers = await call('GET', `/api/stokvels/${G}/withdrawal-requests`, 'SIG2');
+      const row = ((hers.body.data) || []).find(x => x.id === rm.body.data.id);
+      ok('SHE IS TOLD, ON THE ROW, THAT IT IS NOT HERS TO VOTE ON',
+         row && /own removal/i.test(row.vote_refusal || ''),
+         'the screen cannot hide a button for a reason it has not been '
+         + 'given: ' + JSON.stringify(row && row.vote_refusal));
+
+      const theirs = await call('GET', `/api/stokvels/${G}/withdrawal-requests`, 'CHAIR');
+      const same = ((theirs.body.data) || []).find(x => x.id === rm.body.data.id);
+      ok('AND NOBODY ELSE IS STOPPED BY HER REFUSAL',
+         same && !same.vote_refusal,
+         'it is about the viewer, not about the request: '
+         + JSON.stringify(same && same.vote_refusal));
+
+      const other = await call('GET', `/api/stokvels/${G}/withdrawal-requests`, 'SIG1');
+      const anyBlocked = ((other.body.data) || []).filter(x => x.vote_refusal);
+      ok('and no other kind of request blocks anybody',
+         anyBlocked.every(x => x.kind === 'mandate'),
+         'there is exactly one case: ' + JSON.stringify(anyBlocked.map(x => x.kind)));
+    }
     await vote(rm.body.data.id, 'CHAIR');
     await vote(rm.body.data.id, 'SIG1');
     ok('the others carry it without them', (await isSig('SIG2')) === false);

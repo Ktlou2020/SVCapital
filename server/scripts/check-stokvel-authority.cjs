@@ -141,6 +141,25 @@ console.log('\nand an approved authority offers the thing it authorises');
        + 'all says the money has not moved when it has');
   }
 
+  /* AND A ROW THE VIEWER MAY NOT VOTE ON OFFERS NO VOTE. The only case is
+     a signatory's own removal: the server refuses it, the form that raises
+     the change says so, and the panel drew the buttons anyway. */
+  const blocked = render([REQ({ kind: 'mandate', status: 'pending',
+    change_summary: 'remove Palesa Moloi as a signatory',
+    vote_refusal: 'You cannot vote on your own removal as a signatory.' })]);
+  ok('A ROW THE VIEWER MAY NOT VOTE ON OFFERS NO BUTTONS',
+     !/voteStokvelRequest\('SA-1','SWR-1','approve'\)/.test(blocked)
+     && !/voteStokvelRequest\('SA-1','SWR-1','reject'\)/.test(blocked),
+     'pressing a button to be told a rule the product has already told you '
+     + 'twice: ' + blocked.slice(0, 240));
+  ok('and says why instead',
+     /own removal/.test(blocked), blocked.slice(0, 300));
+  const notBlocked = render([REQ({ kind: 'mandate', status: 'pending',
+    change_summary: 'remove Palesa Moloi as a signatory' })]);
+  ok('but everybody else still votes',
+     /voteStokvelRequest\('SA-1','SWR-1','approve'\)/.test(notBlocked),
+     'the refusal is about the viewer, not the request: ' + notBlocked.slice(0, 200));
+
   /* The vote itself is a different gate and must NOT follow. */
   const approved = render([REQ({ status: 'approved', satisfied: true })]);
   ok('an approved request no longer asks for a vote',

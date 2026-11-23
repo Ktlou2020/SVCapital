@@ -306,8 +306,31 @@ console.log('\nand a notification opens the thing it is about');
 
 console.log('\nand voting is offered only to signatories');
 {
-  ok('the buttons are behind the signatory flag',
-     /meIsSignatory \?/.test(CORE));
+  /* DRIVEN, not matched. This asserted the spelling `meIsSignatory ?` and
+     broke the moment the gate grew a second condition — a signatory being
+     removed is now offered no vote on it either. A pattern that pins how a
+     line is written says nothing about what it does: it fails on a
+     harmless rewrite and passes on a broken one. */
+  {
+    const vm = require('vm');
+    const ctx = { window: {}, document: { getElementById: () => null }, location: { search: '' },
+                  localStorage: { getItem: () => null, setItem() {} },
+                  sessionStorage: { getItem: () => null, setItem() {} },
+                  Utils: { rand: n => 'R ' + Number(n || 0).toFixed(2) },
+                  encodeURIComponent, console };
+    vm.createContext(ctx);
+    vm.runInContext(read('js/portal-core.js'), ctx);
+    ctx._esc = v => String(v == null ? '' : v);
+    const row = { id: 'SWR-1', kind: 'withdrawal', amount: 2000, status: 'pending',
+                  approvals: 0, required: 2, satisfied: false, votes: [], bank_name: 'FNB' };
+    const draw = mine => ctx._svWithdrawals({ data: [row] }, mine, 'SA-1',
+      { g: { stokvel_quorum: 2 }, signatories: 2 });
+    ok('a signatory is offered the vote',
+       /voteStokvelRequest\('SA-1','SWR-1','approve'\)/.test(draw(true)));
+    ok('AND SOMEBODY WHO IS NOT A SIGNATORY IS NOT',
+       !/voteStokvelRequest\(/.test(draw(false)),
+       'the mandate is who may decide, not who may look: ' + draw(false).slice(0, 200));
+  }
   ok('but the list itself is not',
      /_svWithdrawals\(requests, meIsSignatory/.test(CORE)
      && !/meIsSignatory[\s\S]{0,80}return ''/.test(CORE),
