@@ -170,6 +170,39 @@ console.log('\nand it is listed as live, not as history');
      empty.includes('Nothing awaiting approval'),
      'the empty state still has to exist');
 
+  /* THE FIFTH DEAD BUTTON, and the one that got there the other way round.
+     _svDissolveReady was the single place that knew an authority reads
+     'approved' — and it is handed `open`, which filtered on 'pending'. So
+     it searched a list of pending requests for an approved one, found
+     nothing, and "Close the group" could never render either. The same
+     mismatch, from the opposite side. */
+  const closable = P._svWithdrawals(
+    { data: [REQ({ id: 'SWR-D', kind: 'dissolve', status: 'approved', satisfied: true, amount: 0 })] },
+    true, 'SA-1', { g: { stokvel_quorum: 2, wallet_balance: 0 }, signatories: 2, canPropose: true });
+  ok('AN APPROVED WIND-UP OFFERS “Close the group”',
+     closable.includes('Close the group')
+     && /dissolveStokvel\('SA-1','SWR-D'\)/.test(closable),
+     'the one panel that knew about "approved" was fed the pending list: '
+     + closable.slice(0, 240));
+
+  const stillHolding = P._svWithdrawals(
+    { data: [REQ({ id: 'SWR-D', kind: 'dissolve', status: 'approved', satisfied: true, amount: 0 })] },
+    true, 'SA-1', { g: { stokvel_quorum: 2, wallet_balance: 9000 }, signatories: 2, canPropose: true });
+  ok('and a group that still holds money is told to pay it out first',
+     !stillHolding.includes('Close the group')
+     && /Pay the\s+members out first/.test(stillHolding),
+     'closing a group does not split the pot by share, so closing one with '
+     + 'money in it would strand it: ' + stillHolding.slice(0, 240));
+
+  const notADissolve = P._svWithdrawals(
+    { data: [REQ({ id: 'SWR-W', kind: 'withdrawal', status: 'approved', satisfied: true })] },
+    true, 'SA-1', { g: { stokvel_quorum: 2, wallet_balance: 0 }, signatories: 2, canPropose: true });
+  ok('AND NO OTHER APPROVAL CLOSES A GROUP',
+     !notADissolve.includes('Close the group'),
+     'ending every membership is the one decision that must be asked for by '
+     + 'name — an approval to move R 2 000 is not an approval to close the '
+     + 'group: ' + notADissolve.slice(0, 240));
+
   /* The badge on the Decisions tab counts what there is to do. */
   const badge = html => (String(html).match(/aria-label="(\d+) waiting"/) || [])[1];
   const tabs = rows => P._svWsTabs('SA-1', 'overview',
