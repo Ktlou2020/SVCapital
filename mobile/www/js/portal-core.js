@@ -13028,6 +13028,13 @@ async function svcOpenDeepLink(href) {
 
   const stokvel = params.get('stokvel');
   const view    = params.get('view');
+  /* WHICH SECTION OF THE GROUP. A notification that says "yours is one of
+     the approvals it needs" used to land the signatory on the Overview,
+     with the decision two taps away. Checked against the sections that
+     exist rather than passed through: a stale or mistyped link opens the
+     group at its Overview instead of nowhere. */
+  const wantTab = params.get('tab');
+  const tab     = _svKnownSection(wantTab) ? wantTab : null;
   if (!stokvel && !view) return false;
 
   try {
@@ -13056,7 +13063,7 @@ async function svcOpenDeepLink(href) {
     _svToast('That group is not one of yours.', 'error');
     return true;
   }
-  openStokvelHub(stokvel);
+  openStokvelHub(stokvel, tab);
   return true;
 }
 
@@ -13134,7 +13141,8 @@ async function acceptStokvelInvite(inviteId) {
 }
 
 async function declineStokvelInvite(inviteId) {
-  if (!confirm('Decline this invitation? Whoever invited you would have to send another.')) return;
+  if (!await _svConfirm('Whoever invited you would have to send another.',
+      { title: 'Decline this invitation?', confirmLabel: 'Decline' })) return;
   try {
     await API._fetch('POST', `stokvels/invites/${inviteId}/decline`, {});
     _svToast('Declined.', 'success');
@@ -13240,7 +13248,8 @@ async function submitStokvelInvite(groupId) {
 }
 
 async function revokeStokvelInvite(groupId, inviteId) {
-  if (!confirm('Withdraw this invitation?')) return;
+  if (!await _svConfirm('They will not be able to accept it.',
+      { title: 'Withdraw this invitation?', confirmLabel: 'Withdraw' })) return;
   try {
     await API._fetch('DELETE', `stokvels/${groupId}/invites/${inviteId}`);
     _svToast('Withdrawn.', 'success');
@@ -13486,14 +13495,26 @@ function _svWhoAmINote() {
    openStokvelHub keeps its name because the sub-account cards, the deep
    links and every notification already point at it. They all now land in
    the workspace, and there is no second place showing the same group. */
-async function openStokvelHub(id) {
+async function openStokvelHub(id, section) {
   if (typeof Modal !== 'undefined') Modal.close('saDetailModal');
   /* A fresh switch always reloads: the member may have been away for days. */
   window.__SVWS = null;
   if (typeof navigate === 'function') {
     navigate('stokvel', document.querySelector('[data-view="stokvel"]'));
   }
-  await _svRenderHub(id);
+  /* OPENED AT A SECTION when the caller names one — a notification about an
+     approval opens the approvals, not the Overview with the approval
+     somewhere behind a tab. An unknown key is ignored rather than refused:
+     landing on the Overview is a worse answer than landing nowhere, and
+     only by a little. */
+  const at = _svKnownSection(section) ? section : undefined;
+  if (at && typeof window !== 'undefined') {
+    /* Reveal the tab that holds it, the same way svWorkspaceTab does, so a
+       group that has not grown into that tab still shows it on arrival. */
+    window.__svRevealed = window.__svRevealed || {};
+    window.__svRevealed[_svGroupOf(at)] = true;
+  }
+  await _svRenderHub(id, at);
 }
 
 /* A message to the member, from the group screens. They called
@@ -13513,6 +13534,40 @@ function _svToast(message, type) {
     if (typeof T[kind] === 'function') return T[kind](message);
     if (typeof T.show === 'function') return T.show(message, kind);
   } catch (_) { /* a notice that cannot be shown must never undo what happened */ }
+}
+
+/* Asking a member to confirm, in the portal's own dialog.
+ *
+ * THE GROUP SCREENS USED THE BROWSER'S confirm(). Twelve of them, including
+ * every one that moves money — paying a contribution, running a payout,
+ * settling an exit, closing the group. The rest of the portal has used
+ * Confirm.ask since it was written, so at the exact moment a member is
+ * asked to part with money the app handed them an operating-system dialog
+ * headed with the host name, in the system font, with OK and Cancel. It
+ * also blocks the page thread, and on a phone it is the least trustworthy
+ * thing on the screen.
+ *
+ * One function, as _svToast is, and for the same reason: Confirm lives in
+ * each bundle's portal.js rather than in core, so core must ask for it
+ * rather than assume it. Falls back to confirm() where there is none, so a
+ * surface that loads core alone still asks before it acts — a dialog that
+ * cannot be drawn must never become a silent yes. */
+async function _svConfirm(message, opts) {
+  const o = opts || {};
+  try {
+    const C = typeof Confirm !== 'undefined' ? Confirm
+            : (typeof window !== 'undefined' ? window.Confirm : null);
+    if (C && typeof C.ask === 'function') {
+      return !!(await C.ask(message, {
+        title: o.title || 'Are you sure?',
+        confirmLabel: o.confirmLabel || 'Confirm',
+        confirmClass: o.confirmClass || 'btn--danger',
+        cancelLabel: o.cancelLabel || 'Cancel',
+      }));
+    }
+  } catch (_) { /* fall through to the browser's own */ }
+  try { return !!confirm(o.title ? `${o.title}\n\n${message}` : message); }
+  catch (_) { return false; }
 }
 
 /* ─── The group workspace in isiZulu and Sesotho ──────────────────────
@@ -13872,6 +13927,19 @@ function _svTabList() {
     out.concat(g.sections.map(k => [k, s[k][0], s[k][1]])), []);
 }
 
+/* IS THIS A SECTION THAT EXISTS? Used by the deep link and by
+   openStokvelHub to decide whether a ?tab= is worth honouring.
+ *
+ * Both of them first asked _svTabList().includes(key) — and that function
+ * returns [key, label, icon] TRIPLES, not keys, so the test was false for
+ * every section there is and every notification landed on the Overview
+ * anyway. The fix looked right in the source and did nothing; it took
+ * opening the link in a browser to see it. One predicate now, reading the
+ * section map directly, so there is nothing to get wrong twice. */
+function _svKnownSection(key) {
+  return !!key && Object.prototype.hasOwnProperty.call(_svSections(), key);
+}
+
 /* Which tab a section lives under. */
 function _svGroupOf(section) {
   const g = _svTabGroups().find(x => x.sections.includes(section));
@@ -14049,10 +14117,25 @@ async function _svRenderHub(id, tab, opts) {
        is, and a heading repeating it is noise. Several sections stacked need
        their names, and an anchor each so arriving at a section scrolls to
        it rather than to the top of the tab. */
+    /* A SECTION MAY HAVE A BETTER NAME THAN ITS TAB'S. "Approvals" names
+       the tab; "Signatory approvals" names the section — and for a member
+       reading isiZulu or Sesotho that heading is the only place the word
+       for signatory appears at all, because the sentence under it is in
+       English. The section builders used to carry these titles themselves,
+       which is what drew them twice; the name moved here with them.
+
+       Written as calls rather than a table of key strings so that the
+       translation sweep, which reads the source for _svT('…'), can see
+       them: a key it cannot see reads as one nobody uses. */
+    const OWN_NAME = {
+      approvals: () => _svT('ap.title', 'Signatory approvals'),
+      proposals: () => _svT('pr.title', 'Proposals'),
+    };
+    const title = OWN_NAME[key] ? OWN_NAME[key]() : _svT('tab.' + key, defs[key][0]);
     parts.push(keys.length === 1 ? `<div id="svSec-${key}">${inner}</div>`
       : `<section id="svSec-${key}" style="margin-bottom:26px">
            <div class="sa-section-title"><i class="fa-solid ${defs[key][1]}"></i>
-             ${_esc(_svT('tab.' + key, defs[key][0]))}</div>
+             ${_esc(title)}</div>
            ${inner}
          </section>`);
   }
@@ -14139,6 +14222,7 @@ function _svWsTabs(id, open, counts) {
   return `<div role="tablist" aria-label="Group sections" id="svWsTablist"
        onkeydown="svTabKeys(event,'${_esc(id)}')"
        style="display:flex;gap:4px;overflow-x:auto;scroll-snap-type:x proximity;
+              scroll-padding-inline:2px;
               padding:10px 0;border-bottom:1px solid var(--border);margin-bottom:14px;
               -webkit-overflow-scrolling:touch">
     ${_svVisibleGroups(counts.tabCtx || {}).map(g => {
@@ -14149,7 +14233,7 @@ function _svWsTabs(id, open, counts) {
       <button role="tab" id="svTab-${g.key}" data-tab="${g.key}"
               aria-selected="${isOpen}" tabindex="${isOpen ? 0 : -1}"
               class="btn btn--sm ${isOpen ? 'btn--primary' : 'btn--ghost'}"
-              style="white-space:nowrap;scroll-snap-align:center"
+              style="white-space:nowrap;flex:0 0 auto;scroll-snap-align:start"
               onclick="svWorkspaceTab('${_esc(id)}','${g.sections[0]}')">
         <i class="fa-solid ${g.icon}"></i> ${_esc(_svT('tab.' + g.key, g.label))}${
           g.sections.includes('approvals') ? badge(waiting) : ''}${
@@ -14161,6 +14245,16 @@ function _svWsTabs(id, open, counts) {
     @media (max-width: 760px) {
       #svWsTablist { gap: 6px; padding: 8px 0; }
       #svWsTablist .btn { padding: 6px 10px; font-size: 0.8rem; }
+    }
+    /* A PHONE FITS ALL FIVE, or very nearly. At 430px the bar used to run
+       past the edge and, because the open tab was scrolled to the CENTRE,
+       it came to rest with the first tab sliced down the middle: "Overview"
+       read as "view" and "Records" as "Re", which looks like a mislabelled
+       tab rather than a bar with more to the side. */
+    @media (max-width: 460px) {
+      #svWsTablist { gap: 4px; }
+      #svWsTablist .btn { padding: 6px 8px; font-size: 0.74rem; }
+      #svWsTablist .btn i { margin-right: 3px; }
     }
   </style>`;
 }
@@ -14197,10 +14291,13 @@ function svTabKeys(ev, id) {
    scroll at all. */
 function _svScrollTabIntoView(open) {
   const el = document.getElementById('svTab-' + open);
-  if (el && el.scrollIntoView) {
-    try { el.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' }); }
-    catch (_) { el.scrollIntoView(); }
-  }
+  if (!el || !el.scrollIntoView) return;
+  /* NEAREST, NOT CENTRE. Centring scrolled the bar even when the open tab
+     was already fully on screen, and the tab at the left edge was then cut
+     down the middle — a button reading "view" where "Overview" should be.
+     `nearest` moves the bar only when the tab is actually out of sight. */
+  try { el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }); }
+  catch (_) { el.scrollIntoView(); }
 }
 
 function svLeaveWorkspace() {
@@ -14657,7 +14754,8 @@ async function submitNoticeRedemption(groupId) {
 }
 
 async function cancelNoticeRedemption(groupId, orderId) {
-  if (!confirm('Cancel this withdrawal from the fund? The money stays invested.')) return;
+  if (!await _svConfirm('The money stays invested and keeps earning. The group can ask again at any time, and the notice period starts over.',
+      { title: 'Cancel this withdrawal from the fund?', confirmLabel: 'Cancel it' })) return;
   try { await API._fetch('POST', `stokvels/${groupId}/notice/redeem/${orderId}/cancel`, {}); _svToast('Cancelled.', 'success'); }
   catch (err) { _svToast(err.message || 'Could not cancel it.', 'error'); }
   await _svRenderHub(groupId, 'investments');
@@ -14917,8 +15015,12 @@ async function _svProposals(id) {
   };
   const open = rows.filter(p => p.status === 'open');
   const past = rows.filter(p => p.status !== 'open').slice(0, 10);
-  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-check-to-slot"></i> ${_esc(_svT('pr.title', 'Proposals'))}</div>
-    <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">
+  /* NO HEADING OF ITS OWN. This section is stacked inside a tab that heads
+     each of its sections (see _svRenderHub), so a title here drew twice —
+     "CONTRIBUTIONS" under "CONTRIBUTIONS". The hub's is the one kept: it
+     carries the anchor the deep links and the checklist scroll to, and the
+     tab's own translated name. */
+  return `<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">
       ${_esc(_svT('pr.intro', 'Put a question to the whole group \u2014 \u201cshould we invest R50 000 for 12 months?\u201d \u2014 and every member votes. It carries when more than half the members say yes, or on more yes than no when voting closes. A carried proposal moves no money: an investment still needs the signatories to approve it.'))}
     </div>
     ${open.length ? open.map(card).join('') : `<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px">${_esc(_svT('pr.none', 'Nothing is being voted on.'))}</div>`}
@@ -14983,7 +15085,8 @@ async function voteStokvelProposal(groupId, proposalId, vote) {
 }
 
 async function withdrawStokvelProposal(groupId, proposalId) {
-  if (!confirm('Withdraw this proposal? Voting on it will stop.')) return;
+  if (!await _svConfirm('Voting on it will stop and the members who have already voted are told.',
+      { title: 'Withdraw this proposal?', confirmLabel: 'Withdraw' })) return;
   try {
     await API._fetch('POST', `stokvels/${groupId}/proposals/${proposalId}/withdraw`, {});
     _svToast('Proposal withdrawn.', 'success');
@@ -15040,8 +15143,12 @@ async function _svTransactions(id) {
    statement uses, scoped to this account. */
 function _svStatement(g, id) {
   const year = new Date().getFullYear();
+  /* NO HEADING OF ITS OWN. This section is stacked inside a tab that heads
+     each of its sections (see _svRenderHub), so a title here drew twice —
+     "CONTRIBUTIONS" under "CONTRIBUTIONS". The hub's is the one kept: it
+     carries the anchor the deep links and the checklist scroll to, and the
+     tab's own translated name. */
   return `<div style="max-width:620px">
-    <div class="sa-section-title"><i class="fa-solid fa-file-lines"></i> Statement</div>
     <p style="font-size:0.88rem;color:var(--text-muted);line-height:1.6">
       The group&rsquo;s statement for a period: what came in and went out, every
       member&rsquo;s contributions, each member&rsquo;s share at the closing date, and the
@@ -15167,7 +15274,8 @@ function _svContributions(res, mine, gid, g) {
                  ${c.overdue ? 'Overdue' : 'Due'} ${_esc(String(c.due_date).slice(0, 10))}
                </div>
              </div>
-             <button class="btn btn--primary btn--sm" onclick="payStokvelContribution('${_esc(gid)}','${_esc(c.id)}')">
+             <button class="btn btn--primary btn--sm" onclick="payStokvelContribution('${_esc(gid)}','${_esc(c.id)}',${
+                 parseFloat(c.amount_due) - parseFloat(c.amount_paid)})">
                Pay ${Utils.rand(parseFloat(c.amount_due) - parseFloat(c.amount_paid))}
              </button>
            </div>`).join('')}
@@ -15220,8 +15328,12 @@ function _svContributions(res, mine, gid, g) {
        </div>`
     : '';
 
-  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-calendar-check"></i> Contributions</div>
-    ${_svScheduleBlock(g || {}, gid)}
+  /* NO HEADING OF ITS OWN. This section is stacked inside a tab that heads
+     each of its sections (see _svRenderHub), so a title here drew twice —
+     "CONTRIBUTIONS" under "CONTRIBUTIONS". The hub's is the one kept: it
+     carries the anchor the deep links and the checklist scroll to, and the
+     tab's own translated name. */
+  return `${_svScheduleBlock(g || {}, gid)}
     ${mineBlock}
     ${autopayBlock}
     <div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Who is behind</div>
@@ -15408,8 +15520,12 @@ function _svPayouts(res, gid) {
 
   const mine = res && res.my_share_now;
 
-  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-gift"></i> Payout</div>
-    ${planned ? `<div style="border:2px solid #eda5ff;border-radius:12px;padding:14px;margin-bottom:10px;background:rgba(237,165,255,0.06)">
+  /* NO HEADING OF ITS OWN. This section is stacked inside a tab that heads
+     each of its sections (see _svRenderHub), so a title here drew twice —
+     "CONTRIBUTIONS" under "CONTRIBUTIONS". The hub's is the one kept: it
+     carries the anchor the deep links and the checklist scroll to, and the
+     tab's own translated name. */
+  return `${planned ? `<div style="border:2px solid #eda5ff;border-radius:12px;padding:14px;margin-bottom:10px;background:rgba(237,165,255,0.06)">
         <div style="font-weight:800;font-size:0.95rem">${_esc(planned.label)}</div>
         <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px">
           Planned for ${_esc(String(planned.pay_on).slice(0, 10))}
@@ -15476,7 +15592,8 @@ async function submitStokvelPayout(groupId) {
 }
 
 async function cancelStokvelPayout(groupId, payoutId) {
-  if (!confirm('Call this payout off? The group can plan another at any time.')) return;
+  if (!await _svConfirm('No money moves. The group can plan another at any time.',
+      { title: 'Call this payout off?', confirmLabel: 'Call it off' })) return;
   try {
     await API._fetch('DELETE', `stokvels/${groupId}/payouts/${payoutId}`);
     _svToast('Called off.', 'success');
@@ -15509,8 +15626,8 @@ async function requestStokvelPayout(groupId, payoutId, label) {
 }
 
 async function runStokvelPayout(groupId, payoutId, authorityId) {
-  if (!confirm('Pay the group out now?\n\nEvery member is paid their share, less anything they owe, '
-             + 'into their own wallet. Nobody leaves the group.')) return;
+  if (!await _svConfirm('Every member is paid their share, less anything they owe, into their own wallet. Nobody leaves the group.',
+      { title: 'Pay the group out now?', confirmLabel: 'Pay the members' })) return;
   try {
     const res = await API._fetch('POST', `stokvels/${groupId}/payouts/${payoutId}/run`,
                                  { authority_id: authorityId });
@@ -15544,8 +15661,12 @@ function _svShares(res, gid) {
     ? 'This group splits its pot equally, as its constitution says. What you still owe comes off your own share.'
     : 'Your share follows what you have put in and your part of everything the group has earned since.';
 
-  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-chart-pie"></i> Shares</div>
-    <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">${basisNote}</div>
+  /* NO HEADING OF ITS OWN. This section is stacked inside a tab that heads
+     each of its sections (see _svRenderHub), so a title here drew twice —
+     "CONTRIBUTIONS" under "CONTRIBUTIONS". The hub's is the one kept: it
+     carries the anchor the deep links and the checklist scroll to, and the
+     tab's own translated name. */
+  return `<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">${basisNote}</div>
     <div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px">
         <span style="color:var(--text-muted)">In the wallet</span><strong>${Utils.rand(d.wallet)}</strong>
@@ -15593,11 +15714,11 @@ async function requestStokvelExit(groupId) {
     const res = await API._fetch('GET', `stokvels/${groupId}/shares`);
     share = (res && res.data && res.data.my_share) || 0;
   } catch (_) { /* the figure is for the confirmation; the server decides */ }
-  if (!confirm(
-      `Ask to leave this group?\n\nYour share is about ${Utils.rand(share)}. `
-    + `The signatories have to approve it, anything you still owe comes off, and if the `
-    + `group's money is tied up in investments you are paid what it holds now and the rest `
-    + `as those mature.`)) return;
+  if (!await _svConfirm(
+      `Your share is about ${Utils.rand(share)}. The signatories have to approve it, anything `
+    + `you still owe comes off, and if the group's money is tied up in investments you are paid `
+    + `what it holds now and the rest as those mature.`,
+      { title: 'Ask to leave this group?', confirmLabel: 'Ask to leave' })) return;
   try {
     await API._fetch('POST', `stokvels/${groupId}/withdrawal-requests`, {
       kind: 'exit', amount: share > 0 ? share : 0.01,
@@ -15613,7 +15734,8 @@ async function requestStokvelExit(groupId) {
 /* Carrying out an approved exit. Any member may press it, exactly as with an
    approved investment: the approval is the control, not who taps. */
 async function settleStokvelExit(groupId, requestId) {
-  if (!confirm('Settle this exit now? The member is paid what the group holds and leaves.')) return;
+  if (!await _svConfirm('The member is paid what the group holds for them, less anything they owe, and their membership ends. This cannot be undone.',
+      { title: 'Settle this exit now?', confirmLabel: 'Settle and pay' })) return;
   try {
     const res = await API._fetch('POST', `stokvels/${groupId}/exits`, { authority_id: requestId });
     const d = (res && res.data) || {};
@@ -15725,8 +15847,12 @@ function _svWithdrawals(res, meIsSignatory, gid, ctx) {
         <div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">${_esc(r.blocked_because)}</div>` : ''}
     </div>`;
 
-  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-user-shield"></i> ${_esc(_svT('ap.title', 'Signatory approvals'))}</div>
-    <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">
+  /* NO HEADING OF ITS OWN. This section is stacked inside a tab that heads
+     each of its sections (see _svRenderHub), so a title here drew twice —
+     "CONTRIBUTIONS" under "CONTRIBUTIONS". The hub's is the one kept: it
+     carries the anchor the deep links and the checklist scroll to, and the
+     tab's own translated name. */
+  return `<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">
       ${_esc(_svT('ap.intro', 'The group\u2019s money only moves \u2014 out to a bank account or into one of our pools \u2014 when enough signatories approve it. No one member can do it alone, and the whole group can see who has agreed to what.'))}
     </div>
     ${_svFoundingPanel(g, gid)}
@@ -15821,7 +15947,8 @@ async function submitStokvelDissolve(groupId) {
 async function dissolveStokvel(groupId, authorityId) {
   /* The same confirm the rest of this file uses for an irreversible vote.
      Closing a group is the most irreversible thing in it. */
-  if (!confirm('Close this group? Every membership ends and it cannot be reopened.')) return;
+  if (!await _svConfirm('Every membership ends and it cannot be reopened. The record of who was in it stays.',
+      { title: 'Close this group?', confirmLabel: 'Close the group' })) return;
   try {
     await API._fetch('POST', `stokvels/${groupId}/dissolve`, { authority_id: authorityId });
     _svToast('The group has been closed.', 'success');
@@ -15946,8 +16073,9 @@ async function submitFoundingMandate(groupId) {
 }
 
 async function confirmStokvelSignatory(groupId) {
-  if (!confirm('Confirm that you will be a signatory of this group?\n\n'
-      + 'The group\u2019s money cannot move unless you and the other signatories approve it.')) return;
+  if (!await _svConfirm('The group\u2019s money cannot move unless you and the other signatories approve it.',
+      { title: 'Confirm that you will be a signatory?', confirmLabel: 'I will be a signatory',
+        confirmClass: 'btn--primary' })) return;
   try {
     const r = await API._fetch('POST', `stokvels/${groupId}/signatory-confirmation`, {});
     _svToast(r.data && r.data.adopted
@@ -16108,8 +16236,18 @@ async function submitStokvelFine(groupId) {
   await _svRenderHub(groupId, 'members');
 }
 
-async function payStokvelContribution(groupId, contributionId) {
-  if (!confirm('Pay this contribution from your wallet?')) return;
+async function payStokvelContribution(groupId, contributionId, amount) {
+  /* The amount is in the question. "Pay this contribution from your
+     wallet?" asked a member to agree to a figure the dialog did not show
+     them, with the button they had just pressed already scrolled away
+     behind it. */
+  const due = Number(amount) > 0 && typeof Utils !== 'undefined' && Utils.rand
+    ? Utils.rand(Number(amount)) : null;
+  if (!await _svConfirm(
+      due ? `${due} comes out of your own wallet and goes into the group's.`
+          : 'It comes out of your own wallet and goes into the group\u2019s.',
+      { title: due ? `Pay ${due}?` : 'Pay this contribution?',
+        confirmLabel: due ? `Pay ${due}` : 'Pay', confirmClass: 'btn--primary' })) return;
   try {
     const res = await API._fetch('POST', `stokvels/${groupId}/contributions/${contributionId}/pay`, {});
     _svToast(`Paid ${Utils.rand(res.data.paid)}.`, 'success');
@@ -16391,7 +16529,8 @@ async function submitStokvelMandateChange(groupId) {
 }
 
 async function voteStokvelRequest(groupId, requestId, decision) {
-  if (decision === 'reject' && !confirm('Reject this withdrawal? It cannot be out-voted afterwards.')) return;
+  if (decision === 'reject' && !await _svConfirm('It cannot be out-voted afterwards. The group would have to raise it again.',
+      { title: 'Reject this request?', confirmLabel: 'Reject' })) return;
   try {
     const res = await API._fetch('POST',
       `stokvels/${groupId}/withdrawal-requests/${requestId}/vote`, { decision });
