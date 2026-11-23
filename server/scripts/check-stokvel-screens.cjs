@@ -650,11 +650,18 @@ const STUB = {
       return out;
     })()`);
 
+    /* A HANDFUL, not one per section. Six now rather than five: what the
+       group can put its savings into came out of Money and became its own
+       tab, because it is the decision a committee opens the app to make
+       and it was six scrolls down a tab about what the group already has.
+       The number is held loosely and the NAMES are held exactly — the
+       thing this assertion exists to stop is the eleven-tab screen it
+       replaced, not a sixth deliberate tab. */
     ok('the bar holds a handful of tabs, not one per section',
-       nav.shown.length > 0 && nav.shown.length <= 5,
+       nav.shown.length > 0 && nav.shown.length <= 6,
        `${nav.shown.length}: ${nav.shown.join(' | ')} — eleven is the screen this replaced`);
     ok('and every one of them is a real tab name',
-       nav.shown.every(t => /Overview|People|Money|Decisions|Records/.test(t)),
+       nav.shown.every(t => /Overview|People|Money|Investments|Decisions|Records/.test(t)),
        nav.shown.join(' | '));
     /* The intent the old assertion carried: nothing became unreachable. */
     const unreachable = _svSectionsAll.filter(k => !nav.reached[k]);
@@ -675,9 +682,24 @@ const STUB = {
       return ids;
     })()`);
     ok('opening a tab draws every section under it, not just the first',
-       ['contributions', 'shares', 'investments', 'payouts', 'transactions', 'statement']
+       ['contributions', 'shares', 'payouts', 'transactions', 'statement']
          .every(k => stacked.includes('svSec-' + k)),
        JSON.stringify(stacked));
+    /* AND THE ONE THAT MOVED OUT IS NOT STILL DRAWN HERE. Investments left
+       Money for its own tab; a section listed under two tabs would render
+       twice and the second copy would be the one nobody could find. */
+    ok('and the section that moved to its own tab is not still under Money',
+       !stacked.includes('svSec-investments'), JSON.stringify(stacked));
+    const onItsOwn = await evaluate(`(async () => {
+      await svWorkspaceTab('SA-1', 'investments');
+      const ids = [...document.querySelectorAll('[id^="svSec-"]')].map(e => e.id);
+      await svWorkspaceTab('SA-1', 'overview');
+      return ids;
+    })()`);
+    ok('AND IT IS REALLY THERE, ON ITS OWN',
+       onItsOwn.includes('svSec-investments') && onItsOwn.length === 1,
+       'the tab a committee opens to decide what to do with the pot: '
+       + JSON.stringify(onItsOwn));
 
     /* ── A BRAND-NEW GROUP ──────────────────────────────────────────
        The stubbed group has R12 500 and a roster, so every tab is earned.

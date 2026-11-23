@@ -13998,6 +13998,7 @@ function _svDict() {
       'tab.payouts': 'Izinkokhelo',
       'tab.members': 'Amalungu',
       'tab.investments': 'Ukutshala imali',
+      'kind.dissolve': 'Ukuvala',
       'tab.transactions': 'Ukuhamba kwemali',
       'tab.statement': 'Isitatimende',
       'tab.documents': 'Amadokhumenti',
@@ -14091,6 +14092,7 @@ function _svDict() {
       'tab.payouts': 'Ditefo',
       'tab.members': 'Ditho',
       'tab.investments': 'Matsete',
+      'kind.dissolve': 'Ho kwala',
       'tab.transactions': 'Motsamao wa tjhelete',
       'tab.statement': 'Setatemente',
       'tab.documents': 'Ditokomane',
@@ -14290,9 +14292,22 @@ function _svTabGroups() {
     { key: 'people',    label: 'People',    icon: 'fa-users',
       sections: ['members'], when: () => true },
     { key: 'money',     label: 'Money',     icon: 'fa-sack-dollar',
-      sections: ['contributions', 'shares', 'investments', 'payouts', 'transactions', 'statement'],
+      sections: ['contributions', 'shares', 'payouts', 'transactions', 'statement'],
       /* Once there is money, or a schedule that will bring some. Before
-         that every one of these six sections is an empty table. */
+         that every one of these sections is an empty table. */
+      when: c => c.hasMoney || c.hasSchedule },
+    /* INVESTMENTS IS ITS OWN TAB, not a section buried in Money. What a
+       group can put its savings into is a decision the committee comes to
+       the app to make, and it was six scrolls down a tab about what the
+       group already has. It is also the only screen that shows what is
+       OPEN to them rather than what they hold — so a group with nothing
+       invested had the most useful screen in the workspace hidden behind
+       an empty one.
+
+       Shown whenever the group could invest or already has: a group with
+       no money yet still gets to see what its savings are for. */
+    { key: 'investments', label: 'Investments', icon: 'fa-seedling',
+      sections: ['investments'],
       when: c => c.hasMoney || c.hasSchedule },
     { key: 'decisions', label: 'Decisions', icon: 'fa-user-shield',
       sections: ['approvals', 'proposals'],
@@ -14929,6 +14944,37 @@ function _svOverview(id, ctx) {
      take over the overview until they are done. The two that can lag
      behind (the contribution schedule and the group's documents) then sit
      above the ordinary overview as "still to do" until they are done too. */
+  /* ── A GROUP THAT HAS ENDED IS NOT A GROUP STARTING ──────────────
+   *
+   * The checklist is read off the group's state, and a wound-up group
+   * looks exactly like a new one: the pot is zero because the members
+   * were paid out, and the roster is empty because every membership
+   * ended with the group. So the chairperson who had just closed a
+   * two-year-old stokvel was shown "Getting Siyakhula Savings going —
+   * step 4 of 6, get the members in", inviting people back into a group
+   * that no longer exists.
+   *
+   * Checked FIRST, before anything is read off the figures, because the
+   * figures of a finished group and a new one are the same figures. */
+  if (String(ctx.g.status || '') === 'closed') {
+    return `<div style="max-width:640px">
+      <div class="sa-section-title"><i class="fa-solid fa-box-archive"></i> ${_esc(ctx.g.name)} has been wound up</div>
+      <div style="font-size:0.86rem;color:var(--text-muted);line-height:1.6">
+        The signatories agreed to close it, the members were paid their shares, and every
+        membership ended with the group. Nothing more can be paid in or out.
+      </div>
+      <div style="font-size:0.84rem;line-height:1.6;margin-top:12px">
+        What it did is still here: the contributions, the shares as they stood, every payout,
+        and the register of who approved what. Build the statement for any period you need —
+        that is the document to keep.
+      </div>
+      <button class="btn btn--secondary btn--sm" style="margin-top:14px"
+              onclick="svWorkspaceTab('${_esc(id)}','statement')">
+        <i class="fa-solid fa-file-lines"></i> Build its statement
+      </button>
+    </div>`;
+  }
+
   const steps = _svSetupSteps(id, ctx, d);
   const core  = steps.filter(x => x.core);
   /* Only a group with no money in yet loses its overview to the checklist.
@@ -15209,9 +15255,15 @@ async function _svInvestments(id) {
   const t = (res && res.totals) || {};
   const lock = (res && res.lock_date) || '';
   if (!rows.length) {
+    /* A GROUP THAT HAS NOT INVESTED STILL NEEDS THE LIST. This used to be
+       the end of the screen: a sentence saying the group had nothing, on a
+       tab about investing, with no way to see what investing would even
+       mean. What is OPEN to them is the useful half, and it is the half a
+       committee opens this tab to find. */
     return `<div class="empty-state"><p>${_esc(_svT('inv.none', 'This group has not invested anything yet.'))}</p>
       <p style="font-size:0.84rem;color:var(--text-muted)">Investing the pot is the group&rsquo;s own
-      decision and needs the signatories&rsquo; approval. Capital is at risk.</p></div>`;
+      decision and needs the signatories&rsquo; approval. Capital is at risk.</p></div>
+      ${_svOpenToGroup(id)}`;
   }
 
   /* Your part of each investment, read off your share of the pot today. An
@@ -15284,7 +15336,70 @@ async function _svInvestments(id) {
     <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">
       Expected figures are each pool&rsquo;s target return. Capital is at risk and a target is not a promise.
       &ldquo;Your part&rdquo; is read off your share of the pot today; the Shares section is the record.
-    </div>`;
+    </div>
+    ${_svOpenToGroup(id)}`;
+}
+
+/* ─── What the group could put its savings into ────────────────────
+ *
+ * The Investments tab showed only what the group HOLDS. A committee
+ * deciding what to do with the pot — which is the decision they open the
+ * app to make — had nowhere to see what was on offer, and a group holding
+ * nothing got one sentence saying so. The marketplace exists, but it is
+ * the personal one: you reach it by leaving the group.
+ *
+ * SAME FILTER AS THE REQUEST FORM. raiseStokvelInvestment offers exactly
+ * these pools, so a pool listed here is a pool the group can actually ask
+ * for; a list that offered something the next screen refused would be
+ * worse than no list.
+ *
+ * NOTHING IS BOUGHT FROM HERE. Every button raises a REQUEST — the
+ * signatories approve the amount and the pool, and a member places it
+ * afterwards. Saying so on each one, rather than once at the bottom,
+ * because the button is what people read.
+ */
+function _svOpenToGroup(gid) {
+  const pools = (PORTAL.pools || []).filter(p => p.status === 'open' && !_poolPastClose(p));
+  if (!pools.length) {
+    return `<div class="sa-section-title mt-16"><i class="fa-solid fa-store"></i> Open to the group</div>
+      <div style="font-size:0.84rem;color:var(--text-muted)">
+        Nothing is open to new money at the moment. The 30-day notice account above is always open.
+      </div>`;
+  }
+  const pct = v => (Number(v) * 100).toFixed(1).replace(/\.0$/, '') + '%';
+  const term = p => {
+    const m = parseInt(p.term_months, 10) || 0;
+    return m >= 24 && m % 12 === 0 ? `${m / 12} years` : `${m} months`;
+  };
+  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-store"></i> Open to the group</div>
+    <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px;line-height:1.55">
+      What the group&rsquo;s savings can go into. Every one of these needs the signatories to approve
+      the amount and the pool before a member can place it. <strong>Capital is at risk</strong> and a
+      target return is not a promise.
+    </div>
+    ${pools.map(p => `<div style="border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:9px">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:start">
+        <div style="min-width:0">
+          <div style="font-weight:800">${_esc(p.name)}</div>
+          <div style="font-size:0.76rem;color:var(--text-muted);margin-top:2px">
+            ${_esc(term(p))} &middot; from ${Utils.rand(p.min_investment)}${
+              p.maturity_date ? ' &middot; matures ' + _esc(String(p.maturity_date).slice(0, 10)) : ''}
+          </div>
+        </div>
+        <div style="text-align:right;white-space:nowrap">
+          <div style="font-size:1.15rem;font-weight:800;color:#eda5ff">${_esc(pct(p.annual_rate))}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">target a year</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
+        <button class="btn btn--secondary btn--sm" onclick="raiseStokvelInvestment('${_esc(gid)}','${_esc(p.id)}')">
+          <i class="fa-solid fa-paper-plane"></i> Ask the signatories
+        </button>
+        <span style="font-size:0.72rem;color:var(--text-muted)">
+          The 1% platform fee is charged on top of what reaches the pool.
+        </span>
+      </div>
+    </div>`).join('')}`;
 }
 
 /* ─── The group's documents ──────────────────────────────────────
@@ -16444,14 +16559,26 @@ function _svWithdrawals(res, meIsSignatory, gid, ctx) {
       <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
         <div>
           <div style="font-weight:800">
-            ${r.kind === 'mandate' ? 'Change to the mandate' : Utils.rand(r.amount)}
+            ${r.kind === 'mandate' ? 'Change to the mandate'
+              /* NOT A ZERO-RAND WITHDRAWAL. A dissolve carries no amount —
+                 it moves no money — so it fell through to Utils.rand(0) and
+                 a signatory being asked to END THE GROUP was shown
+                 "R 0,00". The headline on the most irreversible decision a
+                 group can take has to be the decision. */
+              : r.kind === 'dissolve' ? 'Close the group for good'
+              : Utils.rand(r.amount)}
             <span style="font-size:0.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
                          border:1px solid var(--border);border-radius:999px;padding:1px 7px;margin-left:6px;
-                         color:${r.kind === 'investment' || r.kind === 'mandate' ? '#eda5ff' : (r.kind === 'exit' ? '#f59e0b' : 'var(--text-muted)')}">
+                         color:${r.kind === 'investment' || r.kind === 'mandate' ? '#eda5ff'
+                           /* Red, alone among the kinds: it is the only one
+                              that cannot be undone. */
+                           : r.kind === 'dissolve' ? '#ef4444'
+                           : (r.kind === 'exit' ? '#f59e0b' : 'var(--text-muted)')}">
               ${_esc(r.kind === 'notice_deposit' ? 'Notice fund'
                 : r.kind === 'investment' ? _svT('kind.investment', 'Invest')
                 : r.kind === 'exit' ? _svT('kind.exit', 'Exit')
                 : r.kind === 'mandate' ? _svT('kind.mandate', 'Mandate')
+                : r.kind === 'dissolve' ? _svT('kind.dissolve', 'Closing')
                 : r.kind === 'payout' ? _svT('kind.payout', 'Payout') : _svT('kind.withdrawal', 'Withdraw'))}
             </span>
           </div>
@@ -16472,6 +16599,12 @@ function _svWithdrawals(res, meIsSignatory, gid, ctx) {
               : r.kind === 'notice_deposit'
                 ? ' · into ' + _esc(r.fund_name || 'the 30-day notice fund')
                   + ' · ' + Utils.rand(svcWalletSpend(r.amount)) + ' leaves the wallet with the 1% fee'
+              : r.kind === 'dissolve'
+                /* Every other kind names its destination here. A dissolve's
+                   is the group itself, and saying so beside the name of
+                   whoever asked is the difference between a decision and a
+                   row. */
+                ? ' · asks the signatories to end this group permanently'
                 : (r.bank_name ? ' · ' + _esc(r.bank_name) : '')}
           </div>
           ${r.reason && r.reason !== r.change_summary ? `<div style="font-size:0.78rem;margin-top:4px">${_esc(r.reason)}</div>` : ''}
@@ -17116,12 +17249,18 @@ async function payOutStokvelWithdrawal(groupId, requestId) {
    figure the signatories approve; the form says so, because a signatory who
    thinks R10 000 leaves the wallet when R10 100 does has approved the wrong
    number. */
-function raiseStokvelInvestment(groupId) {
+function raiseStokvelInvestment(groupId, poolId) {
   const pools = (PORTAL.pools || []).filter(p => p.status === 'open' && !_poolPastClose(p));
   if (!pools.length) {
     _svToast('There are no open pools to invest in right now.', 'error');
     return;
   }
+  /* COMING FROM A NAMED POOL, the one they tapped is the one selected.
+     Dropping somebody onto a list they have to find their choice in again
+     is how a two-tap decision becomes a three-tap one with a mistake in
+     the middle. A pool id that is not on offer is ignored rather than
+     obeyed: the list is the authority on what can be asked for. */
+  const want = pools.some(p => String(p.id) === String(poolId)) ? String(poolId) : '';
   _svFormShell(groupId, {
     icon: 'fa-seedling',
     title: 'Request an investment',
@@ -17131,7 +17270,8 @@ function raiseStokvelInvestment(groupId) {
           letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Which pool</label>
       <select id="svInvPool" class="form-input" style="width:100%;margin-bottom:12px"
               onchange="_svInvRecalc()">
-        ${pools.map(p => `<option value="${_esc(p.id)}" data-min="${parseFloat(p.min_investment) || 0}"
+        ${pools.map(p => `<option value="${_esc(p.id)}"${
+                  want && String(p.id) === want ? ' selected' : ''} data-min="${parseFloat(p.min_investment) || 0}"
                   data-term="${parseInt(p.term_months, 10) || 0}"
                   data-maturity="${_esc(String(p.maturity_date || '').slice(0, 10))}">
           ${_esc(p.name)} \u2014 ${(parseFloat(p.annual_rate) * 100).toFixed(1)}% over ${_esc(String(p.term_months))} months \u00b7 from ${Utils.rand(p.min_investment)}

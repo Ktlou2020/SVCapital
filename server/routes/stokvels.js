@@ -851,6 +851,19 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
         return res.status(403).json({
           error: 'Only the chairperson, secretary or treasurer can raise an exit for somebody else.' });
       }
+    } else if (kind === 'dissolve') {
+      /* NOTHING TO PIN. Closing the group moves no money and has no
+         destination: what the signatories agree to is that it should end,
+         and the /dissolve route refuses to close a group that still holds
+         anything. Who may ask is checked above.
+
+         THIS BRANCH IS THE WHOLE FIX. Without it a dissolve fell through to
+         the withdrawal branch below and was refused — "the bank name and
+         account number must be part of the request" — so winding a group up
+         could not even be ASKED FOR. Every other piece of it existed: the
+         form, the permission gate, the approval, the button that carries it
+         out, the route behind that button. The request could never be made,
+         and the message said nothing a committee could act on. */
     } else {
       bankName = String((req.body && req.body.bank_name) || '').trim();
       bankAcct = String((req.body && req.body.bank_account_number) || '').trim();

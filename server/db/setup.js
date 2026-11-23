@@ -1545,8 +1545,12 @@ CREATE TABLE IF NOT EXISTS stokvel_members (
   role            TEXT NOT NULL DEFAULT 'member'
                     CHECK (role IN ('chairperson','treasurer','secretary','member')),
   is_signatory    BOOLEAN NOT NULL DEFAULT false,
+  /* 'exited' is one person leaving a group that carries on. 'ended' is
+     everybody at once because the group was wound up — see the migration
+     below, and routes/stokvels.js's dissolve. Keeping them apart matters:
+     an exit may still owe the leaver money, a wind-up never does. */
   status          TEXT NOT NULL DEFAULT 'invited'
-                    CHECK (status IN ('invited','active','exited')),
+                    CHECK (status IN ('invited','active','exited','ended')),
   invited_by      TEXT REFERENCES investors(id),
   invited_at      TIMESTAMPTZ DEFAULT NOW(),
   joined_at       TIMESTAMPTZ,
@@ -3319,6 +3323,26 @@ async function autoSetup() {
           ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_kind_chk
             CHECK (kind IN ('withdrawal','investment','exit','payout','mandate',
                             'notice_deposit','dissolve'));
+          /* AND THE OTHER HALF OF THE SAME CHANGE, missed when 'dissolve'
+             was added above. routes/stokvels.js ends every membership with
+             status = 'ended' when a group is wound up, and the member
+             constraint allowed only invited/active/exited — so the UPDATE
+             threw, the whole transaction rolled back, and a group whose
+             signatories had agreed to close it and whose members had been
+             paid out was simply never closed. The error reached the log and
+             nothing else: the member saw a toast and a group still listed
+             as active.
+
+             'ended' rather than reusing 'exited' on purpose. An exit is one
+             person leaving a group that carries on, with a share settled
+             and possibly a debt still owed to them; a wind-up is everybody
+             at once with nothing left to settle. Reading the second as the
+             first would have anything that looks for people owed money
+             looking at the whole former roster. */
+          ALTER TABLE stokvel_members DROP CONSTRAINT IF EXISTS stokvel_members_status_check;
+          ALTER TABLE stokvel_members DROP CONSTRAINT IF EXISTS sm_status_chk;
+          ALTER TABLE stokvel_members ADD CONSTRAINT sm_status_chk
+            CHECK (status IN ('invited','active','exited','ended'));
           BEGIN ALTER TABLE sub_accounts ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
           /* ── The foreign investor funds process ────────────────────────
              Residency, not nationality, is what the Reserve Bank's reporting
@@ -6485,6 +6509,28 @@ async function autoSetup() {
          'Console → Groups (Stokvels) → the 30-day notice fund panel → “From the trading '
          + 'facility”, beside the rate boxes.']);
       if (rowCount) console.log('✅ Announced the facility-derived rate.');
+    });
+
+    await step("49. Announce the Investments tab and that a group can be closed", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'portal','everyone','fa-seedling', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['stokvel-investments-tab-endings-2026-11',
+         'Investments is its own tab and shows what the group can invest in — and a group can now be wound up',
+         'What a group can put its savings into is the decision a committee opens the app to make, and it '
+         + 'was six scrolls down the Money tab, showing only what the group already held. It is its own tab '
+         + 'now, and it lists everything open to the group — the target return, the term, the minimum — with '
+         + 'a button on each that asks the signatories. A group holding nothing still sees the list.\n\n'
+         + 'Winding a group up also works for the first time. It could not even be asked for: the request '
+         + 'was refused with a message about bank account details, about a decision that moves no money. '
+         + 'Once asked, it showed to the signatories as a R 0,00 withdrawal rather than as the end of the '
+         + 'group, and carrying it out failed silently. A wind-up now reads as what it is, closes the group '
+         + 'when the members have been paid out, and a group that has been wound up says so instead of '
+         + 'asking the committee to get it going again.',
+         'My Groups → open the group → Investments. Winding up: Decisions → “Wind the group up”.']);
+      if (rowCount) console.log('✅ Announced the Investments tab and the wind-up.');
     });
 
     await step("48. Announce the switch for the notice account", async () => {
