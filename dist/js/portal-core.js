@@ -14039,8 +14039,10 @@ function _svTabContext(g, parts) {
     hasMoney: Number(d ? d.net_assets : g.wallet_balance) > 0
       || Number(g.total_invested) > 0 || contribs.length > 0,
     hasSchedule: !!setup.schedule,
+    /* Live, not pending: an approved authority still has something to do
+       about it — somebody has to press the button that carries it out. */
     waiting: ((parts.requests && parts.requests.data) || [])
-      .filter(r => r.status === 'pending').length,
+      .filter(_svAuthorityLive).length,
     proposals: Number(g.open_proposals) || 0,
     signatories: members.filter(m => m.status === 'active' && m.is_signatory).length,
     iAmNominated: !!g.i_am_nominated,
@@ -14178,7 +14180,7 @@ async function _svRenderHub(id, tab, opts) {
                               signatories: ((members && members.data) || [])
                                 .filter(m => m.status === 'active' && m.is_signatory).length }); break;
     case 'shares':        out = _svShares(shareData, id); break;
-    case 'payouts':       out = _svPayouts(payoutData, id); break;
+    case 'payouts':       out = _svPayouts(payoutData, id, requests); break;
     case 'members':       out = _svMembers(members, id, !!(invitations && invitations.can_invite),
                               { g, canPropose: _svCanProposeMandate(g, meIsSignatory) })
                                + _svInvitations(invitations, id); break;
@@ -14322,7 +14324,7 @@ function _svHeaderFigures(g, d, stat) {
    into view so the scroll never hides where you are. */
 function _svWsTabs(id, open, counts) {
   const waiting = ((counts.requests && counts.requests.data) || [])
-    .filter(r => r.status === 'pending').length;
+    .filter(_svAuthorityLive).length;
   const owed = ((counts.contributions && counts.contributions.data) || [])
     .filter(c => c.is_me && c.status === 'due').length;
   const badge = n => n ? `<span aria-label="${n} waiting" style="background:#eda5ff;color:#1a1a1a;
@@ -14707,12 +14709,16 @@ function _svOverview(id, ctx) {
       </tr>`).join('')}
       </tbody></table>` : ''}
 
-    ${reqs.filter(r => r.status === 'pending').length ? `
+    ${reqs.filter(_svAuthorityLive).length ? `
       <div class="sa-section-title"><i class="fa-solid fa-user-shield"></i> Awaiting approval</div>
-      ${reqs.filter(r => r.status === 'pending').slice(0, 4).map(r => `
+      ${reqs.filter(_svAuthorityLive).slice(0, 4).map(r => `
         <div style="display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:0.85rem">
           <span>${_esc(r.requested_by_name || 'A member')} · ${Utils.rand(r.amount)}</span>
-          <strong style="color:${r.satisfied ? '#22c55e' : 'var(--text-muted)'}">${r.approvals} of ${r.required}</strong>
+          <strong style="color:${r.satisfied ? '#22c55e' : 'var(--text-muted)'}">${
+            /* An approved one is not "2 of 2" news — it is a thing somebody
+               still has to carry out, and saying so is the difference
+               between a record and a task. */
+            _svAuthorityReady(r) ? 'Ready' : `${r.approvals} of ${r.required}`}</strong>
         </div>`).join('')}
       <button class="btn btn--secondary btn--sm" style="margin-top:12px"
               onclick="svWorkspaceTab('${_esc(id)}','approvals')">See all</button>` : ''}`;
@@ -15640,7 +15646,7 @@ async function submitStokvelSchedule(groupId) {
    group has decided on is the most important thing on a member's screen
    once it exists, and the line they care about is their own figure rather
    than the group's total. */
-function _svPayouts(res, gid) {
+function _svPayouts(res, gid, requests) {
   const d = (res && res.data) || [];
   const can = !!(res && res.can_plan);
   const planned = d.find(p => p.status === 'planned');
@@ -15648,6 +15654,20 @@ function _svPayouts(res, gid) {
   if (!planned && !past.length && !can) return '';
 
   const mine = res && res.my_share_now;
+
+  /* WHAT THE SIGNATORIES HAVE DONE ABOUT THIS PAYOUT, read from the
+     requests rather than from the payout row. stokvel_payouts.authority_id
+     is only written when the payout RUNS, so before that it is always
+     empty — which left "Ask the signatories" on screen after they had
+     approved it, and pressing it again raised a second authority for the
+     same distribution. */
+  const auth = planned
+    ? ((requests && requests.data) || []).filter(r =>
+        r.kind === 'payout' && String(r.payout_id || '') === String(planned.id)
+        && _svAuthorityLive(r))
+    : [];
+  const asked = auth[0] || null;
+  const ready = auth.find(_svAuthorityReady) || null;
 
   /* NO HEADING OF ITS OWN. This section is stacked inside a tab that heads
      each of its sections (see _svRenderHub), so a title here drew twice —
@@ -15665,12 +15685,22 @@ function _svPayouts(res, gid) {
           and the figure moves with whatever the group earns before then.</span>
         </div>` : ''}
         <div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px">
-          It needs the signatories&rsquo; approval before it can be paid, like anything else
-          that moves the group&rsquo;s money. Nobody leaves the group — the pot resets and
-          contributions carry on.
+          ${ready
+            ? 'The signatories have approved it. Paying it out splits the pot between the '
+              + 'members and resets it — nobody leaves the group and contributions carry on.'
+            : asked
+            ? _esc(`Waiting on the signatories — ${asked.approvals} of ${asked.required} have approved it. `)
+              + 'Nobody leaves the group — the pot resets and contributions carry on.'
+            : 'It needs the signatories&rsquo; approval before it can be paid, like anything else '
+              + 'that moves the group&rsquo;s money. Nobody leaves the group — the pot resets and '
+              + 'contributions carry on.'}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-          ${planned.authority_id ? '' : `<button class="btn btn--primary btn--sm"
+          ${ready ? `<button class="btn btn--primary btn--sm"
+            onclick="runStokvelPayout('${_esc(gid)}','${_esc(planned.id)}','${_esc(ready.id)}')">
+            <i class="fa-solid fa-gift"></i> Pay the group out
+          </button>` : ''}
+          ${planned.authority_id || asked ? '' : `<button class="btn btn--primary btn--sm"
             onclick="requestStokvelPayout('${_esc(gid)}','${_esc(planned.id)}','${_esc(planned.label)}')">
             <i class="fa-solid fa-paper-plane"></i> Ask the signatories
           </button>`}
@@ -15877,6 +15907,40 @@ async function settleStokvelExit(groupId, requestId) {
   await _svRenderHub(groupId);
 }
 
+/* ─── IS THIS AUTHORITY STILL LIVE? ───────────────────────────────────────
+ *
+ * A request has five states: pending, approved, rejected, used, expired.
+ * The server moves it to 'approved' THE MOMENT the last signatory agrees
+ * (routes/stokvels.js), and it stays spendable until something consumes it
+ * — mandate.authorityFor asks whether it is SATISFIED, never what its
+ * status is, and mandate.consume marks the spent one 'used'.
+ *
+ * The client only ever knew 'pending'. So every carry-it-out button was
+ * gated on `satisfied && status === 'pending'` — a condition that cannot
+ * hold, because the vote that makes a request satisfied is the same vote
+ * that takes it out of 'pending'. Pay the group out, settle this exit,
+ * move it into the fund: three buttons that could never render. And
+ * stokvelInvestAuthority looked for a pending authority to place an
+ * investment against, found none, and told the member to go and ask the
+ * signatories for the approval they had already given.
+ *
+ * Driven in a browser: a payout approved 2 of 2, satisfied, with no way
+ * to pay it; a group investment approved 2 of 2, refused at the
+ * marketplace with "needs the signatories to approve it first".
+ *
+ * One predicate now, in one place. 'pending' is when a signatory may still
+ * VOTE — that gate is different and stays as it was. */
+function _svAuthorityLive(r) {
+  /* Built inside the function, not at the top of the file: portal-core.js
+     carries no load-time state, and check-portal-split holds that. */
+  const LIVE = ['pending', 'approved'];
+  return LIVE.indexOf(String((r && r.status) || '')) !== -1;
+}
+/* Approved, and not yet spent: the state in which a thing can be carried out. */
+function _svAuthorityReady(r) {
+  return !!(r && r.satisfied) && _svAuthorityLive(r);
+}
+
 /* ─── Signatory approvals ──────────────────────────────────────────────────
    The mandate, made visible. A member who is not a signatory sees exactly
    the same list — knowing what is being asked for is the point — and simply
@@ -15890,8 +15954,12 @@ function _svWithdrawals(res, meIsSignatory, gid, ctx) {
   const c = ctx || {};
   const g = c.g || {};
   const rows = (res && res.data) || [];
-  const open = rows.filter(r => r.status === 'pending');
-  const past = rows.filter(r => r.status !== 'pending').slice(0, 5);
+  /* An approved authority nobody has spent yet belongs with the live ones,
+     not in the history. It was filed under RECENT, under a heading that
+     said "Nothing awaiting approval" — so the group was told the matter
+     was closed while the money had not moved. */
+  const open = rows.filter(_svAuthorityLive);
+  const past = rows.filter(r => !_svAuthorityLive(r)).slice(0, 5);
 
   const row = r => `<div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
@@ -15943,23 +16011,33 @@ function _svWithdrawals(res, meIsSignatory, gid, ctx) {
           <button class="btn btn--primary btn--sm" onclick="voteStokvelRequest('${_esc(gid)}','${_esc(r.id)}','approve')">${_esc(_svT('btn.approve', 'Approve'))}</button>
           <button class="btn btn--ghost btn--sm" onclick="voteStokvelRequest('${_esc(gid)}','${_esc(r.id)}','reject')">${_esc(_svT('btn.reject', 'Reject'))}</button>
         </div>` : ''}
-      ${r.kind === 'payout' && r.satisfied && r.status === 'pending' ? `
+      ${r.kind === 'payout' && _svAuthorityReady(r) ? `
         <div style="margin-top:10px">
           <button class="btn btn--primary btn--sm" onclick="runStokvelPayout('${_esc(gid)}','${_esc(r.payout_id)}','${_esc(r.id)}')">
             <i class="fa-solid fa-gift"></i> Pay the group out
           </button>
         </div>` : ''}
-      ${r.kind === 'notice_deposit' && r.satisfied && r.status === 'pending' ? `
+      ${r.kind === 'notice_deposit' && _svAuthorityReady(r) ? `
         <div style="margin-top:10px">
           <button class="btn btn--primary btn--sm" onclick="moveIntoNoticeFund('${_esc(gid)}','${_esc(r.id)}')">
             <i class="fa-solid fa-hourglass-half"></i> Move it into the fund
           </button>
         </div>` : ''}
-      ${r.kind === 'exit' && r.satisfied && r.status === 'pending' ? `
+      ${r.kind === 'exit' && _svAuthorityReady(r) ? `
         <div style="margin-top:10px">
           <button class="btn btn--primary btn--sm" onclick="settleStokvelExit('${_esc(gid)}','${_esc(r.id)}')">
             <i class="fa-solid fa-door-open"></i> Settle this exit
           </button>
+        </div>` : ''}
+      ${r.kind === 'investment' && _svAuthorityReady(r) ? `
+        <div style="margin-top:10px">
+          <button class="btn btn--primary btn--sm" onclick="openSaInvest('${_esc(gid)}')">
+            <i class="fa-solid fa-seedling"></i> Place this investment
+          </button>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:5px">
+            ${Utils.rand(r.amount)} into ${_esc(r.pool_name || r.pool_id || 'the pool')},
+            approved. Any member can place it.
+          </div>
         </div>` : ''}
       ${(r.votes || []).length ? `
         <div style="margin-top:9px;padding-top:8px;border-top:1px solid var(--border)">
@@ -16626,8 +16704,12 @@ async function stokvelInvestAuthority(subAccountId, poolId, poolAmount) {
   } catch (err) {
     return { error: 'Could not check this group\u2019s approvals. ' + (err.message || '') };
   }
+  /* LIVE, not pending. An authority the signatories have carried reads
+     'approved' and is exactly the one that can be spent — see
+     _svAuthorityLive. Filtering on 'pending' meant the one authority that
+     could place this investment was the one row never considered. */
   const forPool = ((res && res.data) || []).filter(r =>
-    r.kind === 'investment' && r.status === 'pending' &&
+    r.kind === 'investment' && _svAuthorityLive(r) &&
     String(r.pool_id || '') === String(poolId));
 
   const exact = forPool.find(r => r.satisfied && cents(r.amount) === want);

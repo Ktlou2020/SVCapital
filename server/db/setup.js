@@ -6430,6 +6430,28 @@ async function autoSetup() {
       if (rowCount) console.log('✅ Announced the facility-derived rate.');
     });
 
+    await step("43. Announce that an approved decision can now be carried out", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'portal','everyone','fa-circle-check', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['stokvel-approved-authority-2026-11',
+         'Once the signatories approve something, the group can now carry it out',
+         'A decision the signatories had carried showed as “2 of 2 · approved” and then nothing '
+         + 'happened: the buttons that pay the group out, settle a member’s exit, move money into '
+         + 'the notice fund and place an approved investment were all waiting for a state the '
+         + 'request never reached, so none of them appeared. Placing an approved investment at '
+         + 'the marketplace answered “a group investment needs the signatories to approve it '
+         + 'first” — about the investment they had just approved. An approved decision now sits '
+         + 'at the top of Decisions with the button that carries it out, the Decisions tab counts '
+         + 'it, and the payout panel says the signatories have approved it and offers to pay the '
+         + 'group out instead of asking for an approval it already has.',
+         'My Groups → open the group → Decisions, where an approved request now carries its own '
+         + 'button. A payout also shows “Pay the group out” on the Money tab once it is approved.']);
+      if (rowCount) console.log('✅ Announced the approved-authority fix.');
+    });
+
     await step("42. Announce the group screen changes", async () => {
       const { rowCount } = await pool.query(
         `INSERT INTO feature_announcements
