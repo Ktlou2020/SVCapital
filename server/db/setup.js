@@ -3084,6 +3084,18 @@ async function autoSetup() {
           BEGIN ALTER TABLE transactions ADD COLUMN reversed_reference TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors ADD COLUMN last_auto_fica_check TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors ADD COLUMN fica_auto_status TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* WHEN THE SANCTIONS SCREEN LAST RAN, which is not when the check
+             last ran. A screen-only run must not push a client's annual full
+             re-check out by a year, and the full check's stamp cannot say
+             whether any list was read — sanctions_check_status defaults to
+             'skipped' and every row written before that column existed
+             carries it. Two stamps, two windows. See services/ficaPolicy.js. */
+          BEGIN ALTER TABLE investors ADD COLUMN last_sanctions_check TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* Why this client is on the manual route — non-resident, or under
+             the automated threshold. fica_auto_status says 'manual' and the
+             old code left the reason in a log line, so staff opening the
+             client could see that it was manual and not why. */
+          BEGIN ALTER TABLE investors ADD COLUMN fica_manual_reason TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors ADD COLUMN xp_points INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors ADD COLUMN xp_level TEXT DEFAULT 'seed'; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors ADD COLUMN investor_profile JSONB DEFAULT '{}'; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -4356,6 +4368,32 @@ async function autoSetup() {
       `, [id, COO_EMAIL, idNumber]);
       console.log(`✅ COO staff record created as ${id}.` +
                   (supplied ? ' PIN taken from COO_TEMP_PIN.' : ` One-time PIN: ${pin}`));
+    });
+
+    await step("54. Backfill last_sanctions_check from the screens that did run", async () => {
+      /* The column is new, so it is NULL for everybody — including the
+         clients whose sanctions screen DID run, whose fica_checks row says
+         so. Without this, ficaPolicy would read every one of them as never
+         screened and queue a screen they do not need, which at a few
+         thousand clients is a few thousand paid provider calls on the first
+         night. The stamp is taken from the check that actually read a list:
+         'clear' or 'hit', never 'skipped' or 'error'. */
+      try {
+        const { rowCount } = await pool.query(`
+          UPDATE investors i
+             SET last_sanctions_check = c.last_screen
+            FROM (SELECT investor_id, MAX(check_date) AS last_screen
+                    FROM fica_checks
+                   WHERE sanctions_check_status IN ('clear','hit')
+                     AND investor_id IS NOT NULL
+                   GROUP BY investor_id) c
+           WHERE c.investor_id = i.id
+             AND i.last_sanctions_check IS NULL
+        `);
+        if (rowCount) console.log(`✅ [setup] stamped ${rowCount} client(s) as already screened.`);
+      } catch (err) {
+        console.log('⚠️  [setup] could not backfill last_sanctions_check:', err.message);
+      }
     });
 
     await step("7. Backfill investments end date to", async () => {
@@ -6509,6 +6547,53 @@ async function autoSetup() {
          'Console → Groups (Stokvels) → the 30-day notice fund panel → “From the trading '
          + 'facility”, beside the rate boxes.']);
       if (rowCount) console.log('✅ Announced the facility-derived rate.');
+    });
+
+    await step("55. Announce the automated FICA threshold and the sanctions backfill", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'admin','staff','fa-id-card-clip', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['fica-threshold-and-screen-2026-11',
+         'Automated FICA now starts at R2 000, and approved clients who were never screened are being screened',
+         'Three changes to when an automated check runs.\n\n'
+         + 'IT IS TRIGGERED BY AN INVESTMENT, NOT A DEPOSIT. Money arriving in a '
+         + 'wallet used to fire the check and placing it fired nothing, because '
+         + 'nothing watched investments at all. A deposit is not a purchase, so '
+         + 'the check now runs when a client commits.\n\n'
+         + 'AND ONLY FROM R2 000 UP. An automated check is three or four paid '
+         + 'provider calls per client — Home Affairs, a bank, a sanctions list, '
+         + 'a credit bureau. Below R2 000 the client submits an ID, a proof of '
+         + 'address and a proof of bank and a person reads them, which is the '
+         + 'route that already existed. The amount tested is what reaches the '
+         + 'pool: a R2 000 investment costs R2 020 from the wallet, and it is '
+         + 'the R2 000 that counts.\n\n'
+         + 'AND AN APPROVED CLIENT WHO WAS NEVER SCREENED NOW GETS THE SCREEN, '
+         + 'ON ITS OWN. Sanctions screening was added after many clients were '
+         + 'already approved, so there is a population who went through ID and '
+         + 'bank and never past a sanctions or PEP list. The nightly sweep works '
+         + 'through them 25 a night, running the screen only — not the whole '
+         + 'check again. A possible match is held for review and raised as an '
+         + 'incident, exactly as in a full check; a clear screen leaves the '
+         + 'client approved and does not reset their annual re-check.\n\n'
+         + 'Nothing repeats inside 12 months. A staff member can still run a '
+         + 'check by hand at any time, which is what to do when a client has '
+         + 'corrected the detail that failed.\n\n'
+         + 'NON-RESIDENT CLIENTS ARE ALL MANUAL, whatever they invest. The '
+         + 'automated ID step reads Home Affairs, which holds South African ID '
+         + 'numbers only, so run against a non-resident it answers "not found" '
+         + '— a failure on the record of a client whose documents are in '
+         + 'order. They are excluded from all three nightly batches and a '
+         + '"Run check" by hand will not override it. Note what follows: the '
+         + 'sanctions and PEP screen will not run for them either, so '
+         + 'screening a non-resident is part of the manual review and will not '
+         + 'happen on its own.',
+         'KYC / FICA → FICA Pipeline → open a client. Two new fields: '
+         + '“Screened” says when the sanctions screen last ran, or “Never”; '
+         + 'a client on the manual route now carries a line saying why. To run '
+         + 'one by hand: the same client page, Run check.']);
+      if (rowCount) console.log('✅ Announced the FICA threshold and sanctions backfill.');
     });
 
     await step("53. Announce that the console's group screen works and names people", async () => {

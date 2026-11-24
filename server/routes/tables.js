@@ -1799,29 +1799,34 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
        atomic. Do not re-add a post-response hook for these types — it would
        credit a second time on top of the transactional write. */
 
-    /* ── FICA deposit hook ──────────────────────────────────────────────
-       When a completed deposit transaction is created, trigger an
-       automated FICA check if the investor has never had one.
+    /* ── FICA investment hook ───────────────────────────────────────────
+       THE TRIGGER IS THE INVESTMENT, NOT THE DEPOSIT. Money arriving in a
+       wallet used to fire the automated check and placing it fired
+       nothing, because nothing watched investments at all. A deposit is
+       not a purchase: a client can top up and sit on it, and the check
+       belongs where they commit.
+
+       The amount decides which route they take, and runFicaCheck asks
+       ficaPolicy rather than this hook deciding — the sweep and the
+       console trigger ask the same question, and a threshold compared in
+       three places is two places to forget it. investments.amount is what
+       reaches the pool, which is the amount the rule is about: the 1%
+       platform fee rides on top and is not the client's investment.
+
        Fire-and-forget: errors are logged but don't affect the response.
     ───────────────────────────────────────────────────────────────────── */
-    if (
-      table === 'transactions' &&
-      clean.type === 'deposit' &&
-      (clean.status === 'completed' || clean.status === 'pending') &&
-      clean.investor_id
-    ) {
+    if (table === 'investments' && clean.investor_id && clean.amount != null) {
       setImmediate(async () => {
         try {
           const { rows: inv } = await pool.query(
-            'SELECT * FROM investors WHERE id = $1 AND last_auto_fica_check IS NULL',
-            [clean.investor_id]
-          );
+            'SELECT * FROM investors WHERE id = $1', [clean.investor_id]);
           if (inv.length > 0) {
             const { runFicaCheck } = require('../services/ficaService');
-            await runFicaCheck(inv[0], 'first_deposit');
+            await runFicaCheck(inv[0], 'first_investment',
+                               { investedAmount: clean.amount });
           }
         } catch (err) {
-          console.error('[FICA deposit hook] Error:', err.message);
+          console.error('[FICA investment hook] Error:', err.message);
         }
       });
     }

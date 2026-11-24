@@ -6858,7 +6858,15 @@ const _FC_STATUS = {
   reversed:      { label: 'Decline reversed',      color: '#60a5fa', icon: 'fa-rotate-left' },
 };
 const _FC_PROVIDER = { datanamix: 'Datanamix', smile: 'Smile Identity', stitch: 'Stitch' };
-const _FC_TRIGGER  = { first_deposit: 'First deposit', annual_recheck: 'Annual re-check', manual: 'Run by staff', webhook: 'Provider callback' };
+const _FC_TRIGGER  = {
+  /* first_deposit is kept for the rows already written under it. The
+     automated route is triggered by an investment of R2 000 or more now —
+     a deposit is not a purchase — so nothing new carries it. */
+  first_deposit: 'First deposit (historic)',
+  first_investment: 'First investment',
+  annual_recheck: 'Annual re-check',
+  sanctions_backfill: 'Sanctions screen',
+  manual: 'Run by staff', webhook: 'Provider callback' };
 
 /* One line under the FICA stage: what the last automated check said. */
 function _fcAutoLine(inv) {
@@ -6886,7 +6894,20 @@ function _fcSummary(investor) {
     ${cell('FICA stage', `<span style="background:${sc.badge || 'transparent'};color:${sc.badgeText || '#7a92a8'};border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:700">${_esc(_ficaStageLabels[stage] || stage)}</span>`)}
     ${cell('Last automated check', investor.fica_auto_status ? _fcBadge(investor.fica_auto_status) : '<span style="font-size:0.8rem;color:var(--text-muted)">Never run</span>')}
     ${cell('Checked', `<span style="font-size:0.8rem;color:var(--text-muted)">${investor.last_auto_fica_check ? Utils.date(investor.last_auto_fica_check) : '—'}</span>`)}
-  </div>`;
+    ${/* SCREENED IS NOT CHECKED. sanctions_check_status defaults to
+          'skipped', so a client can be fully approved and never have been
+          past a sanctions or PEP list — which is exactly the population
+          the nightly backfill now works through. Staff reading a client
+          cannot tell that from "Checked", so it has its own cell. */''}
+    ${cell('Screened', merged.last_sanctions_check
+      ? `<span style="font-size:0.8rem;color:var(--text-muted)">${Utils.date(merged.last_sanctions_check)}</span>`
+      : '<span style="font-size:0.8rem;color:#fec24f" title="No sanctions or PEP screen on record. The nightly sweep screens these clients.">Never</span>')}
+  </div>
+  ${merged.fica_auto_status === 'manual' && merged.fica_manual_reason
+    ? `<div style="margin:-6px 0 14px;padding:10px 12px;border-radius:8px;background:rgba(254,194,79,0.08);border:1px solid rgba(254,194,79,0.25);font-size:0.78rem;line-height:1.45">
+         <strong style="color:#fec24f">On the manual route.</strong>
+         ${_esc(merged.fica_manual_reason)}
+       </div>` : ''}`;
 }
 
 function _fcBadge(status) {

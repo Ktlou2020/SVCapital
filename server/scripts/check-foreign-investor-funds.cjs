@@ -277,15 +277,37 @@ console.log('\nand a non-resident is never checked by the automated FICA');
      /Home Affairs/.test(F.MANUAL_FICA_REASON) && /manually/.test(F.MANUAL_FICA_REASON),
      F.MANUAL_FICA_REASON);
 
-  /* The refusal is in the RUNNER, not only in the queries that feed it. */
+  /* The refusal is in the RUNNER's path, not only in the queries that feed
+     it: the sweep, the console button and the investment hook all arrive
+     through runFicaCheck, and a predicate repeated in their SELECTs is
+     several places to forget it.
+
+     IT MOVED, and this asserts the behaviour rather than the line. The
+     decision now belongs to services/ficaPolicy.js, which runFicaCheck
+     asks before it does anything — the same rule now also carries the
+     R2 000 threshold and the twelve-month window, so a non-resident and a
+     R500 investment are one decision instead of two shapes of it. What
+     must stay true is that the answer is 'manual' and that no provider is
+     reached first. */
+  const POLICY = require(path.join(ROOT, 'server', 'services', 'ficaPolicy.js'));
+  ok('the policy refuses a non-resident, whatever is asking',
+     POLICY.scope({ residency_status: 'non_resident' }).scope === 'manual'
+     && POLICY.scope({ residency_status: 'non_resident' },
+                     { investedAmount: 1000000 }).scope === 'manual',
+     'an amount cannot buy past it: Home Affairs still does not hold their '
+     + 'ID number: ' + JSON.stringify(POLICY.scope({ residency_status: 'non_resident' })));
+  ok('and a staff member running one by hand cannot override that either',
+     POLICY.scope({ residency_status: 'non_resident' }, { force: true }).scope === 'manual',
+     'the check would record a failure that means nothing, on a client '
+     + 'whose documents are in order');
   const SVC = strip(read('server/services/ficaService.js'));
   const at  = SVC.indexOf('async function runFicaCheck');
   const head = SVC.slice(at, at + 1800);
-  ok('runFicaCheck refuses before it does any work',
-     /automatedFicaAllowed\(investor\)/.test(head),
-     'the sweep, the console button and the on-deposit trigger all arrive '
-     + 'here — a predicate repeated in their four SELECTs is three places to '
-     + 'forget it');
+  ok('runFicaCheck asks before it does any work',
+     /ficaPolicy/.test(head) && /policy\.scope\(investor/.test(head)
+     && head.indexOf('policy.scope') < head.indexOf('datanamix'),
+     'every caller arrives through this function, so the decision is taken '
+     + 'here and before any provider is reached');
   ok('and the refusal is recorded rather than silent',
      /fica_auto_status = 'manual'/.test(head), head.slice(0, 200));
   ok('AND IT DOES NOT STAMP last_auto_fica_check',
@@ -296,7 +318,28 @@ console.log('\nand a non-resident is never checked by the automated FICA');
   /* And the batches do not waste their slots on people it will refuse. */
   const CRON = strip(read('server/jobs/ficaCron.js'));
   const excl = (CRON.match(/residency_status, 'resident'\) <> 'non_resident'/g) || []).length;
-  ok('both cron batches exclude them', excl === 2, `${excl} of 2`);
+  /* COUNTED AGAINST THE BATCHES THAT FEED THE RUNNER, not against every
+     query in the file and not against a number typed here. There were two
+     such batches; the sanctions backfill makes three.
+
+     runFicaExpiryAlerts also selects from investors and correctly has NO
+     exclusion — it emails clients whose approval is ageing out to resubmit
+     their documents, and a non-resident needs that reminder like anybody
+     else. Counting every "FROM investors" would demand the exclusion there
+     and be wrong. Each batch is identified by the limit it takes. */
+  const feeders = ['[BATCH_LIMIT]', '[remainingSlots, POLICY.AUTO_MIN_INVESTMENT]',
+                   '[BACKFILL_LIMIT]'];
+  const missing = feeders.filter(tag => {
+    const at = CRON.indexOf(tag);
+    if (at < 0) return true;
+    const stmt = CRON.slice(Math.max(0, at - 900), at);
+    return !/residency_status, 'resident'\) <> 'non_resident'/.test(stmt);
+  });
+  ok('every batch that feeds the runner excludes them',
+     missing.length === 0 && excl >= feeders.length,
+     `${excl} exclusions; missing from: ${missing.join(', ') || 'none'} — a `
+     + 'batch without it spends its limited slots on clients the runner '
+     + 'will refuse');
 }
 
 /* ── The terms ───────────────────────────────────────────────────────── */

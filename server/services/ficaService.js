@@ -72,32 +72,53 @@ function ficaId() {
    6. Update investor kyc_status + last_auto_fica_check
    Returns: { checkId, idStatus, bankStatus, sanctionsStatus, addressStatus, overallStatus }
    ═══════════════════════════════════════════════════════════════════════ */
-async function runFicaCheck(investor, trigger) {
+async function runFicaCheck(investor, trigger, opts) {
   const { id: investorId, first_name, last_name, id_number, notes, date_of_birth } = investor;
 
-  /* ── A NON-RESIDENT IS NOT CHECKED AUTOMATICALLY ───────────────────
-   * Refused here rather than filtered out of four queries — the nightly
-   * sweep, the console's "run due checks", the on-deposit trigger and
-   * whatever calls this next all arrive through this function, and a
-   * predicate repeated in four SELECTs is three places to forget it.
+  /* ── WHAT THIS CLIENT IS DUE, IF ANYTHING ──────────────────────────
+   * Asked here rather than by each caller, for the same reason the
+   * non-resident refusal below is here: the sweep, the console trigger
+   * and the investment hook all arrive through this function, and a rule
+   * enforced at three call sites is two places to forget it.
    *
-   * It is not a policy preference. The automated path reads Home Affairs,
-   * which knows South African ID numbers and nothing else, so run against a
-   * passport holder living abroad it answers "not found" — which looks
-   * exactly like a real failure. A client whose documents are perfectly in
-   * order would get a FICA failure on their record and somebody would have
-   * to work out why. Their review is done by hand instead.
-   *
-   * The refusal is RECORDED, not silent: last_auto_fica_check is left alone
-   * so nothing reads this as a check that passed, and the reason goes on the
-   * investor where staff will see it. */
-  if (!FOREIGN.automatedFicaAllowed(investor)) {
-    console.log(`[FICA] ${investorId} is a non-resident — automated check skipped, manual review`);
-    await pool.query(
-      `UPDATE investors SET fica_auto_status = 'manual', updated_at = NOW() WHERE id = $1`,
-      [investorId]).catch(() => {});
-    return { skipped: true, manual: true, reason: FOREIGN.MANUAL_FICA_REASON };
+   * 'none' and 'manual' are both recorded on the investor and neither
+   * stamps last_auto_fica_check — nothing may read a check that did not
+   * happen as one that passed. That column is what the sweep tests, and
+   * stamping it on an outcome that checked nobody is the defect that
+   * silently dropped every depositor out of the queue for a year. */
+  const policy = require('./ficaPolicy');
+  const decision = policy.scope(investor, opts);
+
+  if (decision.scope === 'none') {
+    console.log(`[FICA] ${investorId} — nothing due: ${decision.reason}`);
+    return { skipped: true, notDue: true, reason: decision.reason };
   }
+
+  if (decision.scope === 'manual') {
+    console.log(`[FICA] ${investorId} — manual route: ${decision.reason}`);
+    await pool.query(
+      `UPDATE investors SET fica_auto_status = 'manual', fica_manual_reason = $2,
+              updated_at = NOW() WHERE id = $1`,
+      [investorId, decision.reason]).catch(() => {});
+    return { skipped: true, manual: true, reason: decision.reason };
+  }
+
+  /* The screen on its own: an approved client who has never been past a
+     sanctions or PEP list, or whose screen has aged out while the rest of
+     their check has not. ID, bank and address are not re-run — that is
+     the point of the scope, and running them would both cost four calls
+     and risk moving a client who is already approved. */
+  const sanctionsOnly = decision.scope === 'sanctions_only';
+
+  /* A NON-RESIDENT IS ALSO ON THE MANUAL ROUTE, and was refused here
+   * before the policy existed. It is not a preference about foreigners:
+   * the automated path reads Home Affairs, which holds South African ID
+   * numbers and nothing else, so run against a passport holder living
+   * abroad it answers "not found" — indistinguishable from a real
+   * failure, on the record of a client whose documents are in order.
+   * ficaPolicy.scope() now returns 'manual' for them, through the branch
+   * above, so the refusal is one rule with the R2 000 one rather than two
+   * shapes of the same decision in the same function. */
 
   // Prefer doc_subtype from kyc_documents if available; fall back to legacy notes field
   let isPassport = (notes || '').includes('DocType: Passport');
@@ -117,7 +138,8 @@ async function runFicaCheck(investor, trigger) {
      Datanamix's Real-Time IDV reads Home Affairs, which knows SA ID numbers
      and nothing else, so a passport still goes to Smile. */
   let idResult, idStatus;
-  try {
+  if (sanctionsOnly) { idResult = null; idStatus = 'skipped'; }
+  else try {
     if (useDatanamix && !isPassport) {
       const raw    = await datanamix.verifyIdRealtime({ idNumber: id_number });
       const mapped = datanamix.mapIdResult(raw, investor);
@@ -153,7 +175,8 @@ async function runFicaCheck(investor, trigger) {
 
   /* ── 2. Bank account check ── */
   let bankResult = null, bankStatus = 'skipped';
-  if (useDatanamix) {
+  if (sanctionsOnly) { /* not re-run: see the scope above */ }
+  else if (useDatanamix) {
     ({ bankResult, bankStatus } = await _datanamixBank(investor, isPassport));
   } else try {
     const { rows: mat } = await pool.query(
@@ -210,13 +233,41 @@ async function runFicaCheck(investor, trigger) {
      the client's profile. Never fails a client: an address that differs has
      usually just moved, and that is a person's call. */
   let addressResult = null, addressStatus = 'skipped';
-  if (useDatanamix) {
+  if (useDatanamix && !sanctionsOnly) {
     ({ addressResult, addressStatus } = await _datanamixAddress(investor, isPassport));
+  }
+
+  /* A SCREEN-ONLY RUN WITH NO SCREENING PROVIDER CHECKED NOBODY.
+   *
+   * Without Datanamix the sanctions step above cannot run at all, and a
+   * screen-only run is then three skips and nothing else. Writing that as
+   * a check would record a client as screened when no list was read —
+   * which is the precise failure the stamp comment below describes, in a
+   * new place. It is reported instead, and nothing is stamped. */
+  if (sanctionsOnly && (sanctionsStatus === 'skipped' || !useDatanamix)) {
+    console.error(`[FICA] ${investorId} needs a sanctions screen and no screening `
+                + 'provider is configured — nothing recorded');
+    try {
+      await require('./incidents').report(
+        new Error('A client approved without a sanctions screen cannot be screened: '
+                + 'no screening provider is configured. Until one is, this client '
+                + `remains approved and unscreened (${investorId}).`),
+        { source: 'fica', severity: 'critical' });
+    } catch (e) { console.error('[FICA] could not raise incident:', e.message); }
+    return { skipped: true, sanctionsOnly: true, noProvider: true };
   }
 
   /* ── 4. Derive overall status ── */
   let overallStatus;
-  if (idStatus === 'error') {
+  if (sanctionsOnly) {
+    /* One question was asked, so one answer decides it. A hit is never
+       ours to clear — it goes to a person, exactly as it does in a full
+       check — and a clear screen on an approved client leaves them where
+       they are. The skips are the scope, not a shortfall. */
+    overallStatus = sanctionsStatus === 'hit'   ? 'manual_review'
+                  : sanctionsStatus === 'clear' ? 'pass'
+                  : 'error';
+  } else if (idStatus === 'error') {
     overallStatus = 'error';
   } else if (idStatus === 'fail') {
     overallStatus = 'fail';
@@ -259,11 +310,18 @@ async function runFicaCheck(investor, trigger) {
   );
 
   /* ── 6. Update investor record ── */
-  const newKycStatus =
-    overallStatus === 'pass'           ? 'verified' :
-    overallStatus === 'fail'           ? 'rejected' :
-    overallStatus === 'manual_review'  ? 'pending'  :
-    overallStatus === 'error'          ? 'pending'  : null;
+  /* A SCREEN THAT CAME BACK CLEAR MOVES NOBODY. The client was already
+     approved — that is what put them in the screen-only scope — so there
+     is nothing to promote, and writing 'verified' over an 'approved' set
+     by a person who read their documents would quietly relabel a manual
+     approval as an automated one. A hit still holds them at 'pending',
+     the same as in a full check, because that is the point of screening. */
+  const newKycStatus = sanctionsOnly
+    ? (overallStatus === 'manual_review' ? 'pending' : null)
+    : overallStatus === 'pass'           ? 'verified' :
+      overallStatus === 'fail'           ? 'rejected' :
+      overallStatus === 'manual_review'  ? 'pending'  :
+      overallStatus === 'error'          ? 'pending'  : null;
 
   /* THE STAMP IS NOT WRITTEN WHEN THE PROVIDER ERRORED.
    *
@@ -294,7 +352,16 @@ async function runFicaCheck(investor, trigger) {
   const params = [investorId];
   const sets = ['updated_at = NOW()'];
   const param = v => { params.push(v); return '$' + params.length; };
-  if (checked) sets.push('last_auto_fica_check = NOW()');
+  /* THE FULL CHECK'S STAMP IS NOT THE SCREEN'S.
+   *
+   * last_auto_fica_check says when the whole check last ran, and the
+   * annual sweep reads it. A screen-only run stamping it would push a
+   * client's full re-check out by a year on the strength of one list
+   * being read — so the screen carries its own stamp, and that is the
+   * entire reason last_sanctions_check exists as a second column. */
+  if (checked && !sanctionsOnly) sets.push('last_auto_fica_check = NOW()');
+  if (sanctionsStatus === 'clear' || sanctionsStatus === 'hit')
+    sets.push('last_sanctions_check = NOW()');
   if (!held) {
     sets.push('fica_auto_status = ' + param(overallStatus));
     if (newKycStatus) sets.push('kyc_status = ' + param(newKycStatus));

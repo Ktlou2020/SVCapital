@@ -80,11 +80,37 @@ const natOf = async id =>
       /* The shipped statement, lifted rather than retyped — a hand-copied SELECT
          would keep passing here after someone added another column to the real
          one and broke the sweep again. */
-      const m = CRON.match(/const \{ rows: annualDue \} = await pool\.query\(`([\s\S]*?)`, \[BATCH_LIMIT\]\)/);
+      /* THE STATEMENTS ARE TEMPLATES NOW. All three batches share one
+         column list and one re-check interval, so that a batch cannot
+         quietly select a shorter list than the policy reads — but the
+         text lifted out of the file therefore carries ${COLS} and
+         ${POLICY.RECHECK_INTERVAL_SQL}, which Postgres answers with
+         "syntax error at or near $". Interpolated here from the same two
+         sources the job uses, so what is run is still what ships. */
+      /* Each capture is [^`]*, not [\s\S]*?: a lazy match starts at the
+         FIRST "await pool.query(`" in the file and runs on to whichever
+         limit this regex names, stitching two statements into one that
+         Postgres answers with "syntax error at or near ,". A class that
+         cannot cross a backtick can only match one literal. */
+      const CRONMOD = require(path.join(ROOT, 'server', 'jobs', 'ficaCron.js'));
+      const POLICY  = require(path.join(ROOT, 'server', 'services', 'ficaPolicy.js'));
+      const fill = sql => String(sql)
+        .replace(/\$\{COLS\}/g, CRONMOD.COLS)
+        .replace(/\$\{POLICY\.RECHECK_INTERVAL_SQL\}/g, POLICY.RECHECK_INTERVAL_SQL);
+      ok('the job hands over its column list',
+         typeof CRONMOD.COLS === 'string' && /last_sanctions_check/.test(CRONMOD.COLS),
+         'without it this check cannot run the real statements at all');
+
+      const m = CRON.match(/const \{ rows: annualDue \} = await pool\.query\(`([^`]*)`, \[BATCH_LIMIT\]\)/);
       ok('the annual batch statement is still findable', !!m,
          'if this fails the check can no longer prove anything about the real query');
-      const m2 = CRON.match(/const \{ rows \} = await pool\.query\(`([\s\S]*?)`, \[remainingSlots\]\)/);
-      ok('so is the first-deposit statement', !!m2);
+      const m2 = CRON.match(/const \{ rows \} = await pool\.query\(`([^`]*)`, \[remainingSlots, POLICY\.AUTO_MIN_INVESTMENT\]\)/);
+      ok('so is the first-investment statement', !!m2,
+         'the batch that was every depositor is an investment over the '
+         + 'threshold now');
+      const m3 = CRON.match(/const \{ rows \} = await pool\.query\(`([^`]*)`, \[BACKFILL_LIMIT\]\)/);
+      ok('and the sanctions backfill statement', !!m3,
+         'the third batch screens approved clients who never were');
 
       /* Each statement is RUN, and the columns it actually came back with are
          what gets asserted. Reading the SELECT text instead was not enough:
@@ -92,15 +118,19 @@ const natOf = async id =>
          matched the i.notes in the first-deposit one and the check passed
          while the annual batch had lost the field it needs. Two statements
          mean two answers, so ask each of them separately. */
-      const fieldsOf = async (sql) => {
-        try { return (await db.query(sql, [5])).fields.map(f => f.name); }
+      const fieldsOf = async (sql, params) => {
+        try { return (await db.query(fill(sql), params)).fields.map(f => f.name); }
         catch (e) { return { error: e.message }; }
       };
-      const batches = [['annual re-check', m && m[1]], ['first-deposit', m2 && m2[1]]];
+      const batches = [
+        ['annual re-check',   m  && m[1],  [5]],
+        ['first-investment',  m2 && m2[1], [5, POLICY.AUTO_MIN_INVESTMENT]],
+        ['sanctions backfill', m3 && m3[1], [5]],
+      ];
 
-      for (const [label, sql] of batches) {
+      for (const [label, sql, params] of batches) {
         if (!sql) continue;
-        const cols = await fieldsOf(sql);
+        const cols = await fieldsOf(sql, params);
         ok(`the ${label} batch executes against the real schema`,
            Array.isArray(cols), cols && cols.error);
         if (!Array.isArray(cols)) continue;
@@ -109,7 +139,17 @@ const natOf = async id =>
            Without notes it cannot tell a passport from an SA ID, and would
            submit a passport number as a national ID — a wrong answer rather
            than an error, which is the kind this job is least able to notice. */
-        for (const col of ['id', 'first_name', 'last_name', 'id_number', 'notes', 'date_of_birth', 'nationality']) {
+        for (const col of ['id', 'first_name', 'last_name', 'id_number', 'notes', 'date_of_birth', 'nationality',
+                           /* AND WHAT THE POLICY READS. It decides which
+                              check each client gets, and a batch that
+                              leaves one of these out hands it an
+                              undefined: an approved client queued for a
+                              full annual re-check then reads as never
+                              screened and is given a screen instead.
+                              Nothing throws, and the queue still reports
+                              a number. */
+                           'kyc_status', 'fica_status',
+                           'last_auto_fica_check', 'last_sanctions_check']) {
           ok(`  and returns ${col}`, cols.includes(col),
              `got: ${cols.join(', ')}`);
         }

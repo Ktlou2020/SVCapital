@@ -411,7 +411,17 @@ async function dbPart() {
       const { rows: [inv] } = await pool.query('SELECT * FROM investors WHERE id = $1', [id]);
       const quiet = console.log, quietE = console.error;
       console.log = () => {}; console.error = () => {};
-      try { return await runFicaCheck(inv, 'manual'); } finally { console.log = quiet; console.error = quietE; }
+      /* 'manual' MEANS A PERSON ASKED, so it carries what the route that
+         sends it carries. Automated checks are now once every twelve
+         months, and several of the assertions below re-check the same
+         client deliberately — a declined client, to prove a later check
+         is still recorded and still does not undo the decline. Without
+         force those runs come back {skipped:true,notDue:true} and the
+         assertions pass or fail on nothing. routes/fica.js passes force
+         for exactly this reason: staff re-run a check when a client has
+         corrected the detail that failed. */
+      try { return await runFicaCheck(inv, 'manual', { force: true }); }
+      finally { console.log = quiet; console.error = quietE; }
     };
     const inv = async id => (await pool.query(
       'SELECT kyc_status, fica_auto_status, last_auto_fica_check FROM investors WHERE id = $1', [id])).rows[0];

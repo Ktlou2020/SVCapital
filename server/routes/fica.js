@@ -3,7 +3,8 @@
 
    GET  /api/fica/status/:investorId  — check history + next due date
    POST /api/fica/trigger/:investorId — manual admin trigger
-   GET  /api/fica/queue               — investors due for (re-)check
+   GET  /api/fica/queue               — investors due for (re-)check,
+                                        including the sanctions backfill
    GET  /api/fica/providers           — which verification provider is live
    GET  /api/fica/checks/:investorId  — automated check results, staff only
    POST /api/fica/checks/:checkId/decision — approve / decline a review
@@ -18,6 +19,7 @@ const router      = require('express').Router();
 const pool        = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { runFicaCheck } = require('../services/ficaService');
+const POLICY = require('../services/ficaPolicy');
 const smile       = require('../services/smileIdentity');
 const datanamix   = require('../services/datanamix');
 const ficaReview  = require('../services/ficaReview');
@@ -37,7 +39,8 @@ router.get('/status/:investorId', requireAuth, async (req, res) => {
 
   try {
     const { rows: inv } = await pool.query(
-      `SELECT id, first_name, last_name, kyc_status, last_auto_fica_check, fica_auto_status
+      `SELECT id, first_name, last_name, kyc_status, last_auto_fica_check, fica_auto_status,
+              last_sanctions_check, fica_manual_reason
        FROM investors WHERE id = $1`,
       [investorId]
     );
@@ -92,7 +95,13 @@ router.post(
       );
       if (!rows.length) return res.status(404).json({ error: 'Investor not found.' });
 
-      const result = await runFicaCheck(rows[0], req.body?.trigger || 'manual');
+      /* A STAFF MEMBER ASKING IS NOT A SWEEP. The twelve-month window and
+         the R2 000 threshold govern what runs on its own; this endpoint is
+         somebody deciding to run one, usually right after a client fixed
+         the detail that failed, and making them wait out the window would
+         be a year. ficaPolicy still refuses a non-resident. */
+      const result = await runFicaCheck(rows[0], req.body?.trigger || 'manual',
+                                        { force: true });
       res.json({ success: true, ...result });
     } catch (err) {
       console.error('FICA trigger error:', err.message);
@@ -113,7 +122,8 @@ router.get(
   async (req, res) => {
     try {
       const { rows: annual } = await pool.query(`
-        SELECT id, first_name, last_name, kyc_status, last_auto_fica_check, fica_auto_status
+        SELECT id, first_name, last_name, kyc_status, last_auto_fica_check, fica_auto_status,
+               last_sanctions_check, fica_manual_reason
         FROM investors
         WHERE last_auto_fica_check IS NOT NULL
           AND last_auto_fica_check < NOW() - INTERVAL '1 year'
@@ -122,25 +132,50 @@ router.get(
         LIMIT 100
       `);
 
-      const { rows: firstDeposit } = await pool.query(`
+      /* THIS QUERY WAS A FIFTH COPY OF THE RULE, and it listed depositors —
+         so staff reading the pipeline saw a queue of people the sweep was
+         never going to check. The basis is an investment over the
+         threshold, and the threshold comes from ficaPolicy rather than
+         being typed here again. */
+      const { rows: firstInvestment } = await pool.query(`
         SELECT i.id, i.first_name, i.last_name, i.kyc_status,
-               i.last_auto_fica_check, i.fica_auto_status
+               i.last_auto_fica_check, i.fica_auto_status, i.last_sanctions_check,
+               i.fica_manual_reason
         FROM investors i
         WHERE i.last_auto_fica_check IS NULL
           AND EXISTS (
-            SELECT 1 FROM transactions t
-            WHERE t.investor_id = i.id
-              AND t.type = 'deposit'
-              AND t.status = 'completed'
+            SELECT 1 FROM investments v
+            WHERE v.investor_id = i.id
+              AND COALESCE(v.amount, 0) >= $1
+              AND COALESCE(v.status, '') NOT IN ('cancelled', 'rejected')
           )
           AND COALESCE(i.status, '') <> 'suspended'
+          AND COALESCE(i.residency_status, 'resident') <> 'non_resident'
+        LIMIT 100
+      `, [POLICY.AUTO_MIN_INVESTMENT]);
+
+      /* Approved and never screened — what the nightly backfill works
+         through. Staff asking "who is approved without a sanctions check"
+         had nowhere to read the answer. */
+      const { rows: neverScreened } = await pool.query(`
+        SELECT i.id, i.first_name, i.last_name, i.kyc_status,
+               i.last_auto_fica_check, i.fica_auto_status, i.last_sanctions_check,
+               i.fica_manual_reason
+        FROM investors i
+        WHERE i.last_sanctions_check IS NULL
+          AND (i.kyc_status IN ('approved','verified') OR i.fica_status = 'approved')
+          AND COALESCE(i.status, '') <> 'suspended'
+          AND COALESCE(i.residency_status, 'resident') <> 'non_resident'
+        ORDER BY i.last_auto_fica_check ASC NULLS LAST
         LIMIT 100
       `);
 
       res.json({
-        annualRecheck:   annual,
-        firstDeposit:    firstDeposit,
-        totalPending:    annual.length + firstDeposit.length,
+        annualRecheck:    annual,
+        firstInvestment:  firstInvestment,
+        neverScreened:    neverScreened,
+        threshold:        POLICY.AUTO_MIN_INVESTMENT,
+        totalPending:     annual.length + firstInvestment.length + neverScreened.length,
       });
     } catch (err) {
       console.error('FICA queue error:', err.message);
@@ -206,7 +241,8 @@ router.get(
   async (req, res) => {
     try {
       const { rows: inv } = await pool.query(
-        `SELECT id, first_name, last_name, kyc_status, fica_auto_status, last_auto_fica_check
+        `SELECT id, first_name, last_name, kyc_status, fica_auto_status,
+                last_auto_fica_check, last_sanctions_check, fica_manual_reason
            FROM investors WHERE id = $1`, [req.params.investorId]);
       if (!inv.length) return res.status(404).json({ error: 'Investor not found.' });
 

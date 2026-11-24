@@ -59,15 +59,26 @@ async function makeDatabase() {
   pool.on('error', () => {});
 }
 
-/* Six investors, one situation each. Only two of them may be picked up.
+/* THIS BATCH USED TO BE EVERY DEPOSITOR, and these fixtures were deposits.
+   The automated route now starts at an INVESTMENT of R2 000 — a deposit is
+   not a purchase, and the check is paid provider calls per client — so the
+   fixtures are investments, and two new cases carry the rule:
+   somebody who only deposited, and somebody who invested R500.
 
-   FS-OK    deposited, never checked          → first-deposit batch
-   FS-OLD   checked 2 years ago               → annual batch
-   FS-SUSP  deposited, never checked, SUSPENDED
-   FS-DONE  deposited, checked yesterday
-   FS-NODEP never deposited
-   FS-PEND  deposit still PENDING             — money that has not arrived is
-                                                not a first deposit */
+   Nine investors, one situation each. Only two may be picked up.
+
+   FS-OK     invested R2 000, never checked     → first-investment batch
+   FS-OLD    checked 2 years ago                → annual batch
+   FS-SUSP   invested, never checked, SUSPENDED
+   FS-DONE   invested, checked yesterday
+   FS-NOINV  never invested
+   FS-PEND   investment CANCELLED               — a placement that did not
+                                                  stand is not a placement
+   FS-DEP    deposited R50 000, never invested  — money in a wallet is not a
+                                                  purchase
+   FS-SMALL  invested R500                      — under the threshold, so
+                                                  documents and a person
+   FS-SCREEN approved, never screened           → sanctions backfill */
 async function seed() {
   const inv = (id, status, lastCheck) => pool.query(`
     INSERT INTO investors (id, first_name, last_name, email, status, kyc_status,
@@ -76,23 +87,43 @@ async function seed() {
             '9001015800085','1990-01-01','South African',$3)`,
     [id, status, lastCheck]);
 
-  await inv('FS-OK',    'active', null);
-  await inv('FS-OLD',   'active', new Date(Date.now() - 400 * 864e5));
-  await inv('FS-SUSP',  'suspended', null);
-  await inv('FS-DONE',  'active', new Date(Date.now() - 864e5));
-  await inv('FS-NODEP', 'active', null);
-  await inv('FS-PEND',  'active', null);
+  await inv('FS-OK',     'active', null);
+  await inv('FS-OLD',    'active', new Date(Date.now() - 400 * 864e5));
+  await inv('FS-SUSP',   'suspended', null);
+  await inv('FS-DONE',   'active', new Date(Date.now() - 864e5));
+  await inv('FS-NOINV',  'active', null);
+  await inv('FS-PEND',   'active', null);
+  await inv('FS-DEP',    'active', null);
+  await inv('FS-SMALL',  'active', null);
 
-  const dep = (id, who, status) => pool.query(`
+  /* Approved and never screened — the backfill's population. Stamped as
+     screened-never by leaving last_sanctions_check NULL, which is what
+     every client on the platform carries until the screen runs. */
+  await pool.query(`UPDATE investors SET kyc_status = 'approved' WHERE id = 'FS-DONE'`);
+  await inv('FS-SCREEN', 'active', new Date(Date.now() - 60 * 864e5));
+  await pool.query(`UPDATE investors SET kyc_status = 'approved' WHERE id = 'FS-SCREEN'`);
+  /* Everybody else is kyc_status 'pending', so nobody but FS-DONE and
+     FS-SCREEN can reach the screen-only scope. FS-DONE is approved AND
+     checked yesterday AND unscreened, which makes it the case that tells
+     the two windows apart: its full check is inside the window, so the
+     screen is what it is due. */
+
+  const place = (id, who, amount, status) => pool.query(`
+    INSERT INTO investments (id, investor_id, amount, status, start_date)
+    VALUES ($1,$2,$3,$4, NOW() - INTERVAL '10 days')`,
+    [id, who, amount, status]);
+
+  await place('FS-V-OK',    'FS-OK',    2000, 'active');
+  await place('FS-V-OLD',   'FS-OLD',   5000, 'active');
+  await place('FS-V-SUSP',  'FS-SUSP',  5000, 'active');
+  await place('FS-V-DONE',  'FS-DONE',  5000, 'active');
+  await place('FS-V-PEND',  'FS-PEND',  5000, 'cancelled');
+  await place('FS-V-SMALL', 'FS-SMALL',  500, 'active');
+
+  /* A deposit and nothing placed. */
+  await pool.query(`
     INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date)
-    VALUES ($1,$2,'deposit', 1000, $3, $1, 'Deposit', NOW() - INTERVAL '10 days')`,
-    [id, who, status]);
-
-  await dep('FS-T-OK',   'FS-OK',   'completed');
-  await dep('FS-T-OLD',  'FS-OLD',  'completed');
-  await dep('FS-T-SUSP', 'FS-SUSP', 'completed');
-  await dep('FS-T-DONE', 'FS-DONE', 'completed');
-  await dep('FS-T-PEND', 'FS-PEND', 'pending');
+    VALUES ('FS-T-DEP','FS-DEP','deposit', 50000,'completed','FS-T-DEP','Deposit', NOW() - INTERVAL '10 days')`);
 }
 
 const checksFor = async id => (await pool.query(
@@ -117,11 +148,16 @@ const checksFor = async id => (await pool.query(
     console.log('\nthe sweep picks up the people it is for');
     console.log(`  (${queued.trim()})`);
 
-    ok('it queues the investor who deposited and was never checked',
-       /0 annual re-checks/.test(queued) === false || /1 first-deposit/.test(queued),
+    /* THE OLD FORM OF THIS ASSERTION WAS
+         /0 annual re-checks/.test(queued) === false || /1 first-deposit/…
+       which is true the moment the ANNUAL batch queues anybody, whatever
+       the investment batch did. It passed through a change that emptied
+       the batch it is about. The count is read directly now. */
+    ok('it queues the investor who invested R2 000 and was never checked',
+       /1 first-investment checks/.test(queued),
        `${queued} — this is the batch that is empty every night in production`);
     ok('and a check was actually recorded against them',
-       (await checksFor('FS-OK')).some(r => r.trigger === 'first_deposit'),
+       (await checksFor('FS-OK')).some(r => r.trigger === 'first_investment'),
        JSON.stringify(await checksFor('FS-OK')));
     ok('it queues the investor whose check is over a year old',
        (await checksFor('FS-OLD')).some(r => r.trigger === 'annual_recheck'),
@@ -130,13 +166,40 @@ const checksFor = async id => (await pool.query(
     console.log('\nand leaves alone the people it is not for');
     ok('a suspended investor is skipped', (await checksFor('FS-SUSP')).length === 0);
     ok('an investor checked yesterday is skipped', (await checksFor('FS-DONE')).length === 0);
-    ok('an investor who never deposited is skipped', (await checksFor('FS-NODEP')).length === 0);
-    ok('a PENDING deposit is not a first deposit', (await checksFor('FS-PEND')).length === 0,
-       'money that has not arrived does not start the FICA clock');
+    ok('an investor who never invested is skipped', (await checksFor('FS-NOINV')).length === 0);
+    ok('a CANCELLED investment is not a placement', (await checksFor('FS-PEND')).length === 0,
+       'a placement that did not stand does not start the FICA clock');
+
+    /* ── THE RULE ITSELF ── */
+    ok('A DEPOSIT WITH NOTHING PLACED IS NOT CHECKED',
+       (await checksFor('FS-DEP')).length === 0,
+       'R50 000 sitting in a wallet is not a purchase, and this batch used '
+       + 'to be every depositor: ' + JSON.stringify(await checksFor('FS-DEP')));
+    ok('AND NEITHER IS AN INVESTMENT UNDER R2 000',
+       (await checksFor('FS-SMALL')).length === 0,
+       'R500 goes to documents and a person — this is the whole rule: '
+       + JSON.stringify(await checksFor('FS-SMALL')));
+
+    console.log('\nand screens the approved client who was never screened');
+    ok('THE BACKFILL QUEUES THEM',
+       /1 sanctions backfills/.test(queued) || /2 sanctions backfills/.test(queued),
+       queued);
+    /* AND RECORDS NOTHING FOR THEM, because there is no screening provider
+       in this environment — which is the state production is in right now.
+       A screen-only run with nothing to screen with would otherwise write a
+       row whose every step says 'skipped', and that row says the client was
+       screened. They were not. So the honest outcome is no row, no stamp,
+       and an incident naming what cannot happen until a provider is
+       configured — asserted below. */
+    ok('and records nothing, because there is no screening provider here',
+       (await checksFor('FS-SCREEN')).length === 0,
+       'a row of skips says this client was screened, and they were not: '
+       + JSON.stringify(await checksFor('FS-SCREEN')));
 
     console.log('\nand says what it did');
-    ok('the completion line counts both batches',
-       /annual:1 firstDeposit:1/.test(done), done);
+    ok('the completion line counts every batch',
+       /annual:1 firstInvestment:1/.test(done) && /sanctionsBackfill:[1-9]/.test(done),
+       done);
 
     /* The ID step cannot succeed without provider keys. Worth asserting,
        because it is the state production is in RIGHT NOW: were the trigger
@@ -174,7 +237,7 @@ const checksFor = async id => (await pool.query(
       const again = lines2.find(l => /Queued:/.test(l)) || '';
 
       ok('the investor whose check errored is picked up again',
-         (await checksFor('FS-OK')).some(r => r.trigger === 'first_deposit'),
+         (await checksFor('FS-OK')).some(r => r.trigger === 'first_investment'),
          `${again.trim()} — an error means we never checked them, so stamping ` +
          'them as checked hides them for a year behind a verification that ' +
          'never happened');
@@ -182,18 +245,28 @@ const checksFor = async id => (await pool.query(
          (await pool.query(
            `SELECT last_auto_fica_check FROM investors WHERE id = 'FS-OK'`)
          ).rows[0].last_auto_fica_check === null,
-         'the column the first-deposit batch tests must stay NULL until ' +
+         'the column the first-investment batch tests must stay NULL until ' +
          'somebody has actually been checked');
 
       /* Nobody being verified is not a log line. */
       const { rows: inc } = await pool.query(
         `SELECT severity, message FROM platform_incidents WHERE source = 'fica'`);
+      /* SEARCHED, NOT INDEXED. There is a second critical incident now —
+         an approved client who cannot be screened because no screening
+         provider is configured — and it is raised first, so inc[0] is no
+         longer the one this asserts about. An assertion that reads index
+         zero is an assertion about the order things happened to run in. */
       ok('and the silence is raised as an incident',
-         inc.length === 1 && inc[0].severity === 'critical',
+         inc.length >= 1 && inc.every(i => i.severity === 'critical'),
          JSON.stringify(inc));
       ok('naming what cannot happen until it is fixed',
-         inc[0] && /No investor can be verified/.test(inc[0].message),
-         JSON.stringify(inc[0] && inc[0].message));
+         inc.some(i => /No investor can be verified/.test(i.message || '')),
+         JSON.stringify(inc.map(i => i.message)));
+      ok('AND THE UNSCREENED APPROVED CLIENT IS NAMED TOO',
+         inc.some(i => /cannot be screened/.test(i.message || '')),
+         'a client left approved and unscreened because a provider is '
+         + 'missing is not a thing to leave in a log: '
+         + JSON.stringify(inc.map(i => i.message)));
     }
 
     /* ── And the other half: a check that RESOLVES must stamp ────────
@@ -212,9 +285,13 @@ const checksFor = async id => (await pool.query(
             id_number, date_of_birth, nationality, last_auto_fica_check)
         VALUES ('FS-PASS','Pass','Case','pass@example.test','active','pending',
                 '9001015800085','1990-01-01','South African', NULL)`);
+      /* An INVESTMENT over the threshold, not a deposit: the batch that
+         picks this client up is the first-investment one now. R1 000 in a
+         wallet would leave them unqueued and this whole section asserting
+         nothing. */
       await pool.query(`
-        INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date)
-        VALUES ('FS-T-PASS','FS-PASS','deposit', 1000,'completed','FS-T-PASS','Deposit', NOW())`);
+        INSERT INTO investments (id, investor_id, amount, status, start_date)
+        VALUES ('FS-V-PASS','FS-PASS', 2500,'active', NOW())`);
 
       /* Stand a passing provider in front of the real one, then reload the
          service so it picks the stub up. */
