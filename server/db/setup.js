@@ -6511,6 +6511,29 @@ async function autoSetup() {
       if (rowCount) console.log('✅ Announced the facility-derived rate.');
     });
 
+    await step("52. Announce that a group notice is no longer lost when a send fails", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'admin','staff','fa-envelope-circle-check', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['stokvel-notify-durability-2026-11',
+         'A group notice that fails to send is now retried instead of logged and lost',
+         'Every message a group sends — a request for a signature, a payout, a fine, a changed '
+         + 'contribution — went straight to the mail provider, and a failure became a line in '
+         + 'the server log. Meanwhile the monthly statement, which matters far less, already '
+         + 'went through a queue with three attempts and a dead-letter state. The one that '
+         + 'holds up a group’s money had the weaker delivery of the two.\n\n'
+         + 'Group notices now use the same queue: the message is written down before it is '
+         + 'sent, so it survives both a failed send and a deploy that lands mid-send, and it is '
+         + 'still sent immediately so nothing waits for the retry cron. Anything that fails '
+         + 'three times lands as “dead” in email_queue, where it can be found — which is where '
+         + 'to look if a committee says they were never asked.',
+         'Nothing to do. If a member reports a missing notice, look in email_queue for their '
+         + 'address — status “dead” means we tried three times and gave up.']);
+      if (rowCount) console.log('✅ Announced the notification durability change.');
+    });
+
     await step("51. Announce the group's investments showing the full product", async () => {
       const { rowCount } = await pool.query(
         `INSERT INTO feature_announcements

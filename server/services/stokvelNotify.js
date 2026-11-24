@@ -52,10 +52,14 @@ const fmtR = v => 'R' + Number(v || 0).toLocaleString('en-ZA',
 /* Lazily required so a missing mail key or push config cannot stop this file
    from loading inside the money path. */
 function services() {
-  let email = null, push = null;
+  let email = null, push = null, outbox = null;
   try { email = require('./email'); } catch (_) {}
   try { push  = require('./pushService'); } catch (_) {}
-  return { email, push };
+  /* The durable path for the email half — see services/emailQueue.js. Still
+     required lazily, like the other two, because a check that stubs one of
+     them must not be forced to stand up the rest. */
+  try { outbox = require('./emailQueue'); } catch (_) {}
+  return { email, push, outbox };
 }
 
 /* The authority, the group it belongs to and the pool it names, in one read.
@@ -168,18 +172,63 @@ function hubUrl(groupId, section) {
    other and a failure of one never stops the other. */
 async function _tell(person, { title, body, email: mail, url }) {
   if (!person) return null;
-  const { email, push } = services();
+  const { email, push, outbox } = services();
+
+  /* THE EMAIL FIRST, AND THROUGH THE OUTBOX. It used to call the email
+     service directly and catch the failure into a console line, so a
+     request for a signature got one attempt and silence while a monthly
+     statement — which already went through the queue — got three attempts
+     and a dead-letter row. The one that holds up a group's money had the
+     weaker delivery of the two.
+     
+     enqueueAndSend writes the row before it tries, so the message survives
+     a failed send AND a process that dies mid-fan-out, which is what a
+     redeploy looks like from here. It sends immediately, so nothing waits
+     for the two-minute cron, and it never rejects. */
+  if (mail && person.email) {
+    if (outbox && outbox.enqueueAndSend) {
+      await outbox.enqueueAndSend(person.email, 'sendStokvelMandate', [person, mail]);
+    } else if (email) {
+      await Promise.resolve(email.sendStokvelMandate(person, mail))
+        .catch(e => console.warn('[stokvelNotify] email failed:', e.message));
+    }
+  }
+
+  /* Push afterwards and best-effort, deliberately. It needs a permission
+     this member may never have granted and there is nothing to retry into
+     — a subscription that is gone is gone, and pushService prunes it. The
+     email is the channel that has to be durable. */
   if (push && person.id) {
     await push.sendPushToInvestor(person.id, {
       title, body, url: url || '/portal/', tag: 'sv-stokvel',
       icon: '/assets/logo.png', badge: '/assets/logo.png',
     }).catch(e => console.warn('[stokvelNotify] push failed:', e.message));
   }
-  if (email && mail && person.email) {
-    await Promise.resolve(email.sendStokvelMandate(person, mail))
-      .catch(e => console.warn('[stokvelNotify] email failed:', e.message));
-  }
   return person.id;
+}
+
+/* ─── TELLING SEVERAL PEOPLE ───────────────────────────────────────
+ *
+ * Every group-wide notice walked its roster with `for (… ) await _tell(…)`,
+ * so a fifteen-member payout was fifteen round trips end to end, each a
+ * send and a push. The caller is a floating promise — routes fire
+ * `n.paidOut(…).catch(…)` without awaiting — so the longer that tail, the
+ * more of it a restart takes with it. On a platform that redeploys several
+ * times a day that is not a hypothetical.
+ *
+ * Bounded, not unbounded: five at a time keeps the tail short without
+ * opening fifteen connections to the mail provider at once and being rate
+ * limited into the retries this change exists to avoid.
+ */
+async function _tellAll(people, message) {
+  const LANES = 5;
+  const list = (people || []).filter(Boolean);
+  const told = [];
+  for (let i = 0; i < list.length; i += LANES) {
+    const lane = list.slice(i, i + LANES);
+    told.push(...await Promise.all(lane.map(p => _tell(p, message(p)))));
+  }
+  return told;
 }
 
 /* ─── ASKED ────────────────────────────────────────────────────────
@@ -593,10 +642,16 @@ async function paidOut({ groupId, payout, db } = {}) {
       `SELECT name FROM sub_accounts WHERE id = $1`, [groupId]);
     if (!row) return { notified: [] };
 
-    const told = [];
+    /* Everybody who was paid, in lanes rather than one at a time: this is
+       the biggest fan-out a group has and the one most likely to be cut
+       short by a restart. See _tellAll. */
+    const lines = [];
     for (const line of (p.lines || [])) {
       const person = await _person(pool, line.investor_id);
-      if (!person) continue;
+      if (person) lines.push({ person, line });
+    }
+    const told = await _tellAll(lines.map(x => x.person), person => {
+      const { line } = lines.find(x => x.person.id === person.id);
       const queued = Number(line.queued) || 0;
       const tail = queued > 0
         ? ` ${fmtR(queued)} is still owed to you and follows as the group\u2019s investments mature.`
@@ -610,7 +665,7 @@ async function paidOut({ groupId, payout, db } = {}) {
       rows.push(['Paid to your wallet', fmtR(line.paid)]);
       if (queued > 0) rows.push(['Still owed to you', fmtR(queued)]);
 
-      told.push(await _tell(person, {
+      return {
         url: hubUrl(groupId, 'payouts'),
         title: row.name,
         body: `${p.label || 'The payout'}: ${fmtR(line.paid)} is in your wallet.${tail}`,
@@ -627,8 +682,8 @@ async function paidOut({ groupId, payout, db } = {}) {
               + 'as cash becomes available \u2014 it does not need chasing.'
             : 'You are still a member and the group carries on; contributions continue as scheduled.',
         },
-      }));
-    }
+      };
+    });
     return { notified: told.filter(Boolean) };
   } catch (err) {
     console.error('[stokvelNotify] paidOut failed:', err.message);
@@ -718,9 +773,9 @@ async function scheduleChanged({ groupId, actorId, schedule, previous, db } = {}
     const body = previous
       ? `${who} changed the contribution from ${fmtR(previous.amount)} to ${now}, from ${from}. What you already owe is unchanged.`
       : `${who} set the contribution: ${now}, from ${from}.`;
-    const told = [];
-    for (const m of members) {
-      told.push(await _tell(m, {
+    /* The same message to every member, so it is built once and the lanes
+       only differ in who receives it. */
+    const told = await _tellAll(members, () => ({
         url: hubUrl(groupId, 'contributions'), title: (g && g.name) || 'Your group', body,
         email: {
           subject: `${(g && g.name) || 'Your group'}: the contribution is now ${fmtR(schedule.amount)} ${every}`,
@@ -731,8 +786,7 @@ async function scheduleChanged({ groupId, actorId, schedule, previous, db } = {}
           note: 'Contributions raised before this keep the amount they were raised at. '
               + 'If you think this is wrong, raise it with your committee.',
         },
-      }));
-    }
+    }));
     return { notified: told.filter(Boolean) };
   } catch (err) {
     console.error('[stokvelNotify] scheduleChanged failed:', err.message);
