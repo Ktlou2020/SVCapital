@@ -6511,6 +6511,25 @@ async function autoSetup() {
       if (rowCount) console.log('✅ Announced the facility-derived rate.');
     });
 
+    await step("51. Announce the group's investments showing the full product", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'portal','everyone','fa-file-lines', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['stokvel-investments-product-cards-2026-11',
+         'A group now sees the whole product — overview, returns and factsheets — not just a pool name',
+         'The Investments tab listed the pools open to a group as a line of names with a rate '
+         + 'beside each. A committee deciding where its savings go was shown less than a member '
+         + 'deciding for themselves, which is the wrong way round: it is more people’s money. '
+         + 'It is the same card the marketplace draws now — what the product is, what it has '
+         + 'actually returned a year, the minimum, the term, when the next pool closes and the '
+         + 'factsheet — with two buttons: ask the signatories, or open the product and its '
+         + 'factsheets first.',
+         'My Groups → open the group → Investments.']);
+      if (rowCount) console.log('✅ Announced the group product cards.');
+    });
+
     await step("50. Announce that a signatory is not offered a vote on their own removal", async () => {
       const { rowCount } = await pool.query(
         `INSERT INTO feature_announcements

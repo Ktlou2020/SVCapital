@@ -4032,6 +4032,91 @@ function _cancelSaInvestMode() {
   renderMarketplace();
 }
 
+/* ─── ONE PRODUCT CARD, TWO FRONT DOORS ────────────────────────────
+ *
+ * The personal marketplace and the group's Investments tab show the same
+ * products, and showed them completely differently: the marketplace gave
+ * the overview, the metrics, the factsheet and the blurb; the group got a
+ * bare list of pool names with a rate beside them. A committee deciding
+ * where its savings go was asked to decide on less than a member deciding
+ * for themselves, which is the wrong way round — it is more people's money.
+ *
+ * So the card is one function, and each surface supplies only what differs:
+ * `footer` is the action, because the action is the only honest difference
+ * between "I will invest" and "we will ask our signatories".
+ */
+function _svProductCard(p, open, opts) {
+  const o = opts || {};
+
+    const pi = Utils.productInfo(p.product_type);
+    const color = Utils.productColor(p);
+    const icon = p.icon || pi.icon;
+    /* avg_annual_rate, not avg_actual_rate. avg_actual_rate is the return
+       achieved over each pool's OWN period; this tile labels it "P.A." for
+       every product except short_term, so a seven-year solar pool's whole
+       return was being read as one year's. The products route has carried
+       the annualised average all along — AVG(actual_rate × 12 / term) — with
+       a comment saying it exists for exactly this tile and that nothing read
+       it yet. Something does now.
+
+       This also puts the grid on the same basis as the track record and the
+       Browse Pools tile, which annualise already. One rule: what is shown is
+       the average calculated for the product, per annum. */
+    const avg = p.avg_annual_rate > 0 ? parseFloat(p.avg_annual_rate)
+      : (p.avg_actual_rate > 0 ? parseFloat(p.avg_actual_rate) : null);
+    const poolRate = open[0] ? parseFloat(open[0].annual_rate) : null;
+    const rateLabel = avg != null ? `${(avg * 100).toFixed(2)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : (poolRate != null ? `${(poolRate * 100).toFixed(1)}%` : '—'));
+    const termMonths = p.term_months || (open[0] && open[0].term_months) || null;
+    const rateSub = _rateSubLabel(p, avg != null, termMonths);
+    const eif = _isEifProduct(p);
+    // soonest closing among the open pools
+    const days = open.map(o => Utils.daysRemaining(o.end_date)).filter(d => d !== null);
+    const soonest = days.length ? Math.min(...days) : null;
+    /* What the cheapest open pool will actually take, not what the product
+       record happens to say. */
+    const cardMin = eifCardMinimum(p, open);
+    return `
+      <div class="market-pool-card mpc-v2${eif ? ' mpc-v2--eif' : ''}" style="cursor:pointer" onclick="openProductDetail('${p.product_type}')">
+        <div class="mpc2-accent" style="background:linear-gradient(90deg,${color},${color}88)"></div>
+        <div class="mpc2-top">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+            <div class="mpc2-icon" style="background:${color}18;color:${color}"><i class="fa-solid ${icon}"></i></div>
+            <span class="mpc2-badge" style="background:${color}14;color:${color};border-color:${color}30">${open.length ? `${open.length} open pool${open.length === 1 ? '' : 's'}` : 'Details & factsheets'}</span>
+          </div>
+          ${eif && cat !== 'eif' ? `<div class="eif-tag"><i class="fa-solid ${EIF_ICON()}"></i> Interest-free</div>` : ''}
+          <div style="margin-top:14px">
+            <div class="mpc2-title">${_esc((p.label || '').replace(/\s*\(\d+yr\)/gi, '').trim())}</div>
+            <div class="mpc2-blurb">${_esc(p.headline || p.description || '')}</div>
+          </div>
+        </div>
+        <div class="mpc2-metrics">
+          <div class="mpc2-metric">
+            <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${rateLabel}</div>
+            <div class="mpc2-metric__lbl">${rateSub}</div>
+          </div>
+          <div class="mpc2-metric-sep"></div>
+          <div class="mpc2-metric">
+            <div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(cardMin.amount)}</div>
+            <div class="mpc2-metric__lbl">${cardMin.indicative ? 'minimum &middot; indicative' : 'minimum'}</div>
+          </div>
+          <div class="mpc2-metric-sep"></div>
+          <div class="mpc2-metric">
+            <div class="mpc2-metric__val">${termMonths || '—'}<span style="font-size:1rem;opacity:0.7">mo</span></div>
+            <div class="mpc2-metric__lbl">term</div>
+          </div>
+        </div>
+        <div class="mpc2-pills">
+          ${soonest !== null ? `<div class="mpc2-pill${soonest <= 7 ? ' mpc2-pill--urgent' : ''}"><i class="fa-solid fa-clock"></i><span>Next pool closes in <strong>${soonest}d</strong></span></div>` : ''}
+          ${p.factsheet_url ? `<div class="mpc2-pill"><i class="fa-solid fa-file-pdf"></i><span>Factsheet</span></div>` : ''}
+        </div>
+        <div class="mpc2-footer">
+          ${o.footer ? o.footer(p, open) : `<button class="btn btn--primary btn--full" onclick="event.stopPropagation();openProductDetail('${p.product_type}')">
+            <i class="fa-solid fa-arrow-right"></i> View product & pools
+          </button>`}
+        </div>
+      </div>`;
+}
+
 function renderProductsGrid() {
   const grid = document.getElementById('marketplaceGrid');
   if (!grid) return;
@@ -4161,75 +4246,7 @@ function renderProductsGrid() {
     return;
   }
 
-  grid.innerHTML = shown.map(({ p, open }) => {
-    const pi = Utils.productInfo(p.product_type);
-    const color = Utils.productColor(p);
-    const icon = p.icon || pi.icon;
-    /* avg_annual_rate, not avg_actual_rate. avg_actual_rate is the return
-       achieved over each pool's OWN period; this tile labels it "P.A." for
-       every product except short_term, so a seven-year solar pool's whole
-       return was being read as one year's. The products route has carried
-       the annualised average all along — AVG(actual_rate × 12 / term) — with
-       a comment saying it exists for exactly this tile and that nothing read
-       it yet. Something does now.
-
-       This also puts the grid on the same basis as the track record and the
-       Browse Pools tile, which annualise already. One rule: what is shown is
-       the average calculated for the product, per annum. */
-    const avg = p.avg_annual_rate > 0 ? parseFloat(p.avg_annual_rate)
-      : (p.avg_actual_rate > 0 ? parseFloat(p.avg_actual_rate) : null);
-    const poolRate = open[0] ? parseFloat(open[0].annual_rate) : null;
-    const rateLabel = avg != null ? `${(avg * 100).toFixed(2)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : (poolRate != null ? `${(poolRate * 100).toFixed(1)}%` : '—'));
-    const termMonths = p.term_months || (open[0] && open[0].term_months) || null;
-    const rateSub = _rateSubLabel(p, avg != null, termMonths);
-    const eif = _isEifProduct(p);
-    // soonest closing among the open pools
-    const days = open.map(o => Utils.daysRemaining(o.end_date)).filter(d => d !== null);
-    const soonest = days.length ? Math.min(...days) : null;
-    /* What the cheapest open pool will actually take, not what the product
-       record happens to say. */
-    const cardMin = eifCardMinimum(p, open);
-    return `
-      <div class="market-pool-card mpc-v2${eif ? ' mpc-v2--eif' : ''}" style="cursor:pointer" onclick="openProductDetail('${p.product_type}')">
-        <div class="mpc2-accent" style="background:linear-gradient(90deg,${color},${color}88)"></div>
-        <div class="mpc2-top">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
-            <div class="mpc2-icon" style="background:${color}18;color:${color}"><i class="fa-solid ${icon}"></i></div>
-            <span class="mpc2-badge" style="background:${color}14;color:${color};border-color:${color}30">${open.length ? `${open.length} open pool${open.length === 1 ? '' : 's'}` : 'Details & factsheets'}</span>
-          </div>
-          ${eif && cat !== 'eif' ? `<div class="eif-tag"><i class="fa-solid ${EIF_ICON()}"></i> Interest-free</div>` : ''}
-          <div style="margin-top:14px">
-            <div class="mpc2-title">${_esc((p.label || '').replace(/\s*\(\d+yr\)/gi, '').trim())}</div>
-            <div class="mpc2-blurb">${_esc(p.headline || p.description || '')}</div>
-          </div>
-        </div>
-        <div class="mpc2-metrics">
-          <div class="mpc2-metric">
-            <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${rateLabel}</div>
-            <div class="mpc2-metric__lbl">${rateSub}</div>
-          </div>
-          <div class="mpc2-metric-sep"></div>
-          <div class="mpc2-metric">
-            <div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(cardMin.amount)}</div>
-            <div class="mpc2-metric__lbl">${cardMin.indicative ? 'minimum &middot; indicative' : 'minimum'}</div>
-          </div>
-          <div class="mpc2-metric-sep"></div>
-          <div class="mpc2-metric">
-            <div class="mpc2-metric__val">${termMonths || '—'}<span style="font-size:1rem;opacity:0.7">mo</span></div>
-            <div class="mpc2-metric__lbl">term</div>
-          </div>
-        </div>
-        <div class="mpc2-pills">
-          ${soonest !== null ? `<div class="mpc2-pill${soonest <= 7 ? ' mpc2-pill--urgent' : ''}"><i class="fa-solid fa-clock"></i><span>Next pool closes in <strong>${soonest}d</strong></span></div>` : ''}
-          ${p.factsheet_url ? `<div class="mpc2-pill"><i class="fa-solid fa-file-pdf"></i><span>Factsheet</span></div>` : ''}
-        </div>
-        <div class="mpc2-footer">
-          <button class="btn btn--primary btn--full" onclick="event.stopPropagation();openProductDetail('${p.product_type}')">
-            <i class="fa-solid fa-arrow-right"></i> View product & pools
-          </button>
-        </div>
-      </div>`;
-  }).join('');
+  grid.innerHTML = shown.map(({ p, open }) => _svProductCard(p, open)).join('');
 }
 
 function openProductDetail(type) {
@@ -15263,7 +15280,7 @@ async function _svInvestments(id) {
     return `<div class="empty-state"><p>${_esc(_svT('inv.none', 'This group has not invested anything yet.'))}</p>
       <p style="font-size:0.84rem;color:var(--text-muted)">Investing the pot is the group&rsquo;s own
       decision and needs the signatories&rsquo; approval. Capital is at risk.</p></div>
-      ${_svOpenToGroup(id)}`;
+      ${await _svOpenToGroup(id)}`;
   }
 
   /* Your part of each investment, read off your share of the pot today. An
@@ -15337,7 +15354,7 @@ async function _svInvestments(id) {
       Expected figures are each pool&rsquo;s target return. Capital is at risk and a target is not a promise.
       &ldquo;Your part&rdquo; is read off your share of the pot today; the Shares section is the record.
     </div>
-    ${_svOpenToGroup(id)}`;
+    ${await _svOpenToGroup(id)}`;
 }
 
 /* ─── What the group could put its savings into ────────────────────
@@ -15358,48 +15375,75 @@ async function _svInvestments(id) {
  * afterwards. Saying so on each one, rather than once at the bottom,
  * because the button is what people read.
  */
-function _svOpenToGroup(gid) {
+async function _svOpenToGroup(gid) {
+  /* THE SAME CARDS THE MARKETPLACE DRAWS — see _svProductCard. A committee
+     deciding where the group's savings go was being shown less than a member
+     deciding for themselves: a line of pool names and a rate, with no
+     overview, no average achieved, no factsheet. It is more people's money,
+     so it should be more information, not less.
+
+     The products are fetched here rather than read off _mktProducts, which
+     lives in the bundle and is only filled once somebody has opened the
+     marketplace. A member who goes straight to their group has never been
+     there. */
+  let products = [];
+  try { products = (await _getPortalProducts()) || []; } catch (_) { products = []; }
   const pools = (PORTAL.pools || []).filter(p => p.status === 'open' && !_poolPastClose(p));
-  if (!pools.length) {
-    return `<div class="sa-section-title mt-16"><i class="fa-solid fa-store"></i> Open to the group</div>
-      <div style="font-size:0.84rem;color:var(--text-muted)">
+
+  /* Fall back to the pools themselves where the products table is empty, as
+     the marketplace does, so the tab is never blank when there is something
+     to invest in. */
+  if (!products.length && pools.length) {
+    const seen = new Set();
+    products = pools.filter(p => p.product_type && !seen.has(p.product_type) && seen.add(p.product_type))
+      .map(p => Object.assign({ product_type: p.product_type, is_active: true, sort_order: 0 },
+                              { label: (Utils.productInfo(p.product_type) || {}).label || p.product_type,
+                                min_investment: p.min_investment, annual_rate: p.annual_rate }));
+  }
+
+  /* Only what the group can actually ask for: a product with no open pool
+     is an overview of something they cannot buy, and the request form would
+     not offer it either. */
+  const shown = products
+    .filter(p => p.is_active !== false && !_isCategoryExclusive(p))
+    .map(p => ({ p, open: pools.filter(x => x.product_type === p.product_type) }))
+    .filter(x => x.open.length)
+    .sort((a, b) => (a.p.sort_order || 0) - (b.p.sort_order || 0));
+
+  const head = `<div class="sa-section-title mt-16"><i class="fa-solid fa-store"></i> Open to the group</div>`;
+  if (!shown.length) {
+    return `${head}<div style="font-size:0.84rem;color:var(--text-muted)">
         Nothing is open to new money at the moment. The 30-day notice account above is always open.
       </div>`;
   }
-  const pct = v => (Number(v) * 100).toFixed(1).replace(/\.0$/, '') + '%';
-  const term = p => {
-    const m = parseInt(p.term_months, 10) || 0;
-    return m >= 24 && m % 12 === 0 ? `${m / 12} years` : `${m} months`;
+
+  /* THE ONLY DIFFERENCE FROM THE PERSONAL CARD. A member invests; a group
+     ASKS. Saying so on the button rather than once at the bottom, because
+     the button is what people read. */
+  const footer = (prod, open) => {
+    const cheapest = open.slice().sort((a, b) =>
+      (parseFloat(a.min_investment) || 0) - (parseFloat(b.min_investment) || 0))[0];
+    return `<div style="display:flex;flex-direction:column;gap:7px">
+      <button class="btn btn--primary btn--full"
+              onclick="event.stopPropagation();raiseStokvelInvestment('${_esc(gid)}','${_esc(cheapest.id)}')">
+        <i class="fa-solid fa-paper-plane"></i> Ask the signatories
+      </button>
+      <button class="btn btn--ghost btn--sm btn--full"
+              onclick="event.stopPropagation();openProductDetail('${_esc(prod.product_type)}')">
+        <i class="fa-solid fa-file-lines"></i> Product &amp; factsheets
+      </button>
+    </div>`;
   };
-  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-store"></i> Open to the group</div>
-    <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px;line-height:1.55">
+
+  return `${head}
+    <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:12px;line-height:1.55">
       What the group&rsquo;s savings can go into. Every one of these needs the signatories to approve
-      the amount and the pool before a member can place it. <strong>Capital is at risk</strong> and a
-      target return is not a promise.
+      the amount and the pool before a member can place it, and the 1% platform fee is charged on
+      top of what reaches the pool. <strong>Capital is at risk</strong> and a target return is not
+      a promise.
     </div>
-    ${pools.map(p => `<div style="border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:9px">
-      <div style="display:flex;justify-content:space-between;gap:10px;align-items:start">
-        <div style="min-width:0">
-          <div style="font-weight:800">${_esc(p.name)}</div>
-          <div style="font-size:0.76rem;color:var(--text-muted);margin-top:2px">
-            ${_esc(term(p))} &middot; from ${Utils.rand(p.min_investment)}${
-              p.maturity_date ? ' &middot; matures ' + _esc(String(p.maturity_date).slice(0, 10)) : ''}
-          </div>
-        </div>
-        <div style="text-align:right;white-space:nowrap">
-          <div style="font-size:1.15rem;font-weight:800;color:#eda5ff">${_esc(pct(p.annual_rate))}</div>
-          <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">target a year</div>
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
-        <button class="btn btn--secondary btn--sm" onclick="raiseStokvelInvestment('${_esc(gid)}','${_esc(p.id)}')">
-          <i class="fa-solid fa-paper-plane"></i> Ask the signatories
-        </button>
-        <span style="font-size:0.72rem;color:var(--text-muted)">
-          The 1% platform fee is charged on top of what reaches the pool.
-        </span>
-      </div>
-    </div>`).join('')}`;
+    <div class="market-grid">${shown.map(({ p, open }) =>
+      _svProductCard(p, open, { footer })).join('')}</div>`;
 }
 
 /* ─── The group's documents ──────────────────────────────────────
