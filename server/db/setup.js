@@ -6511,6 +6511,31 @@ async function autoSetup() {
       if (rowCount) console.log('✅ Announced the facility-derived rate.');
     });
 
+    await step("53. Announce that the console's group screen works and names people", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'admin','staff','fa-people-group', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['stokvel-console-view-2026-11',
+         'The console’s group screen opens, and every row now carries a name',
+         'Opening a stokvel in the console returned “Could not load: Unknown table: '
+         + 'stokvel_members”, and had done since the screen shipped — it reads eight '
+         + 'stokvel tables and not one of them was readable. They are now readable by staff, '
+         + 'and by staff only; writing to them is refused with a message, because a roster, a '
+         + 'quorum, a vote and an allocation are changed by the group to its own quorum, in '
+         + 'the app, and never from a table editor. The two member controls that wrote to '
+         + 'them have gone; neither had ever worked.\n\n'
+         + 'Every row on the screen used to be an investor id — the roster, the shares, the '
+         + 'exit debt, the attribute list — so somebody ringing in and giving their name left '
+         + 'you holding four identifiers and no way to match them. All of those rows now read '
+         + 'as names. The arrears were a single total; they now list who owes what, for which '
+         + 'period, since when, with a fine shown as a fine rather than as FINE-<id>.',
+         'Clients → Stokvels → Open on a group. The arrears breakdown is under Activity, '
+         + 'below Outstanding contributions.']);
+      if (rowCount) console.log('✅ Announced the console group screen fix.');
+    });
+
     await step("52. Announce that a group notice is no longer lost when a send fails", async () => {
       const { rowCount } = await pool.query(
         `INSERT INTO feature_announcements

@@ -96,8 +96,46 @@ function validateBody(table, body, isCreate) {
   return errors;
 }
 
+/* ─── A STOKVEL'S OWN TABLES: READABLE BY STAFF, WRITABLE BY NOBODY ───
+ *
+ * These were listed in ADMIN_ONLY_TABLES — "requires admin to READ" — and
+ * were never in ALLOWED_TABLES, so the guard protected a door that did not
+ * exist and every read 404'd with "Unknown table". The console's entire
+ * group screen is eight of these reads: staff clicked Open on a group and
+ * got "Could not load: Unknown table: stokvel_members", and had done since
+ * the screen shipped. Found by opening it.
+ *
+ * READ-ONLY IS THE WHOLE POINT OF PUTTING THEM HERE. This file argues at
+ * length that the mandate must not be reachable through the generic
+ * writer — "who may SIGN was never reachable here" — and that argument is
+ * right. Listing them for reading and refusing every write keeps it:
+ * stokvel_members.is_signatory, a quorum, a vote, an allocation are all
+ * changed through services that hold the quorum, or not at all.
+ *
+ * So: visible to the person answering the phone, immovable from here. */
+const READ_ONLY_TABLES = new Set([
+  'stokvel_members', 'stokvel_withdrawal_requests', 'stokvel_request_approvals',
+  'stokvel_invites', 'stokvel_allocations', 'stokvel_exit_debts',
+  'stokvel_payouts', 'stokvel_payout_lines',
+  'stokvel_contributions', 'stokvel_contribution_schedules',
+  'stokvel_cash_receipts',
+]);
+
 /* ─── Whitelist of allowed tables and their primary key column ─── */
 const ALLOWED_TABLES = {
+  /* Read-only, admin-only, and listed one place so the two sets cannot
+     drift into a table that is writable because somebody forgot. */
+  stokvel_members:                 'id',
+  stokvel_withdrawal_requests:     'id',
+  stokvel_request_approvals:       'id',
+  stokvel_invites:                 'id',
+  stokvel_allocations:             'id',
+  stokvel_exit_debts:              'id',
+  stokvel_payouts:                 'id',
+  stokvel_payout_lines:            'id',
+  stokvel_contributions:           'id',
+  stokvel_contribution_schedules:  'id',
+  stokvel_cash_receipts:           'id',
   investors:             'id',
   investment_pools:      'id',
   investments:           'id',
@@ -360,6 +398,18 @@ function validateTable(req, res, next) {
   const table = req.params.table;
   if (!ALLOWED_TABLES[table])
     return res.status(404).json({ error: `Unknown table: ${table}` });
+  /* A STOKVEL'S TABLES ARE READ-ONLY HERE, always, whatever the role — see
+     READ_ONLY_TABLES. The mandate, who signs, what each member has put in
+     and what the group owes somebody who left are changed by the services
+     that hold the quorum, or not at all. Refused by name rather than
+     silently ignored: a column quietly dropped from an update returns 200
+     and tells staff their change was saved. */
+  if (req.method !== 'GET' && READ_ONLY_TABLES.has(table)) {
+    return res.status(403).json({
+      error: `${table} cannot be changed here. A stokvel's roster, mandate and ledger `
+           + 'are changed through the group\'s own screens, where the signatories\' '
+           + 'approval is held.' });
+  }
   req.tableKey = ALLOWED_TABLES[table];
   next();
 }
@@ -572,6 +622,13 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
          holds every listed table to a sort column it actually has. */
       platform_settings:         'key',
       quest_completions:         'completed_at',
+      /* A vote is stamped decided_at, not created_at — one signatory, one
+         vote, and the row IS the decision. Listing the table for reading
+         without this line would have made every unsorted read of it a 500,
+         the same way platform_settings sat on "Loading..." above.
+         check-table-default-sort.cjs caught it the moment the table joined
+         the allowlist, which is what that check is for. */
+      stokvel_request_approvals: 'decided_at',
     };
     const ASC_BY_DEFAULT = ['cattle_animals', 'cattle_cycles', 'platform_settings'];
     const defaultDir = ASC_BY_DEFAULT.includes(table) ? 'ASC' : 'DESC';

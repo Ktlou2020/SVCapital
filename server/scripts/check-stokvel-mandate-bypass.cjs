@@ -165,12 +165,23 @@ const call = (port, method, p, body, who) => new Promise(resolve => {
        (await pool.query(`SELECT 1 FROM sub_accounts WHERE id='MB-G2'`)).rowCount === 0,
        'a refused create that still wrote the row is worse than either outcome');
 
-    console.log('\nand who may SIGN was never reachable here at all');
+    console.log('\nand who may SIGN is still not reachable here');
+    /* THIS ASSERTION USED TO READ 404 "Unknown table", and that was the
+       right shape of answer for the wrong reason: stokvel_members was not
+       in ALLOWED_TABLES, so it was unreachable for READING too — which
+       404'd the console's whole group screen for as long as it existed.
+       The table is now readable by staff and refused for every write, so
+       the claim this check exists to make is unchanged and its expected
+       refusal is a 403 that says so. What must never come back is a 200. */
     const sig = await call(P, 'PATCH', '/api/tables/stokvel_members/MB-SM-MEM',
                            { is_signatory: true }, 'MEM');
-    ok('stokvel_members is not a table this endpoint knows',
-       sig.status === 404 && /Unknown table/.test(sig.body.error || ''),
+    ok('flipping a signatory through the table editor is refused',
+       sig.status === 403 && /cannot be changed here/.test(sig.body.error || ''),
        `HTTP ${sig.status} ${JSON.stringify(sig.body).slice(0, 90)}`);
+    ok('and refused by name, not by dropping the column',
+       sig.status !== 200 && /signatories|group/.test(sig.body.error || ''),
+       'a column quietly dropped returns 200 and tells a committee their '
+       + 'mandate changed: ' + JSON.stringify(sig.body).slice(0, 120));
     ok('so an ordinary member did not become a signatory',
        (await pool.query(
          `SELECT is_signatory FROM stokvel_members WHERE id='MB-SM-MEM'`)).rows[0].is_signatory === false);

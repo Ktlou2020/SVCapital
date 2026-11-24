@@ -23243,6 +23243,35 @@ async function openStokvelAdmin(id) {
   }
 
   const s = (STATE.stokvels || []).find(x => x.id === id) || { id };
+
+  /* ── WHO THESE PEOPLE ARE ────────────────────────────────────────
+   *
+   * Every row on this screen named an investor id — INV-7F2A… in the
+   * roster, in the shares, against the exit debt, in the attribute
+   * dropdown. A member rings up, gives their name, and the person
+   * answering has four identifiers and no way to tell which one is theirs
+   * without opening another screen. Matching a caller to a row is the one
+   * thing this view exists to do.
+   *
+   * The names come from the investor list the console already loads for
+   * its Clients screen; anybody not in it is fetched by id. An id that
+   * cannot be resolved keeps showing the id, which is the honest fallback
+   * — a blank where a name should be is worse than the identifier. */
+  const known = new Map((STATE.investors || []).map(i => [i.id, i]));
+  const wanted = [...new Set([
+    ...((members && members.data) || []).map(m => m.investor_id),
+    ...((exitDebts && exitDebts.data) || []).map(d => d.investor_id),
+    ...((allocations && allocations.data) || []).map(a => a.investor_id),
+  ].filter(x => x && !known.has(x)))];
+  if (wanted.length) {
+    try {
+      const got = await API._fetch('GET', 'tables/investors', null,
+                                   { id: wanted.join(','), limit: 500 });
+      for (const i of ((got && got.data) || [])) known.set(i.id, i);
+    } catch (_) { /* the ids still show; see above */ }
+  }
+  STATE.stokvelNames = known;
+
   STATE.stokvelOpen = {
     id, members: (members && members.data) || [],
     schedule: ((schedules && schedules.data) || []).find(x => x.active) || null,
@@ -23335,35 +23364,31 @@ async function saveStokvelQuorum(id) {
    Blank means the group's own amount, which is what almost every stokvel
    uses — the override exists for the ones whose constitution sets
    different amounts for different members. */
+/* The person, not the identifier. STATE.stokvelNames is filled by
+   openStokvelAdmin; an id it could not resolve keeps showing the id, which
+   is honest — a blank where a name belongs is worse than the identifier. */
+function _stokvelMemberName(id) {
+  const i = (STATE.stokvelNames && STATE.stokvelNames.get(id)) || null;
+  const nm = i ? [i.first_name, i.last_name].filter(Boolean).join(' ').trim() : '';
+  return nm || id || '\u2014';
+}
+
 function _stokvelAdminMembers(s) {
   const rows = STATE.stokvelOpen.members;
   return `<div class="card">
     <div class="card__header"><h3 class="card__title"><i class="fa-solid fa-users"></i> Members</h3>
-      <button class="btn btn--secondary btn--sm" onclick="addStokvelMember('${_esc(s.id)}')">
-        <i class="fa-solid fa-plus"></i> Add member</button></div>
+      <span class="text-muted" style="font-size:0.76rem">Read-only \u2014 the group changes its own roster</span></div>
     <table class="data-table"><thead><tr>
       <th>Investor</th><th>Role</th><th>Signatory</th><th>Status</th><th>Pays</th><th></th>
     </tr></thead><tbody>
     ${rows.length ? rows.map(m => `<tr>
-      <td><code style="font-size:0.75rem">${_esc(m.investor_id)}</code></td>
-      <td>
-        <select class="input input--sm" onchange="updateStokvelMember('${_esc(m.id)}',{role:this.value})">
-          ${STOKVEL_ROLES.map(r => `<option value="${r}"${m.role === r ? ' selected' : ''}>${r.replace(/^\w/, c => c.toUpperCase())}</option>`).join('')}
-        </select>
-      </td>
-      <td><input type="checkbox"${m.is_signatory ? ' checked' : ''}
-            onchange="updateStokvelMember('${_esc(m.id)}',{is_signatory:this.checked})"></td>
-      <td>
-        <select class="input input--sm" onchange="updateStokvelMember('${_esc(m.id)}',{status:this.value})">
-          ${['invited', 'active', 'exited'].map(st => `<option value="${st}"${m.status === st ? ' selected' : ''}>${st.replace(/^\w/, c => c.toUpperCase())}</option>`).join('')}
-        </select>
-      </td>
-      <td>
-        <input type="number" min="0" step="0.01" class="input input--sm" style="width:100px"
-               value="${m.contribution_amount != null ? _esc(m.contribution_amount) : ''}"
-               placeholder="group"
-               onchange="updateStokvelMember('${_esc(m.id)}',{contribution_amount:this.value===''?null:parseFloat(this.value)})">
-      </td>
+      <td><strong>${_esc(_stokvelMemberName(m.investor_id))}</strong>
+        <div><code style="font-size:0.7rem;color:var(--text-muted)">${_esc(m.investor_id)}</code></div></td>
+      <td>${_esc(String(m.role || 'member').replace(/^\w/, c => c.toUpperCase()))}</td>
+      <td>${m.is_signatory ? '<i class="fa-solid fa-pen-nib" style="color:#eda5ff"></i> Yes' : 'No'}</td>
+      <td>${_esc(String(m.status || '').replace(/^\w/, c => c.toUpperCase()))}</td>
+      <td>${m.contribution_amount != null ? Utils.rand(m.contribution_amount)
+            : '<span class="text-muted">group amount</span>'}</td>
       <td class="text-right text-muted" style="font-size:0.74rem">${m.joined_at ? String(m.joined_at).slice(0, 10) : ''}</td>
     </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:16px">No members yet.</td></tr>'}
     </tbody></table>
@@ -23374,36 +23399,19 @@ function _stokvelAdminMembers(s) {
   </div>`;
 }
 
-async function updateStokvelMember(memberId, patch) {
-  try {
-    await API._fetch('PATCH', `tables/stokvel_members/${memberId}`, patch);
-    Toast.show('Member updated.', 'success');
-    await openStokvelAdmin(STATE.stokvelOpen.id);
-  } catch (err) {
-    Toast.show('Could not update: ' + (err.message || ''), 'error');
-    await openStokvelAdmin(STATE.stokvelOpen.id);
-  }
-}
+/* updateStokvelMember and addStokvelMember were here, writing a role, a
+   signatory flag and a status straight into stokvel_members through the
+   generic table API. Neither ever worked — the table was not in
+   ALLOWED_TABLES, so every call 404'd, exactly as every READ on this
+   screen did.
 
-async function addStokvelMember(stokvelId) {
-  const investorId = prompt('Investor ID of the member to add (e.g. INV-1234):');
-  if (!investorId) return;
-  const role = prompt(`Role — one of: ${STOKVEL_ROLES.join(', ')}`, 'member');
-  if (!role || !STOKVEL_ROLES.includes(role)) {
-    Toast.show('That is not a role this platform knows.', 'error');
-    return;
-  }
-  try {
-    await API._fetch('POST', 'tables/stokvel_members', {
-      sub_account_id: stokvelId, investor_id: investorId.trim(),
-      role, status: 'invited', is_signatory: false,
-    });
-    Toast.show('Member added as invited. They see nothing until the status is active.', 'success');
-    await openStokvelAdmin(stokvelId);
-  } catch (err) {
-    Toast.show('Could not add: ' + (err.message || ''), 'error');
-  }
-}
+   They are not restored along with the reads, deliberately. Who signs for
+   a group's money is the mandate, and this file's own argument is that the
+   mandate must not be reachable through a table editor: it is changed by
+   the group, to the quorum, through services/stokvelMandateChange. The
+   roster above is read-only for that reason, and the server refuses a
+   write to these tables whatever the role. */
+
 
 async function saveStokvelShareBasis(id) {
   const basis = document.getElementById('svShareBasis').value;
@@ -23474,10 +23482,10 @@ function _stokvelAdminShares(s) {
       Math.round(((byMember.get(a.investor_id) || 0) + Number(a.amount)) * 100) / 100);
   }
   const active = new Set(o.members.filter(m => m.status === 'active').map(m => m.investor_id));
-  const name = id => {
-    const m = o.members.find(x => x.investor_id === id);
-    return (m && (m.first_name || m.investor_id)) || id;
-  };
+  /* stokvel_members carries no name columns, so this read m.first_name,
+     found nothing and printed the id — on the shares table, the exit
+     debts and the attribute dropdown alike. */
+  const name = id => _stokvelMemberName(id);
   const total = [...byMember.entries()]
     .filter(([id]) => active.has(id))
     .reduce((n, [, v]) => n + v, 0);
@@ -23720,6 +23728,36 @@ function _stokvelAdminActivity(s) {
         <div style="font-size:1.2rem;font-weight:800">${Utils.rand(owed)}</div>
         <div class="text-muted" style="font-size:0.74rem">${arrears.length} obligation${arrears.length === 1 ? '' : 's'}</div></div>
     </div>
+    ${arrears.length ? `<div style="padding:0 14px 6px">
+      <div class="text-muted" style="font-size:0.74rem;text-transform:uppercase;margin-bottom:6px">Who owes it</div>
+      <table class="data-table"><thead><tr>
+        <th>Member</th><th>For</th><th class="text-right">Owing</th><th>Since</th>
+      </tr></thead><tbody>
+      ${arrears.slice(0, 20).map(c => {
+        /* A FINE IS NOT A PERIOD. Fines ride on this table with a period
+           label of their own, FINE-<id>, which is an identifier and not a
+           month — the portal learned that the hard way. What staff need is
+           the word fine and what it was for. */
+        const isFine = c.kind === 'fine';
+        const what = isFine
+          ? 'Fine' + (c.note ? ' \u2014 ' + _esc(String(c.note).slice(0, 60)) : '')
+          : _esc(c.period_label || '');
+        return `<tr>
+          <td>${_esc(_stokvelMemberName(c.investor_id))}</td>
+          <td>${what}</td>
+          <td class="text-right"><strong>${Utils.rand(
+            (parseFloat(c.amount_due) || 0) - (parseFloat(c.amount_paid) || 0))}</strong></td>
+          <td class="text-muted" style="font-size:0.78rem">${_esc(String(c.due_date || '').slice(0, 10))}</td>
+        </tr>`;
+      }).join('')}
+      </tbody></table>
+      ${arrears.length > 20 ? `<div class="text-muted" style="font-size:0.74rem;padding-top:6px">
+        and ${arrears.length - 20} more</div>` : ''}
+      <div class="text-muted" style="font-size:0.74rem;padding-top:6px">
+        A total answers "how much", which is never the question on the phone. This answers
+        "why do I owe R850" \u2014 and settling it is the group&rsquo;s to do, not ours.
+      </div>
+    </div>` : ''}
     ${pending.length ? `<table class="data-table"><thead><tr>
         <th>Requested</th><th>Kind</th><th class="text-right">Amount</th><th>To</th><th class="text-right">Approvals</th>
       </tr></thead><tbody>
