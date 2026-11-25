@@ -615,10 +615,29 @@ tr.total-row td.amt{color:#111}
   _present(html, 860, 960);
 }
 
-function _openAccountStatementWindow(data) {
+function _openAccountStatementWindow(data, mode, opts) {
   const { investor: inv, period, investments, transactions = [],
           opening_balance = 0, closing_balance = 0, paid = {},
           derived_opening_balance = 0, reconciles = true, ledger_gap = 0 } = data;
+
+  /* ── WHICH SECTIONS THE READER ASKED FOR ──────────────────────────────
+   *
+   * The portal offers a client four tick boxes — Portfolio Summary,
+   * Investment Details, Transaction Ledger, Performance Analysis — and
+   * until now they changed nothing at all. The portal read them, worked
+   * out which were on, and then called this builder, which had never
+   * taken them: every statement was the whole document whatever was
+   * ticked. Worse, the page printed "Included sections: Portfolio,
+   * Transactions" beside it, so the client was told a selection had been
+   * honoured that had not.
+   *
+   * ANYTHING NOT NAMED IS INCLUDED. The admin console calls this builder
+   * too and offers no such choice, so an omitted option has to mean the
+   * whole document or staff would silently start sending less than they
+   * used to. */
+  const S = Object.assign(
+    { portfolio: true, investments: true, transactions: true, performance: true },
+    (opts && opts.sections) || {});
 
   const fmt = n => 'R ' + Math.abs(parseFloat(n) || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtDate = s => s ? new Date(s).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
@@ -719,6 +738,83 @@ function _openAccountStatementWindow(data) {
     }
     return null;
   }
+
+  /* ── PERFORMANCE ANALYSIS ─────────────────────────────────────────────
+   *
+   * The portal's tick box has offered this since the statement screen
+   * shipped and the document has never had such a section: when the portal
+   * stopped building its own statement and started rendering this one, the
+   * section went with it and the tick box stayed. Ticking it changed
+   * nothing because there was nothing to change.
+   *
+   * CONFIRMED AND PROJECTED ARE NOT ADDED TOGETHER, and that is the whole
+   * point of splitting them. A matured investment's return is money the
+   * client has been credited; an active one's is the pool's rate applied
+   * to capital that has not come back yet. One total containing both reads
+   * as earnings and is not.
+   *
+   * The same split the pool tables use — active and pending still running,
+   * matured and paid out finished — so a client cannot find one investment
+   * counted as running in one section and finished in the next. */
+  const _ret = i => _n(i.actual_return != null ? i.actual_return : i.expected_return);
+  const _byProduct = rows => {
+    const m = new Map();
+    rows.forEach(i => {
+      const k = i.product_type || 'other';
+      const e = m.get(k) || { count: 0, capital: 0, returns: 0 };
+      e.count += 1; e.capital += _n(i.amount); e.returns += _ret(i);
+      m.set(k, e);
+    });
+    return [...m.entries()].sort((a, b) => b[1].capital - a[1].capital);
+  };
+  const _perfRows = (groups, estimated) => groups.map(([k, g]) =>
+    '    <tr><td style="padding:7px 10px;font-size:11px;color:#374151">' +
+      esc(PROD_LABELS[k] || k) +
+      ' <span style="color:#9ca3af">(' + g.count + ' investment' + (g.count !== 1 ? 's' : '') + ')</span></td>' +
+    '<td class="num" style="padding:7px 10px;text-align:right">' + fmtR(g.capital) + '</td>' +
+    '<td class="num" style="padding:7px 10px;text-align:right;color:' + (estimated ? '#1d4ed8' : '#15803d') + '">' +
+      fmtR(g.returns) + (estimated ? ' est.' : '') + '</td>' +
+    '<td class="num" style="padding:7px 10px;text-align:right;font-weight:700">' +
+      (g.capital > 0 ? ((g.returns / g.capital) * 100).toFixed(2) : '0.00') + '%' +
+      (estimated ? ' est.' : '') + '</td></tr>').join('');
+  const _perfTable = (title, rows, groups, estimated) => {
+    if (!groups.length) return '';
+    const cap = groups.reduce((a, [, g]) => a + g.capital, 0);
+    const ret = groups.reduce((a, [, g]) => a + g.returns, 0);
+    return [
+      '  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:' +
+        (estimated ? '#1d4ed8' : '#15803d') + ';margin:12px 0 6px">' + title + '</div>',
+      '  <table><thead><tr>' +
+        '<th style="text-align:left">Product</th>' +
+        '<th style="text-align:right">Capital</th>' +
+        '<th style="text-align:right">Return</th>' +
+        '<th style="text-align:right">Yield</th></tr></thead><tbody>',
+      rows,
+      '  </tbody><tfoot><tr style="border-top:2px solid #e5e7eb;background:#fafafa">' +
+        '<td style="padding:8px 10px;font-size:11px;font-weight:800;color:#111827">Total</td>' +
+        '<td class="num" style="padding:8px 10px;text-align:right;font-weight:800">' + fmtR(cap) + '</td>' +
+        '<td class="num" style="padding:8px 10px;text-align:right;font-weight:800;color:' +
+          (estimated ? '#1d4ed8' : '#15803d') + '">' + fmtR(ret) + (estimated ? ' est.' : '') + '</td>' +
+        '<td class="num" style="padding:8px 10px;text-align:right;font-weight:800">' +
+          (cap > 0 ? ((ret / cap) * 100).toFixed(2) : '0.00') + '%' + (estimated ? ' est.' : '') +
+        '</td></tr></tfoot></table>',
+    ].join('\n');
+  };
+  const _confirmedGroups = _byProduct(maturedInvests);
+  const _projectedGroups = _byProduct(activeInvests);
+  const performanceBlock = (!_confirmedGroups.length && !_projectedGroups.length)
+    ? [
+        '  <div class="sec-hdr" style="background:#f8fafc;border-left:3px solid #656565">Performance Analysis</div>',
+        '  <p class="note">No investments in this period to analyse.</p>',
+      ].join('\n')
+    : [
+        '  <div class="sec-hdr" style="background:#f8fafc;border-left:3px solid #656565">Performance Analysis</div>',
+        _perfTable('Confirmed &mdash; realised at maturity',
+                   _perfRows(_confirmedGroups, false), _confirmedGroups, false),
+        _perfTable('Projected &mdash; still running, not yet realised',
+                   _perfRows(_projectedGroups, true), _projectedGroups, true),
+        '  <p class="note">Confirmed and projected are shown apart and never added: a projected return is the pool&rsquo;s rate applied to capital that has not come back yet.</p>',
+      ].filter(Boolean).join('\n');
 
   /* An investment still marked active whose maturity date has passed has not
      been processed. The statement reports the status it finds — but the person
@@ -1018,6 +1114,10 @@ function _openAccountStatementWindow(data) {
     '    </dl></div>',
     '  </div>',
 
+    /* Portfolio summary and the cash side of the period are the one
+       section the tick box calls "Portfolio Summary": both answer what
+       the client holds and what moved, rather than listing anything. */
+    ...(S.portfolio ? [
     // ── Portfolio summary ──────────────────────────────────────────────
     '  <div class="sec-hdr" style="background:#f8fafc;border-left:3px solid #eda5ff">Portfolio Summary &mdash; as at ' + toLabel + '</div>',
     '  <table><tbody>',
@@ -1065,7 +1165,17 @@ function _openAccountStatementWindow(data) {
         '<td class="num" style="padding:8px 10px;text-align:right;color:#6b7280">' + fmtR(_n(paid.accrued)) + '</td></tr>'
       : ''),
     '  </tbody></table>',
+    ] : []),
 
+    /* Performance analysis. Its own tick box, and its own section — the
+       document had none at all until now, which is why ticking it did
+       nothing. */
+    ...(S.performance ? [performanceBlock] : []),
+
+    /* The pools themselves: the tick box calls this "Investment
+       Details". The overdue warning belongs with them — it is about a
+       row in these tables — so it goes when they go. */
+    ...(S.investments ? [
     (overdueActive.length
       ? '  <p class="note" style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:7px 10px;border-radius:4px">' +
         overdueActive.length + ' investment' + (overdueActive.length !== 1 ? 's are' : ' is') +
@@ -1090,9 +1200,10 @@ function _openAccountStatementWindow(data) {
     'where neither has been recorded. ' +
     'Rates marked <em>achieved</em> are the return over the pool\'s own period; ' +
     'rates marked <em>p.a. target</em> are the contracted annual rate.</p>',
+    ] : []),
 
     // ── Transaction ledger ─────────────────────────────────────────────
-    (function() {
+    ...(S.transactions ? [(function() {
       /* THE BALANCES COME FROM THE SERVER.
        *
        * This block used to carry its own DEBIT_TYPES — {investment,
@@ -1187,7 +1298,7 @@ function _openAccountStatementWindow(data) {
         gapNote,
         '  </tbody></table>',
       ].join('\n');
-    })(),
+    })()] : []),
 
     '  <div class="footer">',
     '    <strong>SV Capital (Pty) Ltd</strong> &mdash; FSCA Regulated Financial Services Provider.<br>',
@@ -1213,7 +1324,9 @@ function _openAccountStatementWindow(data) {
     openAccountStatement: _openAccountStatementWindow,
     openIncomeReference:  _openAdminTaxCertWindow,
     /* The same page as a string, for a surface that shows it inline. */
-    accountStatementHTML: d => _openAccountStatementWindow(d, 'html'),
+    /* opts.sections picks which of the four the client asked for; omitted,
+       the whole document, which is what the console wants. */
+    accountStatementHTML: (d, opts) => _openAccountStatementWindow(d, 'html', opts),
     incomeReferenceHTML:  d => _openAdminTaxCertWindow(d, 'html'),
     /* Preview a document inside a container, scaled to fit a phone. */
     mountScaled: _mountScaled,

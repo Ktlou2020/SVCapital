@@ -65,9 +65,18 @@ ok('and that only a new build reaches an installed app',
 console.log('\nand the fix it was about is really in the built app assets');
 for (const f of ['mobile/src/js/portal.js', 'mobile/www/js/portal.js']) {
   const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+  /* WHICH VIEWER, NOT HOW MANY ARGUMENTS. This read
+     openAccountStatement(data) exactly, and broke when the call gained
+     the client's chosen sections — a change that has nothing to do with
+     what this check is about. What matters is that the statement goes
+     through the shared viewer rather than window.open, which is the path
+     that looked like a dead button inside the WebView. */
+  const print = (src.match(/function printStatement\(\)[\s\S]*?\n\}/) || [''])[0];
   ok(`${f} opens the statement through the shared document viewer`,
-     /SVCDocs\.openAccountStatement\(data\)/.test(src),
-     'the window.open path is what looked like a dead button in the WebView');
+     /SVCDocs\.openAccountStatement\(data[,)]/.test(print)
+     && !/window\.open/.test(print),
+     'the window.open path is what looked like a dead button in the WebView: '
+     + print.slice(-200));
 }
 const DOCS = fs.readFileSync(path.join(ROOT, 'js', 'investor-documents.js'), 'utf8');
 ok('and the viewer never asks a WebView for a window',

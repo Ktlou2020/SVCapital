@@ -6012,7 +6012,23 @@ async function generateStatement() {
      document that lays out at 1100px and does not reflow — on a phone the
      unscaled frame showed a sliver of the page with the right-hand column off
      the edge. What downloads is unaffected: still A4, still full size. */
-  SVCDocs.mountScaled(doc, SVCDocs.accountStatementHTML(stmtData), SVCDocs.STATEMENT_WIDTH);
+  /* THE TICK BOXES REACH THE DOCUMENT. They were read above, turned into
+     effective* flags, and then this call built the whole statement from
+     the payload alone — so a client could clear three of the four, watch
+     the card tell them "Included sections: Portfolio", and get back every
+     section as before. Three of the flags were computed and never read by
+     anything; the fourth only chose a word in a summary line. */
+  const stmtSections = {
+    portfolio:    effectivePortfolio,
+    investments:  effectiveInvestments,
+    transactions: effectiveTransactions,
+    performance:  effectivePerformance,
+  };
+  /* Kept for the save/print path, which renders the same payload again and
+     must not quietly hand back sections the client left out. */
+  PORTAL._lastStatementSections = stmtSections;
+  SVCDocs.mountScaled(doc, SVCDocs.accountStatementHTML(stmtData, { sections: stmtSections }),
+                      SVCDocs.STATEMENT_WIDTH);
   const generatedSummary = `${transactions.length} transaction${transactions.length === 1 ? '' : 's'} in range · ${effectivePerformance ? 'performance included' : 'summary only'}`;
   renderStatementAssistCard({
     generatedAt: new Date().toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' }),

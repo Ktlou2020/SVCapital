@@ -2462,10 +2462,14 @@ function buildStatementHTML(opts) {
 function printStatement() {
   /* The same document the preview shows, opened for printing — one builder,
      so what a client prints is what they were shown. It used to re-wrap the
-     preview's innerHTML in a second, differently-styled page. */
+     preview's innerHTML in a second, differently-styled page.
+
+     AND THE SAME SECTIONS. The tick boxes reach the preview now, so a
+     print that ignored them would hand back the sections the client had
+     just cleared — the old defect moved one button along. */
   const data = (typeof PORTAL !== 'undefined') && PORTAL._lastStatement;
   if (!data) { Toast.error('Please generate a statement first, then print.'); return; }
-  SVCDocs.openAccountStatement(data);
+  SVCDocs.openAccountStatement(data, null, { sections: PORTAL._lastStatementSections });
 }
 
 /* Cached statement body HTML for _handleSavePdf() */
@@ -3746,8 +3750,12 @@ function downloadStatement() {
      whatever generateStatement last fetched from the server, and only falls
      back to the local builder if the client somehow reaches Save before
      generating anything. */
+  /* AND THE SECTIONS THE CLIENT PICKED, or the saved PDF carries sections
+     they cleared on the screen they just looked at. generateStatement
+     records them beside the payload for exactly this. */
   const bodyHtml = (typeof SVCDocs !== 'undefined' && PORTAL._lastStatement)
-    ? SVCDocs.accountStatementHTML(PORTAL._lastStatement)
+    ? SVCDocs.accountStatementHTML(PORTAL._lastStatement,
+        { sections: PORTAL._lastStatementSections })
     : buildStatementHTML({
         investor, investments, transactions,
         from: from90, to: now,

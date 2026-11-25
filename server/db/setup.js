@@ -6549,6 +6549,38 @@ async function autoSetup() {
       if (rowCount) console.log('✅ Announced the facility-derived rate.');
     });
 
+    await step("56. Announce that the statement's section choices work", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'portal','everyone','fa-list-check', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['statement-sections-2026-11',
+         'The statement’s Include Sections tick boxes now change the statement',
+         'A client could clear Investment Details and Transaction Ledger, generate '
+         + 'their statement, and get back every section exactly as before. The '
+         + 'portal read the four boxes and then built the document without them — '
+         + 'and the panel beside the boxes printed “Included sections: Portfolio, '
+         + 'Transactions” while it did so, so the client was told a choice had been '
+         + 'honoured that had not. All four now do what they say, in the preview, '
+         + 'in Print, and in the PDF the app saves.\n\n'
+         + 'PERFORMANCE ANALYSIS IS BACK. The portal used to build its own '
+         + 'statement and that version had the section; when the portal moved to '
+         + 'the same document the console sends — so a client and staff could not '
+         + 'hold two different answers — the section went and the tick box stayed. '
+         + 'It now shows return by product, with what has been realised at '
+         + 'maturity kept apart from what is still projected on running '
+         + 'investments. The two are never added: a projected figure is the pool’s '
+         + 'rate applied to capital that has not come back yet, and summing it '
+         + 'with money already credited would report it as earned.\n\n'
+         + 'The console’s own statement is unchanged — it offers no such choice '
+         + 'and still sends the whole document.',
+         'Client portal → Statements → Statement Options → Include Sections. If a '
+         + 'client says a section is missing, check which boxes they left ticked — '
+         + 'it is their choice now, and it carries into the PDF.']);
+      if (rowCount) console.log('✅ Announced the statement section choices.');
+    });
+
     await step("55. Announce the automated FICA threshold and the sanctions backfill", async () => {
       const { rowCount } = await pool.query(
         `INSERT INTO feature_announcements

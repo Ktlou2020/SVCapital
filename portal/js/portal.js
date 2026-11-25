@@ -2303,10 +2303,14 @@ function buildStatementHTML(opts) {
 function printStatement() {
   /* The same document the preview shows, opened for printing — one builder,
      so what a client prints is what they were shown. It used to re-wrap the
-     preview's innerHTML in a second, differently-styled page. */
+     preview's innerHTML in a second, differently-styled page.
+
+     AND THE SAME SECTIONS. The tick boxes reach the preview now, so a
+     print that ignored them would hand back the sections the client had
+     just cleared — the old defect moved one button along. */
   const data = (typeof PORTAL !== 'undefined') && PORTAL._lastStatement;
   if (!data) { Toast.error('Please generate a statement first, then print.'); return; }
-  SVCDocs.openAccountStatement(data);
+  SVCDocs.openAccountStatement(data, null, { sections: PORTAL._lastStatementSections });
 }
 
 
