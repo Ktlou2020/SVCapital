@@ -1570,7 +1570,11 @@
       <div class="view" id="view-subaccounts">
         <div class="sa-view-header">
           <div>
-            <div class="sa-view-title">My Accounts</div>
+            <!-- The page title lives in the top bar, which already reads
+                 "My Accounts" for this view (see the titles map in
+                 portal-core). Repeating it here put the same two words
+                 twice, one under the other, and pushed the line that
+                 actually explains the page further down. -->
             <div class="sa-view-sub">Business · Trust · Group · Minor — each with their own wallet, investments and FICA</div>
           </div>
           <button class="btn btn--primary" onclick="openCreateSubAccountModal()">
@@ -2179,7 +2183,7 @@
   <div class="modal modal--lg">
     <div class="modal__header">
       <div>
-        <span class="modal__title">Open a Sub-Account</span>
+        <span class="modal__title" id="saCreateTitle">Open a Sub-Account</span>
         <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px" id="saCreateStepLbl">Step 1 of 3</div>
       </div>
       <button class="modal__close" aria-label="Close" onclick="Modal.close('createSaModal')"><i class="fa-solid fa-xmark"></i></button>
@@ -3074,9 +3078,9 @@ if (window.Capacitor) {
 }
 </script>
 <script src="/js/native.js"></script>
-<script src="../js/portal-core.js?v=103"></script>
+<script src="../js/portal-core.js?v=104"></script>
 <script src="../js/investor-documents.js?v=14"></script>
-<script src="js/portal.js?v=141"></script>
+<script src="js/portal.js?v=142"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 // Service worker: web browsers only (not Capacitor). Handles web push notifications.

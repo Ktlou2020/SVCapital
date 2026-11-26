@@ -34,7 +34,13 @@ const crypto = require('crypto');
 const TYPES = {
   stokvel_constitution: { label: 'Constitution or rules', need: 1 },
   stokvel_bank_proof:   { label: 'Proof of the group’s bank account', need: 1 },
-  stokvel_signatory_id: { label: 'Signatory’s ID document', need: 'signatories' },
+  /* PLURAL, because more than one is always needed. MIN_SIGNATORY_IDS is 2
+     and the real figure is the group's quorum, so the checklist line read
+     "Signatory's ID document" while asking for three of them. The row
+     beneath it already says "3 approved, 3 sent — 3 needed, one for each
+     signatory"; the heading above it now agrees. Each SENT row stays
+     singular — that one really is one person's document. */
+  stokvel_signatory_id: { label: 'Signatories’ ID documents', need: 'signatories' },
   stokvel_resolution:   { label: 'Minutes or resolution appointing the signatories', need: 0 },
 };
 const MAX_BYTES = 5 * 1024 * 1024;

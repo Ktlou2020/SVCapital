@@ -7820,8 +7820,31 @@ function _saShowCreateStep(step) {
   });
   const progFill = document.getElementById('saCreateProg');
   if (progFill) progFill.style.width = `${Math.round((step / 3) * 100)}%`;
+  /* THE MODAL SAYS WHAT IS BEING OPENED. It was headed "Open a
+     Sub-Account" throughout, which is the internal word for the record and
+     not what anybody came here to do — somebody starting a savings club
+     reads it and wonders whether they are in the right place.
+
+     Named by the type they chose rather than renamed outright: the same
+     modal opens a business, a trust and a minor's account, and calling
+     all four "a Group" would be worse than the generic word. The step line
+     says what the step is for, which the step number alone never did. */
+  const TITLES = {
+    stokvel:  'Open a Group',
+    business: 'Open a Business Account',
+    trust:    'Open a Trust Account',
+    minor:    "Open a Minor's Account",
+  };
+  const STEPS = {
+    stokvel: { 1: 'Choose the kind of account',
+               2: 'Set up your group wallet, pot split, and signing mandate',
+               3: 'Check it over' },
+  };
+  const titleEl = document.getElementById('saCreateTitle');
+  if (titleEl) titleEl.textContent = TITLES[_saCreateType] || 'Open a Sub-Account';
   const stepLbl = document.getElementById('saCreateStepLbl');
-  if (stepLbl) stepLbl.textContent = `Step ${step} of 3`;
+  const what = (STEPS[_saCreateType] || {})[step];
+  if (stepLbl) stepLbl.textContent = `Step ${step} of 3${what ? ` — ${what}` : ''}`;
 }
 
 function saSelectType(type) {
@@ -13261,7 +13284,27 @@ function _svInvitations(res, gid) {
           : `They join as an ordinary member. Signing power is a change to the mandate —
              an invitation cannot grant it, and no one person can arrange it.`}
       </div>` : ''}
-    ${past.length ? `<div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Answered</div>${past.map(row).join('')}` : ''}`;
+    ${/* AN ACCEPTED INVITATION IS ALREADY ON THE SCREEN. Everybody who
+          accepted is listed by name in Members, immediately above this —
+          so the Answered list repeated the same three or four people a
+          second time, and a reader counting members got the wrong number.
+
+          What is NOT elsewhere is an invitation that did not become a
+          membership: declined, withdrawn, expired. Those keep their rows.
+          The accepted ones collapse to a count, so the fact that they were
+          invited is still recorded without listing them twice. */''}
+    ${(() => {
+      const accepted = past.filter(v => String(v.status).toLowerCase() === 'accepted');
+      const other    = past.filter(v => String(v.status).toLowerCase() !== 'accepted');
+      if (!accepted.length && !other.length) return '';
+      return `<div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Answered</div>
+        ${other.map(row).join('')}
+        ${accepted.length ? `<div style="font-size:0.78rem;color:var(--text-muted);padding:8px 10px;
+          border:1px solid var(--border);border-radius:10px">
+          ${accepted.length} invitation${accepted.length === 1 ? ' was' : 's were'} accepted &mdash;
+          ${accepted.length === 1 ? 'that member is' : 'those members are'} in the list above.
+        </div>` : ''}`;
+    })()}`;
 }
 
 function inviteToStokvel(groupId) {
@@ -15119,7 +15162,21 @@ function _svOverview(id, ctx) {
     </div>
 
     ${arrears.length ? `<div class="sa-section-title"><i class="fa-solid fa-triangle-exclamation"></i> Who is behind</div>
-      <table class="data-table" style="font-size:0.82rem;margin-bottom:16px"><tbody>
+      <table class="data-table" style="font-size:0.82rem;margin-bottom:16px">
+      ${/* COLUMNS THAT SAY WHAT THEY HOLD. Three numbers sat here unlabelled,
+            and a reader had to infer that the rand figure was a debt and the
+            count beside it was periods rather than payments.
+
+            OWING, not "total contributed". The arrears payload carries
+            name, owed and periods — there is no cumulative contribution
+            figure in it — so a "total contributed" heading would sit above
+            an amount that is the opposite of one. */''}
+      <thead><tr>
+        <th>Member</th>
+        <th class="text-right">Owing</th>
+        <th class="text-right">Periods</th>
+        <th></th>
+      </tr></thead><tbody>
       ${arrears.slice(0, 6).map(a => `<tr>
         <td>${_esc(a.name)}</td>
         <td class="text-right" style="font-weight:700">${Utils.rand(a.owed)}</td>
@@ -15169,7 +15226,18 @@ async function _svNoticeFund(id) {
   return `<div style="border:2px solid #eda5ff;border-radius:14px;padding:14px 16px;margin:16px 0">
     <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start">
       <div>
-        <div style="font-weight:800;font-size:1rem"><i class="fa-solid fa-hourglass-half" style="color:#eda5ff"></i> ${_esc(f.name)}</div>
+        <div style="font-weight:800;font-size:1rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span><i class="fa-solid fa-hourglass-half" style="color:#eda5ff"></i> ${_esc(f.name)}</span>
+          ${/* THE MINIMUM, BEFORE THEY ASK. It was only discovered after a
+                member tapped "Ask to move money in" and the form refused
+                the amount — a committee needs to know what the fund takes
+                while they are deciding, not after. min_deposit is tested
+                against what reaches the FUND, so the wallet pays it plus
+                the 1% fee; the form says that, this says the threshold. */''}
+          ${Number(f.min_deposit) > 0 ? `<span style="font-size:0.7rem;font-weight:700;color:var(--text-muted);
+            border:1px solid var(--border);border-radius:999px;padding:2px 9px;white-space:nowrap">Minimum: ${
+            Utils.rand(f.min_deposit)}</span>` : ''}
+        </div>
         <div style="font-size:0.8rem;color:var(--text-muted);max-width:520px;line-height:1.5">
           Always open to money coming in, with the 1% platform fee on top. Taking money out needs ${days} days&rsquo;
           notice, and it comes back to the group&rsquo;s wallet. Capital is at risk and returns are not guaranteed.</div>
@@ -15183,10 +15251,20 @@ async function _svNoticeFund(id) {
     </div>
     <div style="font-size:0.82rem;margin-top:10px;padding:8px 10px;border-radius:10px;background:rgba(237,165,255,0.08)">
       <i class="fa-solid fa-chart-line" style="color:#eda5ff"></i>
-      Projected return: <strong>${pct(pr.this_rate) ? `${pct(pr.this_rate)} this month` : 'not declared for this month yet'}</strong>${
-        pct(pr.next_rate) ? `, ${pct(pr.next_rate)} next month` : ''}.
-      <span style="color:var(--text-muted)">Declared before each month starts and earned day by day; it stays in the
-        fund and earns too. A projection, not a promise: once a month ends, what it actually earned replaces it.</span>
+      ${/* "INDICATIVE RATE", NOT "PROJECTED RETURN". The number is the same
+            one the fund's managers declare before each month; the words
+            around it were doing more work than they should. "Projected
+            return" reads as a forecast of what the group WILL earn.
+            "Indicative rate … variable, not guaranteed" says what it
+            actually is — the rate in force, which can change and is not
+            promised. On a regulated product the stronger disclosure is the
+            correct one, and it is what the member sees first. */''}
+      Indicative rate: <strong>${pct(pr.this_rate)
+        ? `${pct(pr.this_rate)} / month (variable, not guaranteed)`
+        : 'not declared for this month yet'}</strong>${
+        pct(pr.next_rate) ? ` &middot; ${pct(pr.next_rate)} / month indicated for next month` : ''}
+      <span style="color:var(--text-muted)">&mdash; declared before each month starts and earned day by day; it stays in the
+        fund and earns too. Once a month ends, what it actually earned replaces the indicative rate.</span>
       ${pr.last_actual != null ? `<div style="margin-top:4px">${_esc(pr.last_month)} actually returned
         <strong style="color:${pr.last_actual >= 0 ? '#22c55e' : '#ef4444'}">${pct(pr.last_actual)}</strong>${
         pr.last_projected != null ? ` <span style="color:var(--text-muted)">(projected ${pct(pr.last_projected)})</span>` : ''}.</div>` : ''}
@@ -16510,15 +16588,36 @@ function _svShares(res, gid) {
         <span style="color:var(--text-muted)">Approved, waiting to be sent</span>
         <strong style="color:#f59e0b">−${Utils.rand(d.committed)}</strong>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:0.84rem;border-top:1px solid var(--border);padding-top:6px;margin-top:6px">
-        <span style="font-weight:700">Left to decide on</span><strong>${Utils.rand(d.uncommitted)}</strong>
+      ${/* OVER-COMMITTED READS AS A NEGATIVE, not as "R -18 000,00".
+            Utils.rand puts the minus between the R and the digits, which on
+            the one row where the number can go below zero is the row a
+            committee most needs to read correctly. The sign goes in front
+            and the row says what it means. */''}
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:0.84rem;border-top:1px solid var(--border);padding-top:6px;margin-top:6px">
+        <span style="font-weight:700">Left to decide on${Number(d.uncommitted) < 0
+          ? ` <span style="font-weight:600;font-size:0.68rem;color:#f59e0b;border:1px solid #f59e0b;border-radius:999px;padding:1px 7px;white-space:nowrap">Over-committed by ${
+              Utils.rand(Math.abs(Number(d.uncommitted)))}</span>` : ''}</span>
+        <strong${Number(d.uncommitted) < 0 ? ' style="color:#f59e0b"' : ''}>${Number(d.uncommitted) < 0
+          ? `&minus;${Utils.rand(Math.abs(Number(d.uncommitted)))}` : Utils.rand(d.uncommitted)}</strong>
       </div>
       <div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45">
-        The signatories have released that money and it has not left yet, so it is still in the
-        wallet above. The group cannot spend it twice.
+        ${/* Two sentences naming the two rows, rather than "that money",
+              which could be either of them. */''}
+        <strong>Approved, waiting to be sent</strong> has been released by the signatories and has not left the
+        wallet yet. <strong>Left to decide on</strong> is what is free after it &mdash; the same rand cannot be
+        spent twice.
       </div>` : ''}
     </div>
-    <table class="data-table" style="font-size:0.8rem"><tbody>
+    ${/* THREE UNLABELLED COLUMNS, one of which is a share of the pot and
+          one of which is a debt. A member reading across their own row had
+          to work out which rand figure was theirs and which was owed, and
+          the two mean opposite things. Named now. */''}
+    <table class="data-table" style="font-size:0.8rem">
+    <thead><tr>
+      <th>Member</th>
+      <th class="text-right">Share of the pot</th>
+      <th class="text-right">Owing</th>
+    </tr></thead><tbody>
     ${rows.map(r => `<tr${r.is_me ? ' style="background:rgba(237,165,255,0.08)"' : ''}>
       <td>${_esc(r.first_name)} ${_esc(r.last_name || '')}${r.is_me ? ' <span style="color:var(--text-muted)">(you)</span>' : ''}</td>
       <td class="text-right"><strong>${Utils.rand(r.share)}</strong></td>
