@@ -10,7 +10,18 @@
   <title>SV Capital — Solar Investment Management</title>
   <meta name="description" content="Earn inflation-beating returns from South African solar energy projects with SV Capital. Monthly income from clean, renewable energy. Invest from R500.">
   <link rel="canonical" href="https://platform.svcapital.co.za/fund/solar.html">
-  <meta name="robots" content="index, follow">
+  <meta name="robots" content="noindex, nofollow">
+  <!-- NOINDEX, and not a robots.txt Disallow. This page is the solar finance NAV dashboard,
+       not a product page: everything a crawler can read of it is "Loading NAV…".
+       It said "index, follow" and sat in sitemap.xml at priority 0.8, so search
+       engines were being asked to index a staff console under a description
+       promising investment returns.
+
+       A Disallow in robots.txt would NOT fix that: a page that cannot be
+       crawled cannot be seen to carry noindex, so anything already indexed
+       stays indexed as a bare URL. The removal has to be this tag, read on a
+       normal crawl. Once these have dropped out of the index, /fund/ can be
+       disallowed in robots.txt — see the note in that file. -->
   <meta property="og:title" content="Solar Investment — SV Capital">
   <meta property="og:description" content="Earn inflation-beating returns from South African solar energy projects with SV Capital. Monthly income from clean, renewable energy. Invest from R500.">
   <meta property="og:url" content="https://platform.svcapital.co.za/fund/solar.html">

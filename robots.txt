@@ -7,4 +7,34 @@ Disallow: /api/
 Disallow: /ifa/
 Disallow: /team/
 
+# /fund/ IS STAFF TOOLING TOO, AND IS DELIBERATELY NOT DISALLOWED HERE.
+#
+# fund/index.html is the Fund Management Operations Console; cattle, solar and
+# shortterm are NAV dashboards carrying cost ledgers and herd reconciliation.
+# They belong with the five paths above and not in anybody's search results.
+#
+# They are kept out with <meta name="robots" content="noindex, nofollow"> on
+# the pages themselves, because that is the directive that actually removes a
+# page. A Disallow here stops the crawl, and a page that is never crawled is
+# never seen to carry noindex — so anything already indexed would be frozen in
+# place as a bare URL with no way to shift it. Blocking and de-indexing are
+# different jobs and this is the wrong file for the second one.
+#
+# ONCE THOSE PAGES HAVE DROPPED OUT of Google's index — check Search Console,
+# or a site:platform.svcapital.co.za/fund search — add:
+#
+#   Disallow: /fund/
+#   Allow: /fund/gridfarmer.html
+#
+# in that order. The Allow has the longer path, so it wins for GridFarmer,
+# which is a real product page and must stay indexed.
+#
+# AND ADD A LINE SAYING YOU CHECKED, in this file:
+#
+#   # de-indexed-confirmed: 2026-12-01 <who looked>
+#
+# check-public-seo.cjs refuses the Disallow until that line is there, because
+# adding it early undoes the removal and nothing would ever say so. The script
+# cannot look in Google's index; a person can, and this is where they sign it.
+
 Sitemap: https://platform.svcapital.co.za/sitemap.xml

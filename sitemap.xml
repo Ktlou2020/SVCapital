@@ -1,35 +1,60 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WHAT BELONGS IN HERE: pages a prospective client should be able to find.
+
+  This file used to list five /fund/ URLs at priority 0.6-0.8. Four of them
+  are not product pages at all — fund/index.html is the Fund Management
+  Operations Console, and cattle/solar/shortterm are NAV dashboards with cost
+  ledgers and herd reconciliation on them. They are staff tooling, and all a
+  crawler could read of them was "Loading NAV…". They are out, and they now
+  carry noindex; fund/gridfarmer.html stays, because it is a genuine product
+  page.
+
+  institutional, private-clients, stokvels and get-app were missing although
+  they are real marketing pages, so the three audiences the site is built
+  around had nothing in the sitemap but the home page.
+
+  NO <lastmod>. An accurate one helps; a stale one is worse than none, and
+  nothing regenerates this file on deploy. Add it when something does.
+-->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
   <url>
     <loc>https://platform.svcapital.co.za/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
+
+  <!-- The three audiences the site is written for. -->
   <url>
-    <loc>https://platform.svcapital.co.za/fund/cattle.html</loc>
+    <loc>https://platform.svcapital.co.za/private-clients.html</loc>
     <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
+    <priority>0.9</priority>
   </url>
+  <url>
+    <loc>https://platform.svcapital.co.za/institutional.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://platform.svcapital.co.za/stokvels.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- The one product page under /fund/ that is a product page. -->
   <url>
     <loc>https://platform.svcapital.co.za/fund/gridfarmer.html</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
+
   <url>
-    <loc>https://platform.svcapital.co.za/fund/solar.html</loc>
+    <loc>https://platform.svcapital.co.za/get-app.html</loc>
     <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
+    <priority>0.5</priority>
   </url>
-  <url>
-    <loc>https://platform.svcapital.co.za/fund/shortterm.html</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://platform.svcapital.co.za/fund/index.html</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
+
   <url>
     <loc>https://platform.svcapital.co.za/terms.html</loc>
     <changefreq>yearly</changefreq>
@@ -50,4 +75,5 @@
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
+
 </urlset>
