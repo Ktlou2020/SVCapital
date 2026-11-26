@@ -32,15 +32,26 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:    ["'self'"],
-      scriptSrc:     ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com', '*.googleapis.com', 'js.paystack.co'],
+      /* www.googletagmanager.com: every page loads the gtag snippet and this
+         directive did not admit it, so the browser blocked the script on
+         every request and NO analytics has ever been collected in
+         production. js/analytics.js guards `typeof window.gtag !==
+         "function"` and returns quietly, which is why it failed silently
+         for as long as it did — the only trace was a console warning on
+         each page load. */
+      scriptSrc:     ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com', '*.googleapis.com', 'js.paystack.co', 'www.googletagmanager.com'],
       // Allow inline onclick=/onkeydown= event handler attributes.
       // helmet sets this to 'none' by default, overriding unsafe-inline in scriptSrc.
       scriptSrcAttr: ["'unsafe-inline'"],
       styleSrc:      ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'cdnjs.cloudflare.com'],
       fontSrc:       ["'self'", 'fonts.gstatic.com', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com'],
       // Narrowed from '*' — external images only allowed from trusted chart/QR sources
-      imgSrc:        ["'self'", 'data:', 'blob:', 'api.qrserver.com', 'chart.googleapis.com', 'img.youtube.com', 'i.ytimg.com'],
-      connectSrc:    ["'self'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com', 'api.paystack.co', '*.paystack.co', 'pay.ozow.com'],
+      imgSrc:        ["'self'", 'data:', 'blob:', 'api.qrserver.com', 'chart.googleapis.com', 'img.youtube.com', 'i.ytimg.com', 'www.google-analytics.com'],
+      /* The analytics hosts are the other half of admitting gtag: the
+         script loads from googletagmanager and then POSTs its events to
+         google-analytics. Allowing only the script would have swapped a
+         blocked script for blocked beacons and looked just as fixed. */
+      connectSrc:    ["'self'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com', 'api.paystack.co', '*.paystack.co', 'pay.ozow.com', 'www.googletagmanager.com', '*.google-analytics.com', '*.analytics.google.com'],
       /* blob: so a stored document can be previewed inline. The viewer
          converts the base64 data: URL it holds into a blob first; framing
          the data: URL directly was refused here and rendered blank.

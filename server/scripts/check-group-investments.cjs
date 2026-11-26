@@ -140,6 +140,53 @@ console.log('\nbut a group asks rather than invests');
      + 'tap in: ' + two.html.slice(-300));
 }
 
+/* ══ 2b. EVERY KIND OF PRODUCT, not just the one the fixture had ═══ */
+console.log('\nand it draws an ethical & interest-free product too');
+{
+  /* THIS IS THE ROW THAT TOOK THE LIVE PORTAL DOWN.
+   *
+   * _svProductCard was lifted out of renderProductsGrid and kept a
+   * reference to that function's `const cat`, which is not in scope out
+   * here. Every call threw ReferenceError and the whole Invest grid came
+   * back as "Could not load pools" — for every client, on production.
+   *
+   * THE ASSERTIONS ABOVE DROVE THIS FUNCTION AND PASSED. The reference
+   * sits inside `eif && cat !== 'eif'`, so it is only reached for a
+   * product that is ethical and interest-free, and every fixture here was
+   * cattle. A short circuit hid an undefined variable, and only data
+   * nobody had tested with would reach it. Production had that data.
+   *
+   * So each kind of product is drawn, and the tag is checked both ways:
+   * it says "interest-free" where that is news, and not inside the
+   * section where every card already is. */
+  const P = portal();
+  const EIF = PRODUCT({ category: 'eif', label: 'Ethical Cattle' });
+
+  for (const [what, prod, category] of [
+    ['a standard product',              PRODUCT(), 'all'],
+    ['AN INTEREST-FREE PRODUCT',        EIF,       'all'],
+    ['one inside the interest-free tab', EIF,      'eif'],
+    ['one with no category set at all',  EIF,      undefined],
+  ]) {
+    let html = null, threw = null;
+    try {
+      P.PORTAL = { pools: [POOL()], investor: {},
+                   ...(category === undefined ? {} : { marketCategory: category }) };
+      html = P._svProductCard(prod, [POOL()]);
+    } catch (e) { threw = e.message; }
+    ok(`${what} draws without throwing`, threw === null,
+       'the card renderer must not depend on a variable that belongs to '
+       + 'the function it was extracted from: ' + threw);
+    if (html === null) continue;
+    const tagged = /eif-tag/.test(html);
+    const expected = prod === EIF && category !== 'eif';
+    ok(`  and the interest-free tag is ${expected ? 'shown' : 'not shown'}`,
+       tagged === expected,
+       'inside the interest-free section every card is interest-free, so '
+       + 'the tag is noise; outside it, it is the point');
+  }
+}
+
 /* ══ 3. Only what can really be asked for ══════════════════════════ */
 console.log('\nand it lists only what the group could actually ask for');
 {

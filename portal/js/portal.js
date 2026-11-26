@@ -905,7 +905,7 @@ function renderOverviewInvestments() {
   body.innerHTML = active.map(inv => {
     const pi = Utils.productInfo(inv.product_type);
     const days = Utils.daysRemaining(inv.maturity_date);
-    const pool = PORTAL.pools.find(p => p.id === inv.pool_id);
+    const pool = (PORTAL.pools || []).find(p => p.id === inv.pool_id);
     const progress = pool ? Utils.poolFillPct(pool) : 100;
 
     return `<tr>
@@ -1069,21 +1069,31 @@ let _mktProducts = [];
 let _selectedProductType = null;   // null = product grid; set = product detail
 
 async function loadMarketplace() {
+  /* Array.isArray FIRST. This line used to test .length on its own, which
+     THROWS when pools is undefined — so the fetch it guards never ran for
+     exactly the state it was there to repair, and the catch below logged
+     the TypeError as "failed to fetch pools". A guard that defeats
+     itself, and mislabels itself on the way out. */
   try {
-    if (!PORTAL.pools.length) {
+    if (!Array.isArray(PORTAL.pools) || !PORTAL.pools.length) {
       const res = await API.pools.list({ limit: 100 });
-      PORTAL.pools = res.data || [];
+      PORTAL.pools = (res && res.data) || [];
     }
   } catch (err) {
     console.warn('[marketplace] failed to fetch pools:', err);
     // Render with whatever is cached — show empty state rather than "Loading..."
   }
+  /* Whatever happened above, every reader below this line gets an
+     array. Empty means none loaded, which the grid renders as an
+     empty state; undefined means a thrown render and a client told
+     to check their connection. */
+  if (!Array.isArray(PORTAL.pools)) PORTAL.pools = [];
   try { _mktProducts = await _getPortalProducts(); } catch (_) { _mktProducts = []; }
 
   // Fallback: if the products table has no active entries, synthesise a virtual
   // product for each distinct product_type that has at least one pool so the
   // marketplace always shows what's available.
-  if (!_mktProducts.length && PORTAL.pools.length) {
+  if (!_mktProducts.length && (PORTAL.pools || []).length) {
     const seen = new Set();
     _mktProducts = PORTAL.pools
       .filter(p => p && p.product_type && !seen.has(p.product_type) && seen.add(p.product_type))
@@ -1131,7 +1141,7 @@ async function loadMarketplace() {
     if (grid) grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><i class="fa-solid fa-triangle-exclamation"></i><div class="empty-state__title">Could not load pools</div><div class="empty-state__sub">Pull down to refresh or check your connection.</div></div>`;
   }
   try {
-    SVC.track('view_item_list', { item_list_id: 'marketplace', item_list_name: 'Investment Pools', items: PORTAL.pools.slice(0, 10).map(p => ({ item_id: p.id, item_name: p.name, item_category: p.product_type })) });
+    SVC.track('view_item_list', { item_list_id: 'marketplace', item_list_name: 'Investment Pools', items: (PORTAL.pools || []).slice(0, 10).map(p => ({ item_id: p.id, item_name: p.name, item_category: p.product_type })) });
   } catch (_) {}
 }
 
@@ -1159,7 +1169,7 @@ const _RISK_COLORS = { 'Low': '#22c55e', 'Medium': '#fec24f', 'Medium-High': '#f
 
 // Count of open/waitlist pools for a product type
 function _openPoolsForProduct(type) {
-  return PORTAL.pools.filter(p => {
+  return (PORTAL.pools || []).filter(p => {
     /* Canonical on both sides: a `delivery_bikes` pool belongs to the
        `delivery_bike` product. See svcCanonProductType in portal-core.js. */
     if (svcCanonProductType(p.product_type) !== svcCanonProductType(type)) return false;
@@ -1497,7 +1507,7 @@ function _platformFee(poolAmount) { return svcPlatformFee(poolAmount); }
 function _minPlusFee(pool) { return svcMinWalletFor(pool); }
 
 function openInvestModal(poolId) {
-  const pool = PORTAL.pools.find(p => p.id === poolId);
+  const pool = (PORTAL.pools || []).find(p => p.id === poolId);
   if (!pool) return;
 
   SVC.track('view_item', { items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type }] });
@@ -3436,7 +3446,7 @@ function _renderCertificatesTable() {
         <button class="btn btn--primary btn--sm" onclick="downloadCertificate('${inv.id}')">
           <i class="fa-solid fa-file-pdf"></i> Certificate
         </button>
-        ${(() => { const pool = PORTAL.pools.find(p => p.id === inv.pool_id); return pool && pool.term_sheet_url ? `<a href="${pool.term_sheet_url}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-file-contract"></i> Term Sheet</a>` : ''; })()}
+        ${(() => { const pool = (PORTAL.pools || []).find(p => p.id === inv.pool_id); return pool && pool.term_sheet_url ? `<a href="${pool.term_sheet_url}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-file-contract"></i> Term Sheet</a>` : ''; })()}
       </td>
     </tr>`;
   }).join('');

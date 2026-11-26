@@ -4048,6 +4048,29 @@ function _cancelSaInvestMode() {
 function _svProductCard(p, open, opts) {
   const o = opts || {};
 
+  /* WHICH SECTION THIS CARD IS BEING DRAWN IN, and it has to be asked for
+   * here rather than inherited.
+   *
+   * This function was lifted out of renderProductsGrid, which holds a
+   * `const cat = _mktCategory()` of its own — and the interest-free tag
+   * below still referred to it. Out here `cat` is not in scope, so every
+   * call threw ReferenceError and the whole Invest grid came back as
+   * "Could not load pools", on the live portal, for every client.
+   *
+   * IT HID BEHIND A SHORT CIRCUIT. The reference sits in
+   * `eif && cat !== 'eif'`, so it is only evaluated for a product that IS
+   * ethical and interest-free. check-group-investments drove this function
+   * and passed, because its fixture was a cattle product and the left side
+   * was false. An undefined variable that only one kind of row reaches is
+   * invisible until that row exists — and production had one.
+   *
+   * The tag says "interest-free" on a card OUTSIDE the interest-free
+   * section, where that is news; inside it, every card is, so it would be
+   * noise. A surface that is not a section at all — a group's Investments
+   * tab — wants the tag, which is what 'all' means here. */
+  const cat = o.category != null ? o.category
+            : (typeof _mktCategory === 'function' ? _mktCategory() : 'all');
+
     const pi = Utils.productInfo(p.product_type);
     const color = Utils.productColor(p);
     const icon = p.icon || pi.icon;
@@ -4550,7 +4573,7 @@ async function _renderProductFactsheets(type, product) {
   const el = document.getElementById('prodFactsheets');
   if (!el) return;
   el.innerHTML = `<div style="font-size:0.78rem;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading factsheets…</div>`;
-  const poolIds = new Set(PORTAL.pools.filter(p => p.product_type === type).map(p => p.id));
+  const poolIds = new Set((PORTAL.pools || []).filter(p => p.product_type === type).map(p => p.id));
   let sheets = [];
   try {
     /* Asked by PRODUCT, not by which pools happen to be loaded.
@@ -10245,7 +10268,7 @@ function generateInvestmentCertificate(invId) {
   if (!inv || !investor) return Toast.error('Investment not found');
 
   const certNo = 'SVC-CERT-' + (invId||'').slice(-6).toUpperCase() + '-' + Date.now().toString(36).toUpperCase();
-  const pool = PORTAL.pools.find(p => p.id === inv.pool_id) || {};
+  const pool = (PORTAL.pools || []).find(p => p.id === inv.pool_id) || {};
 
   const html = `<div style="font-family:Arial,sans-serif;padding:40px;max-width:700px;margin:0 auto">
     <div style="text-align:center;margin-bottom:30px">
