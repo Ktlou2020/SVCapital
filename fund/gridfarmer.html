@@ -1,13 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- THIS PAGE HAD NO DOCUMENT AROUND IT. It began at the title element:
+     no doctype, no html, head or body element, no charset and no viewport.
+     So it rendered in quirks mode, guessed its own encoding for every em
+     dash on it, and on a phone laid out at desktop width and zoomed out.
+     It is the one real product page under /fund/ and the only one of them
+     left in the sitemap, so it is the one that had to be a document. -->
 <!-- GridFarmer — SV Capital product page -->
 <title>GridFarmer | White Maize Production Rights — SV Capital</title>
-<meta name="description" content="Invest in GridFarmer White Maize Production Rights through SV Capital — earn returns from South African agriculture with full transparency and monthly reporting.">
+<meta name="description" content="GridFarmer White Maize Production Rights through SV Capital — South African agriculture, with full transparency and monthly reporting.">
 <link rel="canonical" href="https://platform.svcapital.co.za/fund/gridfarmer.html">
 <meta name="robots" content="index, follow">
 <meta property="og:title" content="GridFarmer White Maize Production Rights — SV Capital">
-<meta property="og:description" content="Invest in GridFarmer White Maize Production Rights through SV Capital — earn returns from South African agriculture with full transparency and monthly reporting.">
+<meta property="og:description" content="GridFarmer White Maize Production Rights through SV Capital — South African agriculture, with full transparency and monthly reporting.">
 <meta property="og:url" content="https://platform.svcapital.co.za/fund/gridfarmer.html">
 <meta property="og:type" content="website">
 <style>
+<meta property="og:site_name" content="SV Capital">
+<meta property="og:locale" content="en_ZA">
+<meta property="og:image" content="https://platform.svcapital.co.za/assets/svcapital-og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@sv_capital">
+<meta name="twitter:title" content="GridFarmer White Maize Production Rights — SV Capital">
+<meta name="twitter:description" content="Buy a hectare, not a fund. White maize production rights in South African agriculture, with monthly reporting.">
+<meta name="twitter:image" content="https://platform.svcapital.co.za/assets/svcapital-og.png">
 /* ── Tokens ─────────────────────────────────────── */
 :root {
   --bg:        #1C1C1C;
@@ -469,6 +490,57 @@ footer .wrap { display:flex; justify-content:space-between; gap:16px; flex-wrap:
 .chip-muted { background:transparent; color:var(--muted); border:1px solid var(--border-hi); }
 .divider { border:none; border-top:1px solid var(--border); margin:40px 0; }
 </style>
+
+<!-- Structured data. The Organization and WebSite are declared once, on the
+     home page; this references them by @id rather than restating them, so a
+     detail that changes there does not have to be chased across five files.
+     NO FAQPage and no rate or return claims: this page carries no FAQ to
+     match, and marking up either would describe something the reader cannot
+     see. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": "https://platform.svcapital.co.za/fund/gridfarmer.html#webpage",
+      "url": "https://platform.svcapital.co.za/fund/gridfarmer.html",
+      "name": "GridFarmer White Maize Production Rights",
+      "description": "GridFarmer White Maize Production Rights through SV Capital — South African agriculture, with full transparency and monthly reporting.",
+      "isPartOf": {
+        "@id": "https://platform.svcapital.co.za/#website"
+      },
+      "about": {
+        "@id": "https://platform.svcapital.co.za/#organization"
+      },
+      "publisher": {
+        "@id": "https://platform.svcapital.co.za/#organization"
+      },
+      "inLanguage": "en-ZA"
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://platform.svcapital.co.za/fund/gridfarmer.html#breadcrumb",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SV Capital",
+          "item": "https://platform.svcapital.co.za/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "GridFarmer",
+          "item": "https://platform.svcapital.co.za/fund/gridfarmer.html"
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
 
 <!-- ─────────────────────────────────────────────── -->
 <!-- NAV -->
@@ -1118,3 +1190,5 @@ document.getElementById('safex-slider').addEventListener('input', recalc);
 document.getElementById('grids-input').addEventListener('input', recalc);
 recalc();
 </script>
+</body>
+</html>

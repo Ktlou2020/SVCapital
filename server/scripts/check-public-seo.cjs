@@ -146,5 +146,102 @@ console.log('\nand the parts that were already private still are');
      'without it the sitemap is only found if it is submitted by hand');
 }
 
+/* ══ 5. Every public page is a document, and shareable ════════════ */
+console.log('\nand every public page is a whole document');
+{
+  /* fund/gridfarmer.html began at its <title>: no doctype, no html, head
+     or body element, no charset, no viewport. A browser renders that in
+     quirks mode, guesses the encoding for every em dash on the page, and
+     on a phone lays it out at desktop width and zoomed out — on the one
+     real product page under /fund/. Nothing caught it because nothing
+     looked at the shape of the document, only at its tags. */
+  for (const p of PUBLIC) {
+    const h = read(p);
+    ok(`${p} has a doctype`, /^\s*<!DOCTYPE html>/i.test(h),
+       'without one the browser renders in quirks mode');
+    ok(`  and html, head and body`,
+       /<html[^>]*>/i.test(h) && /<head[\s>]/i.test(h) && /<body[\s>]/i.test(h),
+       'a fragment served as a page is not a page');
+    ok(`  and declares its language`, /<html[^>]+lang="[a-z-]+"/i.test(h),
+       'a screen reader and a search engine both ask');
+    ok(`  and its character set`, /<meta[^>]+charset=/i.test(h),
+       'every em dash on the page is a guess without it');
+    ok(`  AND A VIEWPORT`, /<meta[^>]+name="viewport"/i.test(h),
+       'without it a phone lays the page out at desktop width and zooms '
+       + 'out — on a site whose clients are mostly on phones');
+  }
+}
+
+/* ══ 6. And can be shared without looking broken ═══════════════════ */
+console.log('\nand carries a share card that is not blank');
+{
+  const SHARE = PUBLIC.filter(p => p !== 'index.html');
+  const img = /<meta property="og:image" content="([^"]+)"/i;
+  for (const p of ['index.html', ...SHARE]) {
+    const h = read(p);
+    const m = h.match(img);
+    ok(`${p} has an og:image`, !!m,
+       'WhatsApp and LinkedIn render a share with no picture at all, '
+       + 'which on a financial site reads as a broken or spoofed link');
+    ok(`  and a twitter card`, /name="twitter:card"/i.test(h));
+    if (m) {
+      /* AND THE FILE IS REALLY THERE. An og:image pointing at a 404 is
+         the same blank card, and nothing but a share would show it. */
+      const rel = m[1].replace('https://platform.svcapital.co.za/', '');
+      ok(`  and that image exists on disk`, fs.existsSync(path.join(ROOT, rel)), rel);
+    }
+  }
+}
+
+/* ══ 7. Descriptions that survive the search result ════════════════ */
+console.log('\nand a description short enough to be read');
+{
+  for (const p of PUBLIC) {
+    const d = (read(p).match(/<meta name="description" content="([^"]*)"/i) || [])[1];
+    ok(`${p} has a description`, !!d, 'the snippet is written by Google without one');
+    /* Google truncates near 155-160. Anything past that is written for
+       nobody. Matched to the closing double quote and NOT to [^"\']*,
+       which stops at the apostrophe in "SV Capital\'s" and reports a
+       137-character description as 10 — that misreading is why this
+       assertion names the length it found. */
+    if (d) ok(`  and it is ${d.length} characters, within 155`, d.length <= 155,
+              'the tail is cut off in every search result: ' + d);
+  }
+}
+
+/* ══ 8. Structured data that matches the page ══════════════════════ */
+console.log('\nand structured data that describes what is really there');
+{
+  for (const p of ['index.html', 'institutional.html', 'private-clients.html',
+                   'stokvels.html', 'fund/gridfarmer.html']) {
+    const h = read(p);
+    const raw = (h.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/i) || [])[1];
+    ok(`${p} carries structured data`, !!raw);
+    if (!raw) continue;
+    let g = null;
+    ok(`  and it is valid JSON`, (() => { try { g = JSON.parse(raw); return true; }
+                                          catch (e) { return false; } })(),
+       'invalid JSON-LD is ignored in full, silently');
+    if (!g) continue;
+    /* A FAQPage whose questions are not on the page is a structured data
+       violation, and none of these pages has an FAQ section. */
+    const types = (g['@graph'] || [g]).map(n => n['@type']);
+    /* LOOKED FOR IN WHAT A READER SEES, NOT IN THE MARKUP THAT CLAIMS IT.
+       Scanning the whole file for /faq/ matches the word "FAQPage" inside
+       the JSON-LD itself, so the claim proved itself. Stripping scripts
+       was not enough either: the COMMENT above that block explains why
+       there is no FAQPage on these pages, and the word "FAQ" in that
+       sentence satisfied the probe just as well. Comments and styles are
+       not on the page any more than a script is. */
+    const body = h.replace(/<script[\s\S]*?<\/script>/gi, ' ')
+                  .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+                  .replace(/<!--[\s\S]*?-->/g, ' ');
+    const visible = /faq|frequently asked|<summary/i.test(body);
+    ok(`  and claims no FAQ this page does not have`,
+       !types.includes('FAQPage') || visible,
+       'marking up answers a reader cannot see is what Google penalises');
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

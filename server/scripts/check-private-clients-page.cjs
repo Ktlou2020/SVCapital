@@ -64,6 +64,10 @@ const FLAT = HTML.replace(/\s+/g, ' ');
    so the meta description in <head> cannot stand in for it. */
 const HERO = FLAT.slice(FLAT.indexOf('<body'), FLAT.indexOf('</header>'));
 
+/* Everything the reader can see, head excluded — for the rules that are
+   about what the PAGE says rather than what the markup claims. */
+const BODY = FLAT.slice(FLAT.indexOf('<body'));
+
 console.log('\nwhat the page says');
 {
   ok('the provider and the fund manager are named exactly',
@@ -164,8 +168,20 @@ console.log('\nhow long the money is committed for');
   /* 18 months is a minimum this audience has to be told before they spend
      any more time on the page — it disqualifies people, which is the point
      of saying it early. */
+  /* READ FROM THE BODY, and in the wording the page actually uses.
+     This matched /minimum (?:term is|of) 18 months/ against the whole
+     file. The page says "A minimum term OF 18 months", which that
+     pattern does not accept — so the only thing ever satisfying it was
+     the meta description in <head>, which says "a minimum of 18
+     months". The disclosure was on the page the whole time and this
+     assertion was not reading it; trimming the description for length
+     is what finally showed that, by removing the copy it was really
+     testing. It is the same trap the HERO slice below was written to
+     avoid, one assertion earlier. */
   ok('the minimum term is named',
-     /minimum (?:term is|of) 18 months/i.test(FLAT), 'not found');
+     /minimum term (?:is|of) 18 months|minimum of 18 months/i.test(BODY),
+     'not found in the body — a term minimum that lives only in the meta '
+     + 'description has been told to Google and not to the reader');
   /* From <body>, not from character zero: the meta description in <head>
      also says 18 months, and slicing from the top let it stand in for the
      hero — the assertion passed with the hero stripped of every mention.
