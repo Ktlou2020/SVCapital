@@ -184,12 +184,46 @@ function call(method, url, body, user) {
          Number(amt.pool_amount_cents) + Number(amt.fee_cents) === Number(amt.amount_cents),
          JSON.stringify(amt));
 
-      /* Eligibility is refused before a contract exists, not after. */
-      await db.query(`UPDATE investors SET fica_status='pending' WHERE id='INV-SIGN-1'`);
+      /* ── REWRITTEN, NOT DELETED ──────────────────────────────────────
+         This asserted a 403: "FICA is required before a contract is
+         drawn". It was the gate that actually stopped unverified clients
+         investing, because an investment will not fund without a
+         matching signed agreement — and the symptom reported from
+         production was a client with a funded wallet and "Your FICA
+         verification must be approved before you can sign an investment
+         agreement."
+
+         The platform's rule, confirmed with the business, is the other
+         way round: money may come IN before we have identified who sent
+         it and may not go OUT until we have. The withdrawal gate
+         (services/withdrawalAccess, check-fica-gates) is what holds
+         that, and it is why nothing an unverified client pays in can be
+         taken out again by them.
+
+         So the assertion is inverted — an unverified client gets their
+         agreement — and the thing worth protecting is kept: the fact
+         that they were unverified AT THAT MOMENT is written onto the
+         row, because the status columns move afterwards and a client
+         verified next week would otherwise look, in the record, as
+         though they had always been. */
+      await db.query(`UPDATE investors SET fica_status='pending', kyc_status='pending' WHERE id='INV-SIGN-1'`);
       const noFica = await call('POST', '/draw', { pool_id: 'POOL-SIGN', amount: 5000 }, ME);
-      ok('FICA is required before a contract is drawn', noFica.status === 403,
-         JSON.stringify(noFica.body));
-      await db.query(`UPDATE investors SET fica_status='approved' WHERE id='INV-SIGN-1'`);
+      ok('FICA DOES NOT STOP A CONTRACT BEING DRAWN', noFica.status === 200,
+         JSON.stringify(noFica.body) + ' — this 403 was the thing blocking '
+         + 'investing, one step upstream of the investment');
+      ok('  and the agreement records that we had not identified them yet',
+         noFica.status === 200 && (await db.query(
+           `SELECT fica_cleared_at_signing c FROM investment_agreements WHERE id=$1`,
+           [noFica.body.id])).rows[0].c === false,
+         'without this nobody can answer which agreements were signed '
+         + 'before we knew who they were');
+      await db.query(`UPDATE investors SET fica_status='approved', kyc_status='approved' WHERE id='INV-SIGN-1'`);
+      const withFica = await call('POST', '/draw', { pool_id: 'POOL-SIGN', amount: 5000 }, ME);
+      ok('  and records the other answer for a client we have',
+         withFica.status === 200 && (await db.query(
+           `SELECT fica_cleared_at_signing c FROM investment_agreements WHERE id=$1`,
+           [withFica.body.id])).rows[0].c === true,
+         'a column that is always false records nothing: ' + JSON.stringify(withFica.body).slice(0, 160));
 
       await db.query(`UPDATE investment_pools SET end_date = CURRENT_DATE - 1 WHERE id='POOL-SIGN'`);
       const closed = await call('POST', '/draw', { pool_id: 'POOL-SIGN', amount: 5000 }, ME);
