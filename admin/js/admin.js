@@ -10,6 +10,32 @@
    "KYC Pending". */
 const _kycVerified = inv => !!inv && (inv.kyc_status === 'approved' || inv.kyc_status === 'verified');
 
+/* ─── Which way the money went ──────────────────────────────────────────────
+   Money LEAVING a client's wallet, by transaction type. The ledger drew its
+   sign from ['investment','reinvestment','withdrawal','fee'] — four of the
+   nine debit types — so a platform_fee rendered as +R5,00 in green against
+   the rule that fees always display as negative, and a gift_sent, stored
+   with a negative amount, rendered as a green credit to the client whose
+   money had just left. The sub-account panel already held the right list;
+   this is that list, in one place, read by both.
+
+   Kept in step with CASH_DEBIT_TYPES in server/services/ledger.js, which is
+   where the same question is answered for statements and balances.
+   check-gifts-console.cjs holds the two to each other. */
+const TXN_OUTFLOW_TYPES = ['withdrawal', 'investment', 'reinvestment', 'fee', 'platform_fee',
+                           'gift_sent', 'stokvel_contribution', 'reversal', 'transfer_out'];
+
+/* ─── One filter option, a family of types ──────────────────────────────────
+   A gift writes gift_sent against the sender and gift_received against the
+   recipient, and a cancellation writes gift_cancelled back. Somebody tracking
+   gifts wants all of them: three separate options would mean three passes to
+   see one gift, and picking the wrong one shows a third of the ledger and
+   reads as none. The dropdown's value is the family name. */
+const TXN_TYPE_FAMILIES = {
+  gift: ['gift_sent', 'gift_received', 'gift_cancelled', 'gift'],
+};
+
+
 /* Escape user-controlled strings before inserting into innerHTML */
 /* A swallowed error should be a decision, not a leftover.
 
@@ -478,6 +504,7 @@ function navigate(view, btnEl) {
     'fica-pipeline': 'FICA Pipeline',
     insights: 'Insight Articles',
     handbook: 'Platform Handbook', rewards: 'Rewards',
+    gifts: 'Gifts',
     stokvels: 'Groups',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
@@ -508,6 +535,7 @@ function navigate(view, btnEl) {
     feedback: () => loadFeedback('pending'),
     rewards: loadRewards,
     stokvels: loadStokvels,
+    gifts: loadGifts,
   };
   if (loaders[view]) loaders[view]();
   // Close mobile sidebar after navigation
@@ -748,6 +776,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   _registerSortable('transactions', () => { txnPage = 1; renderTxnTable(); });
   _registerSortable('kyc',          () => renderKYCTable());
   _registerSortable('maturity',     () => renderMaturityTable());
+  _registerSortable('gifts',        () => { giftPage = 1; renderGiftTable(); });
   _initSortableTables();
 
   // Restore last active view from session (deep-link fix)
@@ -2678,7 +2707,7 @@ function viewSubAccount(saId) {
           <tbody>${saTxnRows.map(t => {
             /* Same sign rule the statements use, so this list and a statement
                cannot disagree about which way the money went. */
-            const out = ['withdrawal','investment','reinvestment','fee','platform_fee','gift_sent'].includes(t.type);
+            const out = TXN_OUTFLOW_TYPES.includes(t.type);
             return `<tr style="border-top:1px solid var(--border)">
             <td style="padding:7px 9px"><span class="badge badge--gray">${_esc(t.type)}</span></td>
             <td style="padding:7px 9px;text-align:right;font-weight:700;color:${out ? '#ef4444' : '#22c55e'}">${out ? '-' : ''}${Utils.rand(Math.abs(parseFloat(t.amount) || 0))}</td>
@@ -3642,7 +3671,7 @@ async function viewInvestor(id) {
         <tbody>${txns.length ? txns.map(t => `
           <tr>
             <td>${Utils.statusBadge(t.type)}</td>
-            <td class="${['investment','reinvestment','withdrawal','fee'].includes(t.type)?'td-red':'td-green'} fw-700">${['investment','reinvestment','withdrawal','fee'].includes(t.type)?'-':'+'}${Utils.rand(Math.abs(parseFloat(t.amount)||0))}</td>
+            <td class="${TXN_OUTFLOW_TYPES.includes(t.type)?'td-red':'td-green'} fw-700">${TXN_OUTFLOW_TYPES.includes(t.type)?'-':'+'}${Utils.rand(Math.abs(parseFloat(t.amount)||0))}</td>
             <td>${Utils.statusBadge(t.status)}</td>
             <td class="td-muted" style="font-size:0.78rem;font-family:monospace">${_esc(t.reference)||'—'}</td>
             <td class="td-muted" style="font-size:0.78rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(t.description||t.notes)||'—'}</td>
@@ -10256,7 +10285,10 @@ function renderTxnTable() {
     return;
   }
 
-  const typeColors = { deposit: 'green', withdrawal: 'red', investment: 'blue', reinvestment: 'purple', return: 'gold', payout: 'green', matured_funds: 'green', fee: 'orange', referral_bonus: 'purple', transfer_in: 'green', transfer_out: 'red' };
+  const typeColors = { deposit: 'green', withdrawal: 'red', investment: 'blue', reinvestment: 'purple', return: 'gold', payout: 'green', matured_funds: 'green', fee: 'orange', platform_fee: 'orange', referral_bonus: 'purple', transfer_in: 'green', transfer_out: 'red',
+    /* A gift leaves one wallet and arrives in another, so the pair reads the
+       way a transfer does; a cancellation is the money coming back. */
+    gift_sent: 'red', gift_received: 'green', gift_cancelled: 'green' };
 
   body.innerHTML = page.map(t => {
     const isPendingDeposit = t.type === 'deposit' && t.status === 'pending';
@@ -10283,7 +10315,7 @@ function renderTxnTable() {
         : ''}</td>
       <td><div class="td-strong clip">${invName}</div></td>
       <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ') || '—'}</span></td>
-      <td class="${['investment','reinvestment','withdrawal','fee'].includes(t.type)?'td-red':'td-green'} fw-700">${['investment','reinvestment','withdrawal','fee'].includes(t.type)?'-':'+'}${Utils.rand(Math.abs(parseFloat(t.amount)||0))}</td>
+      <td class="${TXN_OUTFLOW_TYPES.includes(t.type)?'td-red':'td-green'} fw-700">${TXN_OUTFLOW_TYPES.includes(t.type)?'-':'+'}${Utils.rand(Math.abs(parseFloat(t.amount)||0))}</td>
       <td>${statusCell}</td>
       <td class="td-muted clip" style="font-size:0.75rem">${_esc(t.reference || '—')}${t.reference ? `<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(t.reference))},this)' title="Copy reference"><i class="fa-regular fa-copy"></i></button>` : ''}</td>
       <td class="td-muted" style="font-size:0.75rem"><div class="clip">${_esc(t.description || '—')}</div>${proofLink}</td>
@@ -10348,7 +10380,7 @@ function applyTxnFilters(opts) {
        unrelated id on the row — an operator holding one of the two strings
        should not have to know which one they are holding. */
     const mq = !q || `${invName} ${t.reference || ''} ${t.description || ''} ${t.id || ''}`.toLowerCase().includes(q);
-    const mt = !tp || t.type === tp;
+    const mt = !tp || (TXN_TYPE_FAMILIES[tp] ? TXN_TYPE_FAMILIES[tp].includes(t.type) : t.type === tp);
     /* A row with no status reads as pending everywhere else in the console,
        so it has to filter as pending here too — otherwise the queue count on
        the dashboard and the queue you can actually see disagree. */
@@ -10676,6 +10708,258 @@ async function saveNewTicket(btn) {
       await loadSupport();
     } catch (e) { Toast.error('Failed to create ticket: ' + (e.message || 'unknown')); }
   });
+}
+
+/* ═════════════════════════════════════════════
+   GIFTS
+
+   A gift was only ever visible as two rows in the Transaction Ledger that
+   nothing joined — gift_sent against the sender and, if it was claimed,
+   gift_received against the recipient. The gift itself, who sent it to whom
+   and whether it ever arrived, was on no screen at all.
+
+   FOUR STATES, NOT THREE. The table stores 'pending' for a gift waiting on
+   a claim AND for one whose claim link stopped working, because nothing
+   sweeps expires_at. Only one of the two is anybody's problem, so the server
+   derives a lapsed flag (routes/gifts.js, in SQL, on the database's clock)
+   and the console treats it as a state of its own: counted, badged, and the
+   one thing the nav badge points at.
+   ═════════════════════════════════════════════ */
+let giftRows = [], giftFiltered = [], giftTotals = null, giftPage = 1, giftTruncated = false;
+const GIFT_PG_SIZE = 25;
+
+/* The state a gift is really in, in one word.
+
+   LAPSED AND EXPIRED ARE NOT THE SAME THING, and collapsing them would have
+   been the whole point of this screen pointed at the wrong rows.
+
+   'lapsed' is derived: status is still 'pending', the expiry date has gone
+   by, and the money left a LIVE wallet on this platform when the gift was
+   sent. That is somebody to contact.
+
+   'expired' is stored, and only the Firebase import writes it (see
+   server/scripts/import-firebase-gifts.js, EXPIRED → expired). That script
+   writes no transactions and touches no wallet — the rows are history from
+   the system before this one, closed there. Reading them as lapsed would
+   have sent staff chasing money that never left an SV wallet, with a
+   confident figure beside it. They are shown, and they are not counted as
+   anybody's problem. */
+function _giftState(g) {
+  if (!g) return 'awaiting';
+  if (g.status === 'claimed')   return 'claimed';
+  if (g.status === 'cancelled') return 'cancelled';
+  if (g.status === 'expired')   return 'expired';
+  if (g.status === 'pending')   return g.lapsed ? 'lapsed' : 'awaiting';
+  return g.status;
+}
+
+const GIFT_STATES = {
+  claimed:   ['badge--green',  'Claimed',   'The money is in the recipient’s wallet.'],
+  awaiting:  ['badge--orange', 'Waiting',   'Sent to somebody with no account yet. The claim link still works.'],
+  lapsed:    ['badge--red',    'Lapsed',    'Never claimed and past the expiry date. The money has left the sender’s wallet and belongs to nobody.'],
+  cancelled: ['badge--gray',   'Cancelled', 'The sender cancelled it and the money went back to their wallet.'],
+  expired:   ['badge--gray',   'Expired (imported)', 'Imported from the previous system, where it had already expired. No wallet on this platform was debited for it.'],
+};
+
+function _giftStateBadge(g) {
+  const s = _giftState(g);
+  const row = GIFT_STATES[s];
+  if (!row) return `<span class="badge badge--gray">${_esc(s)}</span>`;
+  return `<span class="badge ${row[0]}" title="${_esc(row[2])}">${row[1]}</span>`;
+}
+
+/* Who sent it and who it went to. A recipient with no account has no name on
+   investors, only the email the sender typed — which is the only thing
+   identifying them, so it is what the column falls back to. */
+const _giftFrom = g => [g.sender_first, g.sender_last].filter(Boolean).join(' ').trim()
+                       || g.sender_id || '—';
+const _giftTo   = g => [g.recipient_first, g.recipient_last].filter(Boolean).join(' ').trim()
+                       || (g.recipient_name || '').trim() || g.recipient_email || '—';
+const _giftSent = g => g.sent_at || g.created_at;
+const _giftAmt  = g => Math.abs(parseFloat(g.amount) || 0);
+
+const GIFT_SORT = {
+  _sent:   g => { const t = new Date(_giftSent(g)).getTime(); return isNaN(t) ? null : t; },
+  _from:   g => _giftFrom(g).toLowerCase(),
+  _to:     g => _giftTo(g).toLowerCase(),
+  _amount: g => _giftAmt(g),
+  _state:  g => _giftState(g),
+};
+
+async function loadGifts() {
+  const body = document.getElementById('giftBody');
+  try {
+    const res = await API._fetch('GET', 'gifts/admin', null, { limit: 2000 });
+    giftRows      = (res && res.data) || [];
+    giftTotals    = (res && res.totals) || null;
+    giftTruncated = !!(res && res.truncated);
+    _giftStats();
+    applyGiftFilters();
+  } catch (e) {
+    console.error('[gifts]', e);
+    Toast.error('Could not load gifts' + (e && e.message ? ` — ${e.message}` : ''));
+    if (body) body.innerHTML = _emptyRow('fa-triangle-exclamation', 'Gifts could not be loaded',
+      (e && e.message) || 'The server did not answer.', 7);
+  }
+}
+
+/* The cards and the nav badge.
+
+   THE FIGURES COME FROM THE SERVER'S AGGREGATE, not from giftRows. The list
+   is capped at 2 000; a card summing the rows it was handed would report a
+   total that quietly shrank as the table outgrew the cap, and it would look
+   like a number rather than a bug. */
+function _giftStats() {
+  const t = giftTotals || {};
+  const n = v => Number(v) || 0;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('gift-total',          Utils.rand(n(t.total)));
+  set('gift-count',          n(t.gifts));
+  set('gift-claimed',        Utils.rand(n(t.claimed_amount)));
+  set('gift-claimed-count',  n(t.claimed));
+  set('gift-awaiting',       Utils.rand(n(t.awaiting_amount)));
+  set('gift-awaiting-count', n(t.awaiting));
+  set('gift-lapsed',         Utils.rand(n(t.lapsed_amount)));
+  set('gift-lapsed-count',   n(t.lapsed));
+
+  const lapsed = n(t.lapsed);
+  const badge = document.getElementById('giftBadge');
+  if (badge) { badge.textContent = lapsed; badge.style.display = lapsed ? '' : 'none'; }
+
+  /* WHAT TO DO ABOUT IT, not just how much of it there is. Staff cannot
+     cancel a gift: DELETE /api/gifts/:id is scoped to the sender, so only the
+     client who sent it can get the money back, from their own portal. A
+     number with no action beside it is a number people stop reading. */
+  const notice = document.getElementById('giftLapsedNotice');
+  if (notice) {
+    if (!lapsed) { notice.style.display = 'none'; notice.innerHTML = ''; }
+    else {
+      notice.style.display = 'block';
+      notice.innerHTML = `<div style="border:1px solid rgba(249,115,22,0.35);background:rgba(249,115,22,0.07);border-radius:10px;padding:12px 14px;display:flex;gap:11px;align-items:flex-start">
+        <i class="fa-solid fa-triangle-exclamation" style="color:#f97316;margin-top:2px"></i>
+        <div style="font-size:0.82rem;line-height:1.55">
+          <strong>${Utils.rand(n(t.lapsed_amount))} across ${lapsed} gift${lapsed === 1 ? '' : 's'} has left a client’s wallet and was never claimed.</strong>
+          The claim link stopped working on the expiry date and nothing refunds these on its own.
+          The sender gets the money back by opening <em>Send a Gift</em> in their own portal and
+          using <em>Cancel &amp; Refund</em> — staff cannot do it for them, so these are clients to contact.
+          <button class="btn btn--ghost btn--sm" style="margin-left:8px" onclick="setGiftFilter('lapsed')">Show them</button>
+        </div></div>`;
+    }
+  }
+}
+
+/* Used by the stat cards and by the notice above, so a figure and the rows
+   behind it are always one click apart. */
+function setGiftFilter(state) {
+  const sel = document.getElementById('giftStateFilter');
+  if (!sel) return;
+  sel.value = state;
+  applyGiftFilters();
+}
+
+function applyGiftFilters() {
+  const q     = (document.getElementById('giftSearch')?.value || '').trim().toLowerCase();
+  const state = document.getElementById('giftStateFilter')?.value || '';
+
+  giftFiltered = giftRows.filter(g => {
+    /* The recipient's email is searchable because for a recipient with no
+       account it is the only handle anybody has on them. */
+    const hay = `${_giftFrom(g)} ${_giftTo(g)} ${g.recipient_email || ''} ${g.sender_email || ''} ${g.id || ''}`.toLowerCase();
+    if (q && !hay.includes(q)) return false;
+    if (state && _giftState(g) !== state) return false;
+    return true;
+  });
+
+  giftPage = 1;
+  renderGiftTable();
+}
+
+function renderGiftTable() {
+  const body = document.getElementById('giftBody');
+  if (!body) return;
+
+  const ordered = _sortState.gifts?.key
+    ? _sortRows('gifts', giftFiltered, GIFT_SORT)
+    : giftFiltered;
+
+  const pages = Math.ceil(ordered.length / GIFT_PG_SIZE) || 1;
+  if (giftPage > pages) giftPage = pages;
+  const page = ordered.slice((giftPage - 1) * GIFT_PG_SIZE, giftPage * GIFT_PG_SIZE);
+
+  if (!page.length) {
+    body.innerHTML = giftRows.length
+      ? _emptyRow('fa-filter-circle-xmark', 'No matching gifts', 'Try clearing the search or the state filter.', 7)
+      : _emptyRow('fa-gift', 'No gifts yet', 'A gift appears here the moment one client sends another money from their wallet.', 7);
+  } else {
+    body.innerHTML = page.map(g => {
+      const state = _giftState(g);
+      const to    = _giftTo(g);
+      const email = (g.recipient_email || '').trim();
+      /* An account, or an email and nothing else. The difference decides
+         whether the money moved or is still in the air, so it is on the row
+         rather than something to work out from the state badge. */
+      const toSub = g.recipient_id
+        ? (email && email.toLowerCase() !== to.toLowerCase() ? _esc(email) : 'Has an account')
+        : `${_esc(email) || '—'} · no account yet`;
+      /* Claimed: when. Still waiting, or lapsed: when the link stops or
+         stopped working. Cancelled: neither applies. */
+      const when = state === 'claimed'
+        ? (g.claimed_at ? `Claimed ${Utils.date(g.claimed_at)}` : 'Claimed')
+        : state === 'cancelled'
+          ? '—'
+          : g.expires_at
+            ? `${state === 'lapsed' ? 'Expired' : 'Expires'} ${Utils.date(g.expires_at)}`
+            : '—';
+      const msg = (g.message || '').trim();
+      return `<tr>
+        <td style="padding-left:14px" class="td-muted">${Utils.date(_giftSent(g))}</td>
+        <td><div class="td-strong clip">${_esc(_giftFrom(g))}</div>
+            <div class="td-muted clip" style="font-size:0.7rem">${_esc(g.sender_id || '')}</div></td>
+        <td><div class="td-strong clip">${_esc(to)}</div>
+            <div class="td-muted clip" style="font-size:0.7rem">${toSub}</div></td>
+        <td class="fw-700">${Utils.rand(_giftAmt(g))}</td>
+        <td>${_giftStateBadge(g)}</td>
+        <td class="td-muted" style="font-size:0.75rem">${_esc(when)}</td>
+        <td class="td-muted" style="font-size:0.75rem"><div class="clip" title="${_esc(msg)}">${_esc(msg) || '—'}</div></td>
+      </tr>`;
+    }).join('');
+  }
+
+  const footer = document.getElementById('giftFooter');
+  if (footer) {
+    footer.textContent = `${ordered.length} of ${giftRows.length} gift${giftRows.length === 1 ? '' : 's'}`
+      + (giftTruncated ? ' — showing the most recent 2 000; the figures above cover every gift' : '');
+  }
+  _setRefreshLabel('giftRefreshed', 'gifts');
+
+  const pag = document.getElementById('giftPagination');
+  if (pag) pag.innerHTML = [
+    giftPage > 1 ? `<button class="page-btn" onclick="giftPage--;renderGiftTable()">&#8249; Prev</button>`
+                 : `<button class="page-btn" disabled style="opacity:0.35">&#8249; Prev</button>`,
+    `<span class="page-btn active" style="cursor:default;min-width:60px;text-align:center">${giftPage} / ${pages}</span>`,
+    giftPage < pages ? `<button class="page-btn" onclick="giftPage++;renderGiftTable()">Next &#8250;</button>`
+                     : `<button class="page-btn" disabled style="opacity:0.35">Next &#8250;</button>`,
+  ].join('');
+}
+
+/* The rows on screen, not the whole table: somebody who filtered to the
+   lapsed gifts wants a list of people to ring, not every gift ever sent. */
+function exportGiftsCSV() {
+  if (!giftRows.length) { Toast.error('Load gifts first'); return; }
+  const rows = giftFiltered.length ? giftFiltered : giftRows;
+  const headers = ['Gift ID', 'Sent', 'Time', 'From', 'From ID', 'To', 'To email', 'To ID',
+                   'Amount', 'State', 'Claimed', 'Expires', 'Message'];
+  const out = [headers, ...rows.map(g => [
+    g.id, Utils.csvDate(_giftSent(g)), Utils.csvTime(_giftSent(g)),
+    _giftFrom(g), g.sender_id || '',
+    _giftTo(g), g.recipient_email || '', g.recipient_id || '',
+    _giftAmt(g), (GIFT_STATES[_giftState(g)] || [, _giftState(g)])[1],
+    g.claimed_at ? Utils.csvDate(g.claimed_at) : '',
+    g.expires_at ? Utils.csvDate(g.expires_at) : '',
+    (g.message || '').trim(),
+  ])];
+  _downloadCSV(out, `gifts-${new Date().toISOString().slice(0, 10)}.csv`);
+  Toast.success(`Exported ${rows.length} gift${rows.length === 1 ? '' : 's'}`);
 }
 
 async function loadSupport() {

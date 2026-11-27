@@ -96,6 +96,10 @@
       <button class="nav-item" data-view="platform-fees" onclick="navigate('platform-fees', this)">
         <i class="fa-solid fa-percent"></i> Platform Fees
       </button>
+      <button class="nav-item" data-view="gifts" onclick="navigate('gifts', this)">
+        <i class="fa-solid fa-gift"></i> Gifts
+        <span class="nav-badge" id="giftBadge" style="display:none;background:#f97316">0</span>
+      </button>
 
       <div class="nav-section-label">Operations</div>
       <button class="nav-item" data-view="opsconsole" onclick="navigate('opsconsole', this)">
@@ -1048,6 +1052,13 @@
                 <option value="payout">Payout</option>
                 <option value="fee">Fee</option>
                 <option value="referral_bonus">Referral Bonus</option>
+                <!-- ONE OPTION, FOUR TYPES. A gift writes gift_sent against the
+                     sender and gift_received against the recipient, and a
+                     cancellation writes gift_cancelled back to the sender. An
+                     operator tracking a gift wants all of them; picking one of
+                     the three shows a third of the story. applyTxnFilters reads
+                     this value through TXN_TYPE_FAMILIES. -->
+                <option value="gift">Gifts (sent, received &amp; refunded)</option>
               </select>
               <!-- Status. Without it the pending-deposit queue could only be
                    found by eye, page by page, through the whole ledger. -->
@@ -1100,6 +1111,95 @@
           <div class="table-card__footer">
             <span id="txnFooter">—</span><span class="last-refreshed" id="txnRefreshed"></span>
             <div class="pagination" id="txnPagination"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: GIFTS
+
+           A gift was only ever visible in the Transaction Ledger, as two
+           rows that nothing joined: gift_sent against the sender and, if it
+           was claimed, gift_received against the recipient. The gift itself
+           — who sent it to whom, for how much, and whether it ever arrived —
+           was not on any screen.
+
+           LAPSED IS THE REASON THIS SECTION EARNS ITS PLACE. A gift to
+           somebody who has no account debits the sender's wallet at once and
+           then waits. Nothing sweeps the expiry date, so the row still reads
+           'pending' long after the claim link stopped working. That is a
+           client's money, out of their wallet, belonging to nobody. The
+           server derives the flag (routes/gifts.js) and it is a state of its
+           own here, counted and filterable.
+      ══════════════════════════════════ -->
+      <div class="view" id="view-gifts">
+        <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="setGiftFilter('')">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-gift"></i></div></div>
+            <div class="stat-card__value" id="gift-total">—</div>
+            <div class="stat-card__label">Gifts sent &mdash; <span id="gift-count">0</span></div>
+          </div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="setGiftFilter('claimed')">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-circle-check"></i></div></div>
+            <div class="stat-card__value" id="gift-claimed">—</div>
+            <div class="stat-card__label">Claimed &mdash; <span id="gift-claimed-count">0</span></div>
+          </div>
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="setGiftFilter('awaiting')">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-hourglass-half"></i></div></div>
+            <div class="stat-card__value" id="gift-awaiting">—</div>
+            <div class="stat-card__label">Waiting to be claimed &mdash; <span id="gift-awaiting-count">0</span></div>
+          </div>
+          <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="setGiftFilter('lapsed')">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-triangle-exclamation"></i></div></div>
+            <div class="stat-card__value" id="gift-lapsed">—</div>
+            <div class="stat-card__label">Lapsed, money still out &mdash; <span id="gift-lapsed-count">0</span></div>
+          </div>
+        </div>
+
+        <!-- Shown only when there is something in it. -->
+        <div id="giftLapsedNotice" style="display:none;margin-bottom:12px"></div>
+
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">Gifts</div>
+              <div style="font-size:0.78rem;color:var(--text-muted)">Every gift one client has sent another, and whether it arrived</div>
+            </div>
+            <div class="table-card__controls">
+              <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Sender, recipient, email or gift id" id="giftSearch" oninput="applyGiftFilters()" /></div>
+              <select class="tbl-filter" id="giftStateFilter" onchange="applyGiftFilters()">
+                <option value="">All gifts</option>
+                <option value="claimed">Claimed</option>
+                <option value="awaiting">Waiting to be claimed</option>
+                <option value="lapsed">Lapsed &mdash; past expiry, unclaimed</option>
+                <option value="cancelled">Cancelled &amp; refunded</option>
+                <!-- Imported history, not a state anything writes now, and
+                     deliberately not counted as lapsed: see _giftState. -->
+                <option value="expired">Expired (imported)</option>
+              </select>
+              <button class="btn btn--secondary btn--sm" onclick="loadGifts()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+              <button class="btn btn--secondary btn--sm" onclick="exportGiftsCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table" data-sort-table="gifts">
+              <thead><tr>
+                <th style="width:11%;padding-left:14px" data-sort="_sent"   data-sort-type="date">Sent</th>
+                <th style="width:19%" data-sort="_from"   data-sort-type="text">From</th>
+                <th style="width:23%" data-sort="_to"     data-sort-type="text">To</th>
+                <th style="width:10%" data-sort="_amount" data-sort-type="num">Amount</th>
+                <th style="width:13%" data-sort="_state"  data-sort-type="text">State</th>
+                <th style="width:12%">Claimed / expires</th>
+                <th style="width:12%">Message</th>
+              </tr></thead>
+              <tbody id="giftBody">
+                <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-card__footer">
+            <span id="giftFooter">—</span><span class="last-refreshed" id="giftRefreshed"></span>
+            <div class="pagination" id="giftPagination"></div>
           </div>
         </div>
       </div>
@@ -5492,7 +5592,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=33"></script>
 <script src="../js/investor-documents.js?v=9"></script>
-<script src="js/admin.js?v=245"></script>
+<script src="js/admin.js?v=246"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

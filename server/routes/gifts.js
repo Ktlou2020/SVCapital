@@ -3,7 +3,7 @@
 const router  = require('express').Router();
 const pool    = require('../db/pool');
 const crypto  = require('crypto');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireRole } = require('../middleware/auth');
 const email   = require('../services/email');
 const { recordTransaction, actorFromRequest } = require('../services/ledger');
 
@@ -135,6 +135,84 @@ router.post('/send', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Internal server error.' });
   } finally {
     client.release();
+  }
+});
+
+/* ── GET /api/gifts/admin ───────────────────────────────────────
+   Every gift, for the console's Gifts section.
+
+   Staff could only meet a gift as two unconnected rows in the Transaction
+   Ledger — a gift_sent against one client and, if it was ever claimed, a
+   gift_received against another — with nothing joining them and nothing at
+   all for the ones in between.
+
+   NO claim_token, deliberately. It is the bearer credential that claims the
+   money, and a list endpoint is the wrong place for one; nothing the console
+   shows needs it. recipient_email IS here: for a recipient who has no
+   account yet it is the only thing identifying them.
+
+   LAPSED IS DERIVED HERE, NOT STORED. A gift to somebody without an account
+   debits the sender's wallet immediately and then waits on a claim. Nothing
+   sweeps expires_at: the claim route refuses a gift past it, but the row
+   goes on saying 'pending' for ever. A console reading status alone would
+   therefore report money as "waiting to be claimed" that can never be
+   claimed — the sender's money, already gone from their wallet, recoverable
+   only if they happen to cancel the gift in the portal. The flag is computed
+   in SQL so the database's clock decides it, not the reader's browser.
+
+   The totals are their own aggregate over the whole table rather than a sum
+   of the rows returned. A stat card that sums a capped page reports a figure
+   that quietly shrinks as the table outgrows the cap.
+─────────────────────────────────────────────────────────────────────── */
+/* The two states written once, the way ledger.js writes cashMovementSQL: `p`
+   prefixes the columns for the query that aliases the table, so the row flag
+   and the stat card beside it cannot come to disagree about what lapsed
+   means. */
+const LAPSED_SQL   = (p = '') => `${p}status = 'pending' AND ${p}expires_at IS NOT NULL AND ${p}expires_at < NOW()`;
+const AWAITING_SQL = (p = '') => `${p}status = 'pending' AND (${p}expires_at IS NULL OR ${p}expires_at >= NOW())`;
+
+router.get('/admin', requireAuth, requireRole('admin', 'director', 'staff'), async (req, res) => {
+  const asked = parseInt(req.query.limit, 10);
+  const limit = Math.min(Math.max(Number.isFinite(asked) ? asked : 500, 1), 2000);
+  try {
+    const [list, totals] = await Promise.all([
+      pool.query(
+        `SELECT g.id, g.amount, g.status, g.message,
+                g.sender_id, g.recipient_id, g.recipient_email, g.recipient_name,
+                g.sent_at, g.claimed_at, g.expires_at, g.created_at,
+                s.first_name AS sender_first, s.last_name AS sender_last,
+                s.email      AS sender_email,
+                r.first_name AS recipient_first, r.last_name AS recipient_last,
+                (${LAPSED_SQL('g.')}) AS lapsed
+           FROM gifts g
+           LEFT JOIN investors s ON s.id = g.sender_id
+           LEFT JOIN investors r ON r.id = g.recipient_id
+          ORDER BY COALESCE(g.sent_at, g.created_at) DESC
+          LIMIT $1`, [limit]),
+      pool.query(
+        `SELECT COUNT(*)::int AS gifts,
+                COALESCE(SUM(amount), 0) AS total,
+                COUNT(*) FILTER (WHERE status = 'claimed')::int AS claimed,
+                COALESCE(SUM(amount) FILTER (WHERE status = 'claimed'), 0) AS claimed_amount,
+                COUNT(*) FILTER (WHERE ${AWAITING_SQL()})::int AS awaiting,
+                COALESCE(SUM(amount) FILTER (WHERE ${AWAITING_SQL()}), 0) AS awaiting_amount,
+                COUNT(*) FILTER (WHERE ${LAPSED_SQL()})::int AS lapsed,
+                COALESCE(SUM(amount) FILTER (WHERE ${LAPSED_SQL()}), 0) AS lapsed_amount,
+                COUNT(*) FILTER (WHERE status = 'cancelled')::int AS cancelled,
+                /* Imported Firebase history. Counted apart from lapsed on
+                   purpose: that import writes no transaction and moves no
+                   wallet, so those gifts are not money anybody here is
+                   holding. See _giftState in admin.js. */
+                COUNT(*) FILTER (WHERE status = 'expired')::int AS expired
+           FROM gifts`),
+    ]);
+    res.json({
+      data: list.rows, totals: totals.rows[0],
+      limit, truncated: list.rows.length >= limit,
+    });
+  } catch (err) {
+    console.error('[gifts/admin]', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 

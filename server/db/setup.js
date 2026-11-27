@@ -6549,6 +6549,34 @@ async function autoSetup() {
       if (rowCount) console.log('✅ Announced the facility-derived rate.');
     });
 
+    await step("57. Announce the Gifts section and the gift filter on the ledger", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'admin','staff','fa-gift', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['admin-gifts-section-2026-11',
+         'Gifts have their own section, and the ledger can filter to them',
+         'A gift could only be met in the Transaction Ledger, as two rows nothing joined — '
+         + 'gift_sent against the sender and, if it was ever claimed, gift_received against the '
+         + 'recipient. Who sent what to whom, and whether it arrived, was on no screen. There is '
+         + 'now a Gifts section listing every gift with both names, the amount and its state, '
+         + 'searchable by sender, recipient or recipient email, with a CSV export of whatever is '
+         + 'on screen. It counts a state the gifts table does not store: a gift sent to somebody '
+         + 'with no account leaves the sender’s wallet at once and waits on a claim, and nothing '
+         + 'clears the expiry date — so the row still reads “pending” long after the claim link '
+         + 'stopped working. Those are now counted as Lapsed, badged red, and the nav badge '
+         + 'points at them; the notice says what to do, because only the client who sent it can '
+         + 'get the money back, from Send a Gift in their own portal. The Transaction Ledger’s '
+         + 'Type filter has a single Gifts option covering all three gift transaction types. '
+         + 'While fixing that: a gift sent and a platform fee were both drawn as green credits '
+         + 'in the ledger and in a client’s drawer, because the sign came from a four-name list '
+         + 'that had neither in it. They now read negative, as fees always should.',
+         'Console → Gifts, under Finance in the sidebar. The filter is Console → Transactions → '
+         + 'the Type dropdown → “Gifts (sent, received & refunded)”.']);
+      if (rowCount) console.log('✅ Announced the Gifts section.');
+    });
+
     await step("56. Announce that the statement's section choices work", async () => {
       const { rowCount } = await pool.query(
         `INSERT INTO feature_announcements
