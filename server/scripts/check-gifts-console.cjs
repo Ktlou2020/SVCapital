@@ -240,8 +240,16 @@ console.log('\nand the ledger draws a gift and a fee as money leaving');
    ═══════════════════════════════════════════════════════════════════ */
 console.log('\nand one Type option finds every kind of gift row');
 {
-  ok('the option is on the ledger’s Type filter',
-     /<option value="gift">/.test(ADMIN_HTML),
+  /* SLICED TO THE LEDGER'S OWN SELECT. Probing the whole page for
+     <option value="gift"> passed with the option deleted: there is
+     another one, on an unrelated dropdown further down the file, and the
+     scan found that instead. */
+  const tf = ADMIN_HTML.slice(ADMIN_HTML.indexOf('id="txnTypeFilter"'));
+  const typeSelect = tf.slice(0, tf.indexOf('</select>'));
+  ok('the ledger’s Type filter is still findable', typeSelect.length > 100
+     && /All Types/.test(typeSelect), typeSelect.slice(0, 120));
+  ok('and the Gifts option is on IT',
+     /<option value="gift">/.test(typeSelect),
      'the dropdown is where an operator reaches the filter; the family map '
      + 'alone is a feature with no control');
 
@@ -365,6 +373,14 @@ console.log('\nand the Gifts section draws the gifts');
   ok("and a recipient with no account is identified by the email the sender typed",
      /naledi@example\.com/.test(html) && /no account yet/.test(html),
      'it is the only handle anybody has on them');
+  /* AND THE FALLBACK ITSELF, because the row above does not prove it:
+     that fixture carries a recipient_name, and the email prints on the
+     line beneath the name either way. Dropping the fallback leaves a
+     nameless recipient reading as an em dash, and the assertion above
+     passed straight through that. */
+  ok('  including one the sender did not name',
+     run("_giftTo({ recipient_email: 'nameless@example.com' })") === 'nameless@example.com',
+     run("_giftTo({ recipient_email: 'nameless@example.com' })"));
 
   const lapsedRow = html.split('<tr>').find(r => r.includes('nobody@example.com'));
   ok('the lapsed gift is on screen', !!lapsedRow);
@@ -487,11 +503,15 @@ console.log('\nand the endpoint behind it');
      'the bearer credential for the money has no business in a list the '
      + 'console reads: ' + handler.slice(0, 200));
 
+  /* PINNED TO THE DERIVATION, NOT THE COLUMN NAME. `/AS lapsed/` was
+     satisfied by `FALSE AS lapsed`, and `/LAPSED_SQL/` by the totals
+     query further down, so replacing the row flag with a constant passed
+     every part of this assertion while every gift read as fine. */
   ok('lapsed is decided by the database’s clock',
-     /AS lapsed/.test(handler) && /LAPSED_SQL/.test(handler)
+     /\(\$\{LAPSED_SQL\('g\.'\)\}\) AS lapsed/.test(handler)
      && /expires_at < NOW\(\)/.test(GIFTS_ROUTE),
      'computing it from a browser clock makes the figure depend on whose '
-     + 'screen it is on');
+     + 'screen it is on, and hard-coding it makes every gift read as fine');
 
   ok('and the totals are their own aggregate over the whole table',
      /FROM gifts`\)/.test(handler) && /COUNT\(\*\)[^\n]*AS gifts/.test(handler)

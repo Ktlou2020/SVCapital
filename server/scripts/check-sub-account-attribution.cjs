@@ -145,8 +145,23 @@ console.log('\nthe sub-account screen shows what is behind its numbers');
      'counting them and listing nothing is what the screen did before');
   ok('an empty one says so rather than showing a blank panel',
      /has not invested yet/.test(ADMIN) && /Nothing has moved through this sub-account yet/.test(ADMIN));
+  /* REWRITTEN, NOT RELAXED. This asserted the six-name list written out
+     here by hand — correct when the panel was the only screen in the
+     console that got the sign right, and the point was that it must not
+     invent a seventh answer.
+
+     The list is now TXN_OUTFLOW_TYPES, shared with the Transaction Ledger
+     and the client drawer, which had been drawing gifts and platform fees
+     as green credits off a shorter list of their own. The intent is
+     unchanged and stricter: this panel carries no sign rule, it reads the
+     one, and check-gifts-console.cjs holds that one equal to
+     CASH_DEBIT_TYPES in server/services/ledger.js. */
   ok('the money moves the same way it does on a statement',
-     /\['withdrawal','investment','reinvestment','fee','platform_fee','gift_sent'\]\.includes\(t\.type\)/.test(ADMIN),
+     /const out = TXN_OUTFLOW_TYPES\.includes\(t\.type\);/.test(ADMIN)
+     && require(path.join(ROOT, 'server/services/ledger.js')).CASH_DEBIT_TYPES
+          .every(t => new RegExp(`'${t}'`).test(
+            ADMIN.slice(ADMIN.indexOf('const TXN_OUTFLOW_TYPES'),
+                        ADMIN.indexOf('const TXN_OUTFLOW_TYPES') + 400))),
      'a second sign rule is a second answer to which way the money went');
 }
 
