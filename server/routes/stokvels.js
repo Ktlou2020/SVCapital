@@ -1732,9 +1732,34 @@ router.get('/:id/contributions', async (req, res) => {
         WHERE m.sub_account_id = $1 AND m.investor_id = $2`,
       [group.id, me]);
 
+    /* ── WHAT EACH OF THEM HAS PUT IN, ALL TOLD ──────────────────────
+     *
+     * Asked for beside the arrears, so a treasurer looking at who is
+     * behind can see whether this is somebody who has paid for two years
+     * and missed one month, or somebody who has never paid at all. Those
+     * are different conversations and the arrears figure alone does not
+     * tell them apart.
+     *
+     * ITS OWN AGGREGATE, NOT A SUM OF THE ROWS ABOVE. That query is
+     * LIMIT 500, which is plenty for showing a ledger and silently wrong
+     * for a total: a group with more contribution rows than that would
+     * have under-reported what its members had paid, on the screen whose
+     * whole job is to say who is behind. A number that is quietly too low
+     * is worse than no number, because nobody checks it. */
+    const { rows: paidRows } = await pool.query(
+      `SELECT investor_id, COALESCE(SUM(amount_paid), 0) AS contributed
+         FROM stokvel_contributions
+        WHERE sub_account_id = $1
+        GROUP BY investor_id`, [group.id]);
+    const contributed = {};
+    for (const r of paidRows)
+      contributed[r.investor_id] = Math.round(Number(r.contributed) * 100) / 100;
+    const arrearsOut = Object.values(arrears).map(a =>
+      Object.assign({}, a, { contributed: contributed[a.investor_id] || 0 }));
+
     return res.json({
       data: rows,
-      arrears: Object.values(arrears),
+      arrears: arrearsOut,
       autopay: {
         enabled:  !!(state && state.autopay_enabled),
         has_card: !!(state && state.has_card),

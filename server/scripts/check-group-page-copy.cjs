@@ -189,11 +189,25 @@ console.log('\nand every money column is labelled');
      portal-core for "total contributed" matched the COMMENT that explains
      why that heading is not used — the probe was satisfied by the
      reasoning for its own existence. Only the <th> text counts. */
-  ok('and calls the money column Owing, not Total contributed',
-     heads.includes('owing') && !heads.some(h => /contributed/.test(h)),
-     'the arrears payload carries no cumulative contribution figure, so '
-     + 'that heading would name the opposite of what it sits above. '
-     + 'Headers found: ' + heads.join(', '));
+  /* THIS ASSERTION USED TO FORBID "Total contributed" ENTIRELY, and was
+     right to at the time: the arrears payload carried name, owed and
+     periods and nothing cumulative, so the heading the review asked for
+     would have sat above the amount each member OWES — the opposite of
+     what it named.
+
+     The figure exists now, aggregated server-side, so the heading is
+     correct and the ban is obsolete. What has to stay true is the thing
+     the ban was protecting: a debt is never labelled a contribution. So
+     both columns must be present, which is only possible when each has
+     its own number. */
+  ok('the arrears name both what is owed and what has been paid',
+     heads.includes('owing') && heads.includes('total contributed'),
+     'Headers found: ' + heads.join(', '));
+  ok('AND THE CONTRIBUTED COLUMN IS FED BY ITS OWN FIELD',
+     /a\.contributed == null \? '&mdash;' : Utils\.rand\(a\.contributed\)/.test(core)
+     && !/Total contributed[\s\S]{0,200}Utils\.rand\(a\.owed\)[\s\S]{0,40}<\/td>\s*<td[^>]*>\s*\$\{Utils\.rand\(a\.owed\)/.test(core),
+     'the heading is only honest if the cell under it is the contributed '
+     + 'figure and not the arrears one repeated');
   ok('AND THE SHARES TABLE NAMES ITS COLUMNS',
      /Share of the pot/.test(core),
      'one column is a share of the pot and one is a debt');
@@ -245,6 +259,98 @@ console.log('\nand an accepted invitation is not a second member');
     { id: '2', invitee_name: 'Linda', contact: 'l@x.test', status: 'accepted' }] }, 'SA-1'));
   ok('and one of them is written as one',
      /1 invitation was accepted/.test(one) && /that member is/.test(one), one);
+}
+
+/* ══ 8. What each member has put in, beside what they owe ══════════ */
+console.log('\nand the arrears say what each member has already paid');
+{
+  const P = portal();
+  const roster = [{ investor_id: 'I1', status: 'active', is_signatory: true },
+                  { investor_id: 'I2', status: 'active', is_signatory: true }];
+  const base = {
+    g: { name: 'Club', stokvel_quorum: 2, status: 'active',
+         mandate_state: { has_mandate: true, quorum: 2, signatories: 2, short_by: 0 },
+         setup: { schedule: { from: '2026-01-01' } } },
+    shareData: { data: { wallet: 82000, invested: 0, net_assets: 82000,
+                         my_share: 0, committed: 0, uncommitted: 82000 } },
+    payoutData: { data: [] }, requests: { data: [] },
+    members: { data: roster }, mine: [], meIsSignatory: true };
+  const overview = arr => {
+    P.__c = Object.assign({}, base, { contributions: { arrears: arr } });
+    return words(vm.runInContext('_svOverview("SA-1", __c)', P));
+  };
+
+  /* A FIXTURE THAT REACHES THE TABLE. A group whose setup steps are not
+     done renders the checklist instead of the dashboard, and every
+     assertion about the arrears table would then be reading a screen
+     that does not contain one — passing or failing on nothing. */
+  const w = overview([{ investor_id: 'I1', name: 'Linda', owed: 500,
+                        periods: 1, contributed: 4500 }]);
+  ok('THE ARREARS TABLE IS WHAT IS BEING DRAWN',
+     /Who is behind/.test(w) && /Linda/.test(w),
+     'the setup checklist renders instead when a group is not yet going: '
+     + w.slice(0, 160));
+  ok('and it names a total contributed column', /Total contributed/.test(w), w.slice(0, 200));
+  ok('AND SHOWS WHAT THEY HAVE PAID BESIDE WHAT THEY OWE',
+     /Linda R 4.500,00 R 500,00/.test(w),
+     'somebody who has paid for two years and missed one month is a '
+     + 'different conversation from somebody who has never paid: '
+     + (w.match(/Linda.{0,60}/) || [''])[0]);
+  ok('and a payload without the figure shows a dash, not R 0,00',
+     /Linda — R 500,00/.test(overview([{ investor_id: 'I1', name: 'Linda',
+                                         owed: 500, periods: 1 }])),
+     'a confident zero against somebody who may well have paid is worse '
+     + 'than saying nothing');
+
+  /* THE TOTAL IS THE SERVER'S, NOT A SUM OF WHAT THE PAGE HOLDS. */
+  const route = read('server/routes/stokvels.js');
+  ok('AND THE SERVER AGGREGATES IT RATHER THAN THE PAGE',
+     /SUM\(amount_paid\)[\s\S]{0,120}GROUP BY investor_id/.test(route),
+     'the rows the page already has are LIMIT 500, so summing them would '
+     + 'under-report a long-running group — quietly, on the screen whose '
+     + 'job is to say who is behind');
+}
+
+/* ══ 9. The notice account on Overview, reporting only ═════════════ */
+console.log('\nand the notice account is reported on Overview, not acted on there');
+{
+  const P = portal();
+  const row = async payload => {
+    P.__payload = payload;
+    vm.runInContext('API._fetch = async () => __payload;', P);
+    return words(await vm.runInContext('_svNoticeSummary("SA-1")', P));
+  };
+  const FUND = { name: 'Agriculture Notice Account', notice_days: 30, min_deposit: 25000 };
+
+  const some = await row({ data: { available: true, fund: FUND,
+                                   position: { value: 51000, cost: 50000 }, orders: [] } });
+  ok('IT SAYS WHAT THE GROUP HAS IN THERE',
+     /Agriculture Notice Account/.test(some) && /R 51.000,00/.test(some),
+     some.slice(0, 200));
+  ok('and what was put in', /R 50.000,00 put in/.test(some), some.slice(0, 200));
+
+  /* ONE PLACE TO ACT. Two cards each carrying the action is how one of
+     them quietly stops showing the minimum, or shows a stale rate, and a
+     committee acts on whichever they happened to open. */
+  ok('AND IT CARRIES NO ACTION OF ITS OWN',
+     !/Ask to move money in/.test(some) && !/Give notice/.test(some),
+     'the full card on Investments is the one place to act: ' + some);
+  ok('but it sends them to the card that does',
+     /investments/.test(await (async () => {
+       P.__payload = { data: { available: true, fund: FUND,
+                               position: { value: 51000, cost: 50000 }, orders: [] } };
+       vm.runInContext('API._fetch = async () => __payload;', P);
+       return vm.runInContext('_svNoticeSummary("SA-1")', P);
+     })()), 'a row that reports and goes nowhere is a dead end');
+
+  const none = await row({ data: { available: true, fund: FUND,
+                                   position: { value: 0, cost: 0 }, orders: [] } });
+  ok('and with nothing in it says so rather than drawing a figure',
+     /nothing in this yet/.test(none), none.slice(0, 200));
+
+  ok('AND NOTHING AT ALL WHEN THE FUND IS NOT OFFERED',
+     (await row({ data: { available: false } })) === '',
+     'a section for a product this group cannot reach');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

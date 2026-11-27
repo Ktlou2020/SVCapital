@@ -7907,8 +7907,15 @@ function _saFormFields(type) {
          that everybody invited afterwards is SHOWN it before they join. Asked
          at creation so there is never a window in which somebody can be
          invited to a group with no rules to disclose. -->
+    ${/* THE GROUP PALETTE REACHES HERE TOO. This block is stokvel-only — it
+          is the mandate somebody sets while opening a group — but it lives
+          in _saFormFields, which draws the fields for all four kinds of
+          account. The colour pass scoped itself to functions named _sv*
+          and so walked straight past it, and this box stayed lilac while
+          every other group surface had moved. A filter that looks right
+          is still a filter. */''}
     <div style="margin-top:4px;padding:12px 14px;border-radius:12px;
-                background:rgba(237,165,255,0.09);border-left:3px solid #eda5ff">
+                background:${SV_WASH()};border-left:3px solid ${SV_GREEN()}">
       <div style="font-weight:800;font-size:0.84rem;margin-bottom:2px">Signing rules</div>
       <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px;line-height:1.5">
         Everybody you invite is shown these before they decide to join. Once they are in
@@ -14667,7 +14674,8 @@ async function _svRenderHub(id, tab, opts) {
     case 'transactions':  out = await _svTransactions(id); break;
     case 'statement':     out = _svStatement(g, id); break;
     default:              out = _svOverview(id, { g, shareData, payoutData, contributions,
-                                                   requests, members, mine, meIsSignatory });
+                                                   requests, members, mine, meIsSignatory })
+                              + (await _svNoticeSummary(id));
     }
     return out;
   };
@@ -15210,22 +15218,33 @@ function _svOverview(id, ctx) {
 
     ${arrears.length ? `<div class="sa-section-title"><i class="fa-solid fa-triangle-exclamation"></i> Who is behind</div>
       <table class="data-table" style="font-size:0.82rem;margin-bottom:16px">
-      ${/* COLUMNS THAT SAY WHAT THEY HOLD. Three numbers sat here unlabelled,
-            and a reader had to infer that the rand figure was a debt and the
-            count beside it was periods rather than payments.
+      ${/* COLUMNS THAT SAY WHAT THEY HOLD. Three numbers sat here
+            unlabelled, and a reader had to infer that the rand figure was
+            a debt and the count beside it was periods rather than
+            payments.
 
-            OWING, not "total contributed". The arrears payload carries
-            name, owed and periods — there is no cumulative contribution
-            figure in it — so a "total contributed" heading would sit above
-            an amount that is the opposite of one. */''}
+            TOTAL CONTRIBUTED SITS BESIDE OWING, and it is a real figure
+            now — the server aggregates SUM(amount_paid) per member rather
+            than the page summing the rows it happens to hold, which are
+            capped at 500 and would have under-reported a long-running
+            group. The two columns are the point of the section: somebody
+            who has paid for two years and missed one month is a different
+            conversation from somebody who has never paid, and the arrears
+            figure alone does not tell them apart. */''}
       <thead><tr>
         <th>Member</th>
+        <th class="text-right">Total contributed</th>
         <th class="text-right">Owing</th>
         <th class="text-right">Periods</th>
         <th></th>
       </tr></thead><tbody>
       ${arrears.slice(0, 6).map(a => `<tr>
         <td>${_esc(a.name)}</td>
+        <td class="text-right" style="color:var(--text-muted)">${
+          /* Only when the server sent it: an older payload shows a dash
+             rather than a confident R 0,00 against somebody who may well
+             have paid. */
+          a.contributed == null ? '&mdash;' : Utils.rand(a.contributed)}</td>
         <td class="text-right" style="font-weight:700">${Utils.rand(a.owed)}</td>
         <td class="text-right" style="color:var(--text-muted)">${a.periods} period${a.periods === 1 ? '' : 's'}</td>
         <td class="text-right">${_svChaseLink(a, ctx.g && ctx.g.name)}</td>
@@ -15255,6 +15274,49 @@ function _svOverview(id, ctx) {
    before each month, earned day by day and added to the fund, replaced by
    the month's ACTUAL return once it is posted. Shown at the
    top of Investments, only once it is offered. */
+/* ─── The notice account, in one line, on Overview ────────────────
+ *
+ * The review asked whether this card belongs on Investments or also on
+ * Overview. Both, but not twice: the full card — the rate, the notice
+ * period, the minimum and "Ask to move money in" — stays on Investments,
+ * and Overview carries a row that only reports.
+ *
+ * ONE PLACE TO ACT. Two cards each carrying the action is how one of them
+ * quietly stops showing the minimum, or shows a stale rate, and a
+ * committee acts on whichever they happened to open. The row says what
+ * the group has in there and sends them to the card to do anything about
+ * it.
+ *
+ * It appears even at nil, because "you have nothing in this" is the thing
+ * a group that has never used it needs to be told; it just says so rather
+ * than drawing an empty figure.
+ */
+async function _svNoticeSummary(id) {
+  let res;
+  try { res = await API._fetch('GET', `stokvels/${id}/notice`); }
+  catch (_) { return ''; }
+  const d = res && res.data;
+  if (!d || !d.available) return '';
+  const gid = _esc(id), f = d.fund || {}, p = d.position || {};
+  const inIt = Number(p.value) > 0;
+  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-seedling"></i> Investments</div>
+    <div onclick="svWorkspaceTab('${gid}','investments')"
+         style="cursor:pointer;border:1px solid var(--border);border-left:3px solid ${SV_GREEN()};
+                border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;
+                gap:12px;flex-wrap:wrap;align-items:center">
+      <div>
+        <div style="font-weight:700;font-size:0.88rem">${_esc(f.name || 'Notice account')}</div>
+        <div style="font-size:0.74rem;color:var(--text-muted);margin-top:2px">${inIt
+          ? `${Utils.rand(p.cost)} put in &middot; open to more, with ${Number(f.notice_days) || 30} days&rsquo; notice to take it out`
+          : 'The group has nothing in this yet &mdash; open Investments to ask the signatories'}</div>
+      </div>
+      <div style="text-align:right;white-space:nowrap">
+        <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Worth now</div>
+        <div style="font-size:1.05rem;font-weight:800">${p.value == null ? '&mdash;' : Utils.rand(p.value)}</div>
+      </div>
+    </div>`;
+}
+
 async function _svNoticeFund(id) {
   let res;
   try { res = await API._fetch('GET', `stokvels/${id}/notice`); }

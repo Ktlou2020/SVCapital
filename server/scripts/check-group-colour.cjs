@@ -128,6 +128,31 @@ console.log('\nand the palette is named rather than written out');
      + retyped.map(o => `${o.fn}:${o.n}`).join(', '));
 }
 
+/* ══ 2b. And the group blocks that live in shared functions ════════ */
+console.log('\nand the group blocks inside shared functions too');
+{
+  /* SCOPING BY FUNCTION NAME WALKED PAST THIS ONE. The signing-rules box
+     is the mandate somebody sets while opening a group — as group a
+     surface as any in the list above — but it is drawn by _saFormFields,
+     which fills in the fields for a business, a trust and a minor's
+     account as well. The _sv* filter excluded it and it stayed lilac
+     while everything around it moved.
+     
+     So the block is found by its own anchor rather than by the name of
+     the function holding it, and the same two rules are applied to it. */
+  const at = CORE.indexOf('THE SIGNING RULES, SET HERE');
+  ok('the signing-rules box is still findable by its anchor', at > 0,
+     'the comment it is sliced on has gone, and this assertion now reads '
+     + 'nothing while passing');
+  const box = at > 0 ? CORE.slice(at, CORE.indexOf('How the pot divides', at)) : '';
+  ok('and there is a block there to check', box.length > 200, String(box.length));
+  ok('THE SIGNING RULES BOX CARRIES NO PURPLE', !PURPLE.test(box),
+     'the one group surface the _sv* filter did not cover: ' + box.slice(0, 220));
+  ok('and it uses the palette rather than its own colours',
+     /SV_WASH\(\)/.test(box) && /SV_GREEN\(\)/.test(box),
+     box.slice(0, 220));
+}
+
 /* ══ 3. The personal portal keeps the brand ════════════════════════ */
 console.log('\nand the rest of the portal keeps the brand purple');
 {
