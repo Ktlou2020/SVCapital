@@ -64,9 +64,14 @@ router.post('/request', requireAuth, async (req, res) => {
           await client.query('ROLLBACK');
           return res.status(404).json({ error: 'Sub-account not found or does not belong to you.' });
         }
-        if (saRow.kyc_status !== 'approved') {
+        /* The same question, asked of the account rather than of its
+           owner: a sub-account's documents are its own. The message now
+           names it, because "your FICA verification" sent the owner to
+           their own screen, where there was nothing to fix. */
+        const _saRefusal = access.ficaRefusal(saRow, { accountName: saRow.name });
+        if (_saRefusal) {
           await client.query('ROLLBACK');
-          return res.status(403).json({ error: 'Sub-account FICA/KYC verification is required before withdrawing funds.' });
+          return res.status(403).json({ error: _saRefusal });
         }
         if (parseFloat(saRow.wallet_balance) < numAmount) {
           await client.query('ROLLBACK');
@@ -193,10 +198,15 @@ router.post('/request', requireAuth, async (req, res) => {
       }
       investor = row;
 
-      const ficaOk = investor.fica_status === 'approved' || investor.kyc_status === 'verified';
-      if (!ficaOk) {
+      /* THE ONE QUESTION. This read fica='approved' OR kyc='verified' and
+         so refused a client whose documents were approved, because that
+         writes kyc='approved' and this line did not accept it. The portal
+         posts here, so the strictest of the three gates was the live one.
+         See ficaCleared in services/withdrawalAccess. */
+      const _ficaRefusal = access.ficaRefusal(investor);
+      if (_ficaRefusal) {
         await client.query('ROLLBACK');
-        return res.status(403).json({ error: 'FICA/KYC verification is required before withdrawing funds.' });
+        return res.status(403).json({ error: _ficaRefusal });
       }
 
       if (parseFloat(investor.wallet_balance) < numAmount) {

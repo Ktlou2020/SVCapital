@@ -2293,13 +2293,30 @@ CREATE TABLE IF NOT EXISTS investment_agreements (
   funded_at         TIMESTAMPTZ,
   lapsed_at         TIMESTAMPTZ,
   expires_at        TIMESTAMPTZ,
-  investment_id     TEXT
+  investment_id     TEXT,
+  /* Whether we had identified this client when they signed.
+     FICA does not refuse to draw an agreement — money may come in before
+     we know who sent it, and the withdrawal gate is what stops it going
+     out again. So this is the only record that an agreement was signed
+     ahead of verification: the columns it is read off move afterwards,
+     and a client verified next week would otherwise look, in the record,
+     as though they had been verified all along. */
+  fica_cleared_at_signing BOOLEAN
 );
 CREATE INDEX IF NOT EXISTS inv_agreements_investor_idx
   ON investment_agreements(investor_id, status);
 /* The lookup tables.js does on every investor investment. */
 CREATE INDEX IF NOT EXISTS inv_agreements_match_idx
   ON investment_agreements(investor_id, pool_id, amount_cents, status);
+/* CREATE TABLE IF NOT EXISTS adds nothing to a table that already exists,
+   and every database but a brand new one already has this one. NULL on
+   the rows that predate the column is the honest value: those agreements
+   could not be drawn without FICA approval, but recording them as cleared
+   would assert a fact about each of them that nobody recorded.
+   (No backticks in here: this comment sits inside a template literal, and
+   one around a word closed it and left the next token loose.) */
+ALTER TABLE investment_agreements
+  ADD COLUMN IF NOT EXISTS fica_cleared_at_signing BOOLEAN;
 
 CREATE TABLE IF NOT EXISTS product_faqs (
   id           TEXT PRIMARY KEY,
@@ -4246,7 +4263,6 @@ async function autoSetup() {
           ('fsp_number',          'FSP #52449',                    'FSCA FSP licence number'),
           ('support_email',       'support@svcapital.co.za',       'Support email address'),
           ('min_investment',      '1000',                          'Global minimum investment (ZAR)'),
-          ('kyc_required',        'true',                          'KYC required before investment'),
           ('maintenance_mode',    'false',                         'Maintenance mode'),
           ('currency',            'ZAR',                           'Platform currency'),
           ('eva_rate',            '0.15',                          'EVA rate — % of net-VAT upfront fee allocated to the referring employee'),
@@ -6549,6 +6565,97 @@ async function autoSetup() {
       if (rowCount) console.log('✅ Announced the facility-derived rate.');
     });
 
+    await step("58. Correct the handbook: FICA gates withdrawing, not investing", async () => {
+      /* THE SEED CANNOT DO THIS. seedStandardCourses inserts the course
+         ON CONFLICT (id) DO NOTHING and only writes its modules when that
+         insert created a row, so editing STANDARD_COURSES changes nothing
+         on any database that already has the course — which is every one
+         of them, production included. Correcting the text up there and
+         stopping would have left the wrong lesson live and looked fixed.
+
+         WHAT WAS WRONG. The module taught "Clients cannot invest until
+         their FICA status is Approved", and its quiz graded that as the
+         right answer. The platform does not work that way and is not
+         meant to: a client may invest at any FICA status, and may not
+         withdraw until it is approved. Staff were being trained, and
+         tested, on a rule the platform does not apply — on a regulated
+         product, to clients who would find out.
+
+         MATCHED ON THE OLD TEXT, so it is a no-op once corrected and
+         leaves alone any module somebody has since rewritten. */
+      const { rowCount } = await pool.query(
+        `UPDATE course_modules
+            SET content = REPLACE(content,
+                  'Status moves from Pending → Submitted → Approved/Rejected. Clients cannot invest until their FICA status is Approved.</p>',
+                  $1)
+          WHERE content LIKE '%Clients cannot invest until their FICA status is Approved%'`,
+        ['Status moves from Pending → Submitted → Approved/Rejected.</p>'
+         + '<h3>What FICA Status Actually Gates</h3><p><strong>A client can invest before their '
+         + 'FICA status is Approved. A client cannot withdraw.</strong> Money may reach the '
+         + 'platform before we have identified who sent it; it may not leave until we have. '
+         + 'Nothing an unverified client pays in can be taken out by them, and that is what stops '
+         + 'the platform being used to move money. So do not tell a client their investment is '
+         + 'blocked on FICA — it is not, and they will find that out. Tell them their '
+         + '<em>withdrawal</em> will be, and that chasing their documents now is what keeps their '
+         + 'money reachable later.</p>']);
+
+      /* The graded answer, which is the half that actually marks somebody
+         wrong for knowing how the platform works. */
+      const { rowCount: quizzed } = await pool.query(
+        `UPDATE course_modules
+            SET quiz = $1::jsonb, key_points = $2::jsonb
+          WHERE title = 'KYC, FICA & Client Verification'
+            AND quiz::text LIKE '%clients cannot invest until FICA status is Approved%'`,
+        [JSON.stringify([
+          { question: 'What proof of address document is acceptable for FICA verification?',
+            options: ['A handwritten letter from the client',
+                      'A utility bill or bank statement not older than 3 months',
+                      'A lease agreement from any year',
+                      'A social media profile showing the client’s address'],
+            correct: 1,
+            explanation: 'FICA requires a utility bill or bank statement dated within the last 3 months — this proves current residency and is recent enough to be reliable.' },
+          { question: 'A client’s FICA status is still Pending. What can they do?',
+            options: ['Nothing — the account is frozen until FICA is Approved',
+                      'They can invest, but they cannot withdraw until FICA is Approved',
+                      'They can withdraw, but they cannot invest',
+                      'Both, as long as a team member approves it'],
+            correct: 1,
+            explanation: 'Money may come in before we have identified who sent it; it may not go out until we have. An unverified client can invest, and the platform refuses the withdrawal — so nothing they pay in can be taken out again by them. Telling a client their investment is blocked on FICA is wrong, and they will find out it is wrong.' },
+          { question: 'Why is FICA compliance critical for SV Capital specifically?',
+            options: ['It increases our returns',
+                      'It prevents SV Capital from being used for money laundering or fraud, protecting our FSP licence',
+                      'It is optional but recommended',
+                      'It only applies to investments over R1 million'],
+            correct: 1,
+            explanation: 'Processing funds from a sanctioned or fraudulent source exposes SV Capital to criminal liability and FSP licence revocation. FICA is our legal and reputational shield.' },
+        ]),
+         JSON.stringify([
+           'A client CAN invest before FICA is approved — they CANNOT withdraw until it is',
+           'Required documents: SA ID/passport, proof of address (under 3 months), source of funds',
+           'Money may come in unverified; it may not go out — that is what stops the platform moving money',
+           'Verification uses SARS, Home Affairs, and internal systems',
+           'KYC prevents money laundering, fraud, and terrorism financing — protecting the licence',
+         ])]);
+
+      await pool.query(
+        `UPDATE course_modules
+            SET content = REPLACE(content,
+                  'Every investor must provide three categories of documents before investing:',
+                  'Every investor must provide three categories of documents:')
+          WHERE content LIKE '%three categories of documents before investing%'`);
+
+      /* A setting staff can see, edit and switch off, that nothing has
+         ever read. It sat in the console's Settings panel describing a
+         rule the platform does not have. */
+      const { rowCount: dropped } = await pool.query(
+        `DELETE FROM platform_settings WHERE key = 'kyc_required'`);
+
+      if (rowCount || quizzed || dropped) {
+        console.log(`✅ Handbook corrected: FICA gates withdrawing, not investing `
+          + `(${rowCount} module text, ${quizzed} quiz, ${dropped} dead setting).`);
+      }
+    });
+
     await step("57. Announce the Gifts section and the gift filter on the ledger", async () => {
       const { rowCount } = await pool.query(
         `INSERT INTO feature_announcements
@@ -7104,11 +7211,11 @@ const STANDARD_COURSES = [
       },
       {
         module_index: 2, title: 'KYC, FICA & Client Verification', estimated_minutes: 17, xp_reward: 70,
-        content: `<h3>Know Your Client (KYC)</h3><p>KYC is the process of verifying who our clients are before they invest. This is both a FICA requirement and a core risk management practice. At SV Capital, KYC is completed digitally through our investor portal — but you need to understand what's required and why.</p><h3>Required FICA Documents</h3><ul><li><strong>Identity verification:</strong> SA ID document or passport (both sides)</li><li><strong>Proof of address:</strong> Utility bill or bank statement, not older than 3 months</li><li><strong>Source of funds:</strong> Payslip, bank statement, or letter of employment for initial investments over R25 000</li></ul><h3>The Verification Process</h3><p>Once documents are uploaded, our compliance team verifies against SARS, Home Affairs, and our internal credit-check systems. Status moves from Pending → Submitted → Approved/Rejected. Clients cannot invest until their FICA status is Approved.</p><h3>Why This Protects Everyone</h3><p>FICA compliance prevents us from being used for money laundering, fraud, or terrorism financing. If SV Capital processes funds from a sanctioned person or entity, we face criminal liability and licence revocation. KYC isn't admin — it's our shield.</p>`,
-        key_points: ['KYC is required under FICA before any client can invest', 'Required documents: SA ID/passport, proof of address (under 3 months), source of funds', 'FICA status must reach Approved before a client can invest', 'Verification uses SARS, Home Affairs, and internal systems', 'KYC prevents money laundering, fraud, and terrorism financing — protecting the licence'],
+        content: `<h3>Know Your Client (KYC)</h3><p>KYC is the process of verifying who our clients are before they invest. This is both a FICA requirement and a core risk management practice. At SV Capital, KYC is completed digitally through our investor portal — but you need to understand what's required and why.</p><h3>Required FICA Documents</h3><ul><li><strong>Identity verification:</strong> SA ID document or passport (both sides)</li><li><strong>Proof of address:</strong> Utility bill or bank statement, not older than 3 months</li><li><strong>Source of funds:</strong> Payslip, bank statement, or letter of employment for initial investments over R25 000</li></ul><h3>The Verification Process</h3><p>Once documents are uploaded, our compliance team verifies against SARS, Home Affairs, and our internal credit-check systems. Status moves from Pending → Submitted → Approved/Rejected.</p><h3>What FICA Status Actually Gates</h3><p><strong>A client can invest before their FICA status is Approved. A client cannot withdraw.</strong> Money may reach the platform before we have identified who sent it; it may not leave until we have. Nothing an unverified client pays in can be taken out by them, and that is what stops the platform being used to move money. So do not tell a client their investment is blocked on FICA — it is not, and they will find that out. Tell them their <em>withdrawal</em> will be, and that chasing their documents now is what keeps their money reachable later.</p><h3>Why This Protects Everyone</h3><p>FICA compliance prevents us from being used for money laundering, fraud, or terrorism financing. If SV Capital processes funds from a sanctioned person or entity, we face criminal liability and licence revocation. KYC isn't admin — it's our shield.</p>`,
+        key_points: ['A client CAN invest before FICA is approved — they CANNOT withdraw until it is', 'Required documents: SA ID/passport, proof of address (under 3 months), source of funds', 'Money may come in unverified; it may not go out — that is what stops the platform moving money', 'Verification uses SARS, Home Affairs, and internal systems', 'KYC prevents money laundering, fraud, and terrorism financing — protecting the licence'],
         quiz: [
           { question: 'What proof of address document is acceptable for FICA verification?', options: ['A handwritten letter from the client', 'A utility bill or bank statement not older than 3 months', 'A lease agreement from any year', 'A social media profile showing the client\'s address'], correct: 1, explanation: 'FICA requires a utility bill or bank statement dated within the last 3 months — this proves current residency and is recent enough to be reliable.' },
-          { question: 'What happens if a client\'s FICA status is still Pending?', options: ['They can invest with a smaller amount', 'They must wait — clients cannot invest until FICA status is Approved', 'A team member can override the status', 'They need to contact their bank'], correct: 1, explanation: 'FICA compliance is a hard gate. No investment can be processed until the client\'s KYC documents are verified and their status is Approved.' },
+          { question: 'A client\'s FICA status is still Pending. What can they do?', options: ['Nothing — the account is frozen until FICA is Approved', 'They can invest, but they cannot withdraw until FICA is Approved', 'They can withdraw, but they cannot invest', 'Both, as long as a team member approves it'], correct: 1, explanation: 'Money may come in before we have identified who sent it; it may not go out until we have. An unverified client can invest, and the platform refuses the withdrawal — so nothing they pay in can be taken out again by them. Telling a client their investment is blocked on FICA is wrong, and they will find out it is wrong.' },
           { question: 'Why is FICA compliance critical for SV Capital specifically?', options: ['It increases our returns', 'It prevents SV Capital from being used for money laundering or fraud, protecting our FSP licence', 'It is optional but recommended', 'It only applies to investments over R1 million'], correct: 1, explanation: 'Processing funds from a sanctioned or fraudulent source exposes SV Capital to criminal liability and FSP licence revocation. FICA is our legal and reputational shield.' },
         ],
       },
@@ -7188,7 +7295,7 @@ const STANDARD_COURSES = [
       },
       {
         module_index: 2, title: 'KYC Verification & Common Pitfalls', estimated_minutes: 16, xp_reward: 63,
-        content: `<h3>The FICA Document Checklist</h3><p>Every investor must provide three categories of documents before investing: identity verification, proof of address, and (for larger amounts) source of funds. Getting this right the first time prevents delays and client frustration.</p><h3>Identity Verification — Common Pitfalls</h3><ul><li><strong>Expired ID/passport:</strong> Documents must be current — check the expiry date</li><li><strong>Poor scan quality:</strong> All four corners must be visible, no glare or blur</li><li><strong>Smart ID card:</strong> Both the front AND back are required</li><li><strong>Foreign nationals:</strong> Must provide passport — South African ID is not applicable</li></ul><h3>Proof of Address — Common Pitfalls</h3><ul><li><strong>Older than 3 months:</strong> Must be recent — check the document date carefully</li><li><strong>Wrong name:</strong> Must match the ID document exactly — married names must be consistent</li><li><strong>Handwritten documents:</strong> Not accepted — must be a utility bill or bank statement</li><li><strong>P.O. Box address:</strong> Not accepted — must be a physical address</li></ul><h3>Handling Rejections Gracefully</h3><p>When a document is rejected, the client receives an automated notification with the specific reason. Your role is to follow up personally within 24 hours, explain clearly what's needed, and offer to walk them through re-uploading. Never leave a rejection sitting — every day of delay is a day without investment.</p>`,
+        content: `<h3>The FICA Document Checklist</h3><p>Every investor must provide three categories of documents: identity verification, proof of address, and (for larger amounts) source of funds. They are not a gate on investing — a client can invest while these are outstanding — they are a gate on getting money back out, so a client whose documents are stuck is a client whose money is stuck. Getting this right the first time prevents exactly that call.</p><h3>Identity Verification — Common Pitfalls</h3><ul><li><strong>Expired ID/passport:</strong> Documents must be current — check the expiry date</li><li><strong>Poor scan quality:</strong> All four corners must be visible, no glare or blur</li><li><strong>Smart ID card:</strong> Both the front AND back are required</li><li><strong>Foreign nationals:</strong> Must provide passport — South African ID is not applicable</li></ul><h3>Proof of Address — Common Pitfalls</h3><ul><li><strong>Older than 3 months:</strong> Must be recent — check the document date carefully</li><li><strong>Wrong name:</strong> Must match the ID document exactly — married names must be consistent</li><li><strong>Handwritten documents:</strong> Not accepted — must be a utility bill or bank statement</li><li><strong>P.O. Box address:</strong> Not accepted — must be a physical address</li></ul><h3>Handling Rejections Gracefully</h3><p>When a document is rejected, the client receives an automated notification with the specific reason. Your role is to follow up personally within 24 hours, explain clearly what's needed, and offer to walk them through re-uploading. Never leave a rejection sitting — every day of delay is a day without investment.</p>`,
         key_points: ['Smart ID cards require both front and back', 'Proof of address must be under 3 months old and match the name on the ID exactly', 'Follow up personally within 24 hours of any document rejection', 'Handwritten documents and P.O. Box addresses are not accepted', 'Getting documents right first time prevents client frustration and delays'],
         quiz: [
           { question: 'A client uploads only the front of their Smart ID card. What should you do?', options: ['Approve it — the front contains all necessary information', 'Contact the client and request the back of the card as well', 'Reject the application permanently', 'Request a passport instead'], correct: 1, explanation: 'Smart ID cards require both front and back — the back contains the barcode and additional security features needed for FICA verification.' },

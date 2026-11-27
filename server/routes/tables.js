@@ -1596,16 +1596,12 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         'SELECT fica_status, kyc_status FROM investors WHERE id = $1',
         [investorIdToCheck]
       );
-      const ficaInv = ficaRows[0];
-      const ficaOk = ficaInv && (
-        ficaInv.fica_status === 'approved' || ficaInv.fica_status === 'verified' ||
-        ficaInv.kyc_status  === 'approved' || ficaInv.kyc_status  === 'verified'
-      );
-      if (!ficaOk) {
-        return res.status(403).json({
-          error: 'Withdrawals are not available until your FICA / KYC verification is complete. Please ensure all required documents have been submitted and approved by the compliance team.',
-        });
-      }
+      /* THE ONE QUESTION, and this was the generous end of it: it also
+         accepted fica_status = 'verified', a value the column's own
+         constraint does not allow and nothing in this repository writes.
+         See ficaCleared in services/withdrawalAccess. */
+      const _ficaRefusal = require('../services/withdrawalAccess').ficaRefusal(ficaRows[0]);
+      if (_ficaRefusal) return res.status(403).json({ error: _ficaRefusal });
     }
 
     /* An investor added from the console gets a referral code too. Only

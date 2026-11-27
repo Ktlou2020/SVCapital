@@ -16,6 +16,7 @@ const crypto  = require('crypto');
 const pool    = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const AG      = require('../services/agreements');
+const ACCESS = require('../services/withdrawalAccess');
 
 /* Long enough to read the document and think, short enough that an
    abandoned draft is not still hanging around tomorrow claiming a price
@@ -128,13 +129,29 @@ router.post('/draw', requireAuth, async (req, res) => {
     );
     if (!inv) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Investor not found.' }); }
 
-    /* FICA before a contract, not after. An agreement signed by someone we
-       have not identified is worth less than the time it took to read. */
-    const fica = String(inv.fica_status || inv.kyc_status || '').toLowerCase();
-    if (fica !== 'approved' && fica !== 'verified') {
-      await client.query('ROLLBACK');
-      return res.status(403).json({ error: 'Your FICA verification must be approved before you can sign an investment agreement.' });
-    }
+    /* ── FICA DOES NOT GATE INVESTING ────────────────────────────
+       This refused to draw an agreement until FICA was approved, and
+       because an investment will not fund without a matching signed
+       agreement (the gate in routes/tables.js), it was the thing that
+       actually stopped unverified clients investing — one step upstream
+       of where anybody looked for it. The reported symptom was a client
+       with a funded wallet, a filled-in amount and "Your FICA
+       verification must be approved before you can sign an investment
+       agreement."
+
+       The platform's rule is that money may come IN before we have
+       identified who sent it and may not go OUT until we have: the
+       withdrawal gate, written once in services/withdrawalAccess, is
+       what holds that. Nothing an unverified client puts in can be taken
+       out by them, so the money cannot be washed through.
+
+       IT ALSO READ THE TWO COLUMNS WITH `||`, which is why it refused
+       clients who WERE approved: a truthy fica_status of 'pending' meant
+       kyc_status was never looked at. Both halves are gone rather than
+       one fixed, because there is no status this should refuse. The
+       status at signing is recorded on the agreement instead, below, so
+       compliance can still find every agreement signed ahead of
+       verification. */
 
     const account = await accountFactsFor(client, {
       subAccountId: sub_account_id, investorId, poolId: pool_id, amountCents,
@@ -198,14 +215,24 @@ router.post('/draw', requireAuth, async (req, res) => {
     });
 
     await client.query(
+      /* fica_cleared_at_signing: whether we had identified this client at
+         the moment they signed. FICA no longer refuses to draw an
+         agreement (see above), so without this the fact would be
+         unrecoverable — the columns it is read off move afterwards, and
+         a client verified next week would look, in the record, as though
+         they had been verified all along. Compliance asks "which
+         agreements were signed before we knew who they were", and this
+         is the only place that can answer it. */
       `INSERT INTO investment_agreements
          (id, agreement_no, investor_id, pool_id, product_type, sub_account_id,
           amount_cents, pool_amount_cents, fee_cents,
-          template_key, template_version, status, document_html, drawn_at, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'drawn',$12,$13,$14)`,
+          template_key, template_version, status, document_html, drawn_at, expires_at,
+          fica_cleared_at_signing)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'drawn',$12,$13,$14,$15)`,
       [id, no, investorId, p.id, p.product_type, sub_account_id || null,
        totalCents, poolCents, feeCents, t.key, t.version, html, drawnAt,
-       new Date(drawnAt.getTime() + VALID_MINUTES * 60000)]
+       new Date(drawnAt.getTime() + VALID_MINUTES * 60000),
+       ACCESS.ficaCleared(inv)]
     );
 
     await client.query('COMMIT');
