@@ -13047,6 +13047,53 @@ function svcInvestmentMaturity(inv, pool) {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   THE GROUP SURFACES' PALETTE, and the one place it is written down.
+
+   These screens were accented in the platform purple, #eda5ff. A review of
+   them asked for green and amber instead: a group's banner reads as its
+   own thing, what has been approved reads as settled, and what is waiting
+   on somebody reads as waiting.
+
+   THIS IS A DELIBERATE EXCEPTION to the brand rule in CLAUDE.md, which
+   says #eda5ff is the single canonical purple platform-wide. It is still
+   the canonical purple, and the personal portal still uses it — the group
+   screens are carved out, and CLAUDE.md records that so the next person
+   does not read the divergence as a mistake and "fix" it back.
+
+   FOUR NAMES, NOT THIRTY-FIVE LITERALS. The purple was written out at
+   thirty-five sites, which is why it could not be changed without reading
+   all of them. Each of these says what the colour is FOR, so the next
+   change is to one line, and check-group-colour can hold the rule by
+   asserting the group functions carry no raw purple at all.
+
+     SV_GREEN()  the group's own colour: its banner, and anything settled —
+               approved, confirmed, done, verified.
+     SV_GOLD()   a thing waiting on a person: a vote they owe, a payment
+               due, the step in progress, the primary button.
+     SV_INK()    text.
+     SV_GREY()   borders, dividers, and an icon that is punctuation rather
+               than a signal.
+
+   A border that was purple becomes SV_GREY() and not SV_GREEN(): it was
+   carrying the brand, not saying anything, and a green box round
+   everything would make the green that DOES mean something worthless.
+
+   FUNCTIONS, NOT CONSTS. portal-core.js is loaded in the same scope as
+   portal.js in both shells, so a top-level `const` here collides with one
+   of the same name there — and a redeclaration is a SyntaxError, which
+   does not break one card, it stops the whole portal parsing.
+   check-portal-split holds that line for the whole file. The codebase
+   already has the shape for a constant that must survive it:
+   EIF_CATEGORY() and EIF_ICON() are the same thing. */
+function SV_GREEN() { return '#078e07'; }
+function SV_GOLD()  { return '#ff9b0c'; }
+function SV_INK()   { return '#303030'; }
+function SV_GREY()  { return '#656565'; }
+/* The faint wash behind a highlighted box. Neutral, so the box's border
+   does the speaking. */
+function SV_WASH()  { return 'rgba(0,0,0,0.035)'; }
+
+/* ═══════════════════════════════════════════════════════════
    Stokvels — the member's view.
 
    Everything the three phases built is server-side: membership, the mandate,
@@ -13185,8 +13232,8 @@ async function loadStokvelInvites() {
 }
 
 function _svInviteCard(v) {
-  return `<div class="sa-card" style="--sa-color:#eda5ff;border:2px solid #eda5ff">
-    <div class="sa-card__header" style="background:linear-gradient(135deg,#2d1d6e 0%,#eda5ff 100%)">
+  return `<div class="sa-card" style="--sa-color:${SV_GREEN()};border:1px solid var(--border)">
+    <div class="sa-card__header" style="background:${SV_GREEN()}">
       <div class="sa-card__type"><i class="fa-solid fa-envelope-open-text"></i> ${_esc(_svT('inv.card', 'Invitation'))}</div>
       <div class="sa-card__name">${_esc(v.stokvel_name)}</div>
       <div style="font-size:0.72rem;color:rgba(255,255,255,0.85);margin-top:2px">
@@ -13201,8 +13248,8 @@ function _svInviteCard(v) {
             whoever starts it and approved by nobody \u2014 agreeing to it IS the
             check, so it cannot be a screen somebody reaches afterwards. */
         v.mandate_line ? `<div style="margin-top:10px;padding:10px 12px;border-radius:10px;
-            background:rgba(237,165,255,0.10);border-left:3px solid #eda5ff">
-          <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.5px;color:#eda5ff;font-weight:800;margin-bottom:4px">
+            background:${SV_WASH()};border-left:3px solid ${SV_GREEN()}">
+          <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.5px;color:${SV_GREEN()};font-weight:800;margin-bottom:4px">
             ${_esc(_svT('inv.rules', 'The group\u2019s rules'))}
           </div>
           <div style="font-size:0.79rem;line-height:1.5">${_esc(v.mandate_line)}</div>
@@ -13695,7 +13742,7 @@ function _svBadge(id) {
   const pill = (text, colour) => `<span style="display:inline-block;font-size:0.66rem;font-weight:800;
       text-transform:uppercase;letter-spacing:.4px;border-radius:999px;padding:2px 9px;margin-right:4px;
       background:${colour};color:#1a1a1a">${text}</span>`;
-  return (votes ? pill(`${votes} waiting on you`, '#eda5ff') : '')
+  return (votes ? pill(`${votes} waiting on you`, SV_GOLD()) : '')
        + (owed  ? pill(`${Utils.rand(owed)} due`, '#fec24f') : '');
 }
 
@@ -13746,7 +13793,7 @@ function renderStokvelSwitcher() {
   host.style.display = '';
 
   const waiting = g => (parseInt(g.awaiting_my_vote, 10) || 0);
-  const pill = n => n ? `<span style="background:#eda5ff;color:#1a1a1a;border-radius:999px;
+  const pill = n => n ? `<span style="background:${SV_GOLD()};color:#1a1a1a;border-radius:999px;
       font-size:0.62rem;font-weight:800;padding:1px 6px;margin-left:6px">${n}</span>` : '';
 
   host.innerHTML = `
@@ -13808,9 +13855,9 @@ function _svRenderInviteBanner() {
   const v = invites[0];
   const more = invites.length - 1;
   host.innerHTML = `<div role="status" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;
-        margin-bottom:16px;padding:14px 16px;border-radius:14px;border:2px solid #eda5ff;
-        background:rgba(237,165,255,0.10)">
-      <i class="fa-solid fa-envelope-open-text" style="font-size:1.4rem;color:#eda5ff"></i>
+        margin-bottom:16px;padding:14px 16px;border-radius:14px;border:1px solid ${SV_GREEN()};
+        background:${SV_WASH()}">
+      <i class="fa-solid fa-envelope-open-text" style="font-size:1.4rem;color:${SV_GREEN()}"></i>
       <div style="flex:1;min-width:200px">
         <div style="font-weight:800">${_esc(v.invited_by_name || 'Somebody')} invited you to join ${_esc(v.stokvel_name || 'a group')}</div>
         <div style="font-size:0.8rem;color:var(--text-muted)">See the group&rsquo;s rules before you decide.${
@@ -13831,7 +13878,7 @@ function renderGroupsView() {
     const owed = parseFloat(g.my_outstanding) || 0;
     const role = g.my_role || (g.i_opened_it ? 'chairperson' : 'member');
     return `<button type="button" onclick="openStokvelHub('${_esc(g.id)}')"
-        style="text-align:left;width:100%;cursor:pointer;border:1px solid var(--border);border-left:3px solid #eda5ff;
+        style="text-align:left;width:100%;cursor:pointer;border:1px solid var(--border);border-left:3px solid ${SV_GREEN()};
                border-radius:14px;padding:14px 16px;background:var(--card-bg,transparent);color:inherit;font:inherit">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:start">
           <div>
@@ -13845,7 +13892,7 @@ function renderGroupsView() {
           </div>
         </div>
         ${waiting || owed > 0 ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-          ${waiting ? `<span style="font-size:0.72rem;font-weight:700;background:#eda5ff;color:#1a1a1a;border-radius:999px;padding:2px 9px">
+          ${waiting ? `<span style="font-size:0.72rem;font-weight:700;background:${SV_GOLD()};color:#1a1a1a;border-radius:999px;padding:2px 9px">
             ${waiting} waiting on your approval</span>` : ''}
           ${owed > 0 ? `<span style="font-size:0.72rem;font-weight:700;border:1px solid #f59e0b;color:#f59e0b;border-radius:999px;padding:2px 9px">
             You owe ${Utils.rand(owed)}</span>` : ''}
@@ -14736,7 +14783,7 @@ function _svHeaderFigures(g, d, stat) {
       ${stat(_esc(_svT('hdr.pot', 'The pot')), Utils.rand(pot))}
       ${stat(_esc(_svT('hdr.wallet', 'In the wallet')), Utils.rand(d ? d.wallet : g.wallet_balance))}
       ${stat(_esc(_svT('hdr.invested', 'Invested')), Utils.rand(invested))}
-      ${d ? stat(_esc(_svT('hdr.myshare', 'Your share')), Utils.rand(d.my_share), '#eda5ff') : ''}
+      ${d ? stat(_esc(_svT('hdr.myshare', 'Your share')), Utils.rand(d.my_share)) : ''}
     </div>`;
 }
 
@@ -14757,7 +14804,7 @@ function _svWsTabs(id, open, counts) {
     .filter(_svAuthorityLive).length;
   const owed = ((counts.contributions && counts.contributions.data) || [])
     .filter(c => c.is_me && c.status === 'due').length;
-  const badge = n => n ? `<span aria-label="${n} waiting" style="background:#eda5ff;color:#1a1a1a;
+  const badge = n => n ? `<span aria-label="${n} waiting" style="background:${SV_GOLD()};color:#1a1a1a;
       border-radius:999px;font-size:0.64rem;font-weight:800;padding:1px 6px;margin-left:5px">${n}</span>` : '';
 
   return `<div role="tablist" aria-label="Group sections" id="svWsTablist"
@@ -15107,7 +15154,7 @@ function _svOverview(id, ctx) {
 
       <div style="display:flex;gap:4px;margin:2px 0 14px">
         ${steps.map(x => `<div title="${_esc(x.title)}" style="height:4px;flex:1;border-radius:999px;
-          background:${x.done ? '#22c55e' : (x === now ? '#eda5ff' : 'var(--border)')}"></div>`).join('')}
+          background:${x.done ? SV_GREEN() : (x === now ? SV_GOLD() : 'var(--border)')}"></div>`).join('')}
       </div>
 
       ${done.length ? `<div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:12px">
@@ -15115,8 +15162,8 @@ function _svOverview(id, ctx) {
         ${done.map(x => _esc(x.title)).join(' · ')}
       </div>` : ''}
 
-      <div style="border:1px solid #eda5ff;border-radius:14px;padding:16px">
-        <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.6px;color:#eda5ff;font-weight:800">
+      <div style="border:1px solid var(--border);border-radius:14px;padding:16px">
+        <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.6px;color:${SV_GOLD()};font-weight:800">
           Step ${n} of ${steps.length}</div>
         <div style="font-weight:800;font-size:1.05rem;margin:4px 0 6px">${_esc(now.title)}</div>
         <div style="font-size:0.86rem;color:var(--text-muted);line-height:1.6">${now.note}</div>
@@ -15143,7 +15190,7 @@ function _svOverview(id, ctx) {
                 gap:12px;margin-bottom:18px">
       ${myVotes ? tile('fa-user-shield', 'Waiting on you', String(myVotes),
           myVotes === 1 ? 'A request needs your approval.' : 'Requests need your approval.',
-          'approvals', '#eda5ff') : ''}
+          'approvals', SV_GOLD()) : ''}
       ${owedByMe > 0 ? tile('fa-calendar-check', 'You owe', Utils.rand(owedByMe),
           'Pay it from your wallet.', 'contributions', '#f59e0b') : ''}
       ${tile('fa-chart-pie', 'Your share', Utils.rand(d ? d.my_share : 0),
@@ -15155,7 +15202,7 @@ function _svOverview(id, ctx) {
           'shares')}
       ${planned ? tile('fa-gift', 'Next payout', _esc(String(planned.pay_on).slice(0, 10)),
           _esc(planned.label) + (planned.authority_id ? ' — approved' : ' — not yet approved'),
-          'payouts', '#eda5ff') : ''}
+          'payouts', SV_GREEN()) : ''}
       ${tile('fa-users', 'Members', String((ctx.members && (ctx.members.data || []).length) || 0),
           arrears.length ? `${arrears.length} behind on contributions` : 'Everybody is up to date.',
           'members')}
@@ -15223,11 +15270,11 @@ async function _svNoticeFund(id) {
   const day = v => _esc(String(v || '').slice(0, 10));
   const waitingOut = (d.orders || []).find(o => o.kind === 'redemption' && o.status === 'pending');
   const recent = (d.orders || []).filter(o => o.status !== 'pending').slice(0, 5);
-  return `<div style="border:2px solid #eda5ff;border-radius:14px;padding:14px 16px;margin:16px 0">
+  return `<div style="border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin:16px 0">
     <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start">
       <div>
         <div style="font-weight:800;font-size:1rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span><i class="fa-solid fa-hourglass-half" style="color:#eda5ff"></i> ${_esc(f.name)}</span>
+          <span><i class="fa-solid fa-hourglass-half" style="color:${SV_GREEN()}"></i> ${_esc(f.name)}</span>
           ${/* THE MINIMUM, BEFORE THEY ASK. It was only discovered after a
                 member tapped "Ask to move money in" and the form refused
                 the amount — a committee needs to know what the fund takes
@@ -15249,8 +15296,8 @@ async function _svNoticeFund(id) {
           p.gain != null && p.cost > 0 ? ` &middot; <span style="color:${p.gain >= 0 ? '#22c55e' : '#ef4444'}">${p.gain >= 0 ? '+' : ''}${Utils.rand(p.gain)}</span>` : ''}</div>
       </div>
     </div>
-    <div style="font-size:0.82rem;margin-top:10px;padding:8px 10px;border-radius:10px;background:rgba(237,165,255,0.08)">
-      <i class="fa-solid fa-chart-line" style="color:#eda5ff"></i>
+    <div style="font-size:0.82rem;margin-top:10px;padding:8px 10px;border-radius:10px;background:${SV_WASH()}">
+      <i class="fa-solid fa-chart-line" style="color:${SV_GREEN()}"></i>
       ${/* "INDICATIVE RATE", NOT "PROJECTED RETURN". The number is the same
             one the fund's managers declare before each month; the words
             around it were doing more work than they should. "Projected
@@ -16080,7 +16127,7 @@ function _svHeader(g, shareRes) {
     <div style="display:flex;gap:24px;margin-top:16px">
       <div><div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">Group wallet</div><div style="font-size:1.3rem;font-weight:800;color:#fff">${Utils.rand(g.wallet_balance)}</div></div>
       <div><div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">Invested</div><div style="font-size:1.3rem;font-weight:800;color:#fff">${Utils.rand(g.total_invested)}</div></div>
-      ${shareRes && shareRes.data ? `<div><div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">Your share</div><div style="font-size:1.3rem;font-weight:800;color:#eda5ff">${Utils.rand(shareRes.data.my_share)}</div></div>` : ''}
+      ${shareRes && shareRes.data ? `<div><div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">Your share</div><div style="font-size:1.3rem;font-weight:800">${Utils.rand(shareRes.data.my_share)}</div></div>` : ''}
     </div>
   </div>`;
 }
@@ -16116,7 +16163,7 @@ function _svContributions(res, mine, gid, g) {
     n + (parseFloat(c.amount_due) - parseFloat(c.amount_paid)), 0);
 
   const mineBlock = mine.length
-    ? `<div style="background:rgba(237,165,255,0.08);border:1px solid rgba(237,165,255,0.25);border-radius:12px;padding:14px;margin-bottom:14px">
+    ? `<div style="background:${SV_WASH()};border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
          <div style="font-size:0.78rem;color:var(--text-muted)">You owe</div>
          <div style="font-size:1.4rem;font-weight:800;margin:2px 0 10px">${Utils.rand(owed)}</div>
          ${mine.map(c => `
@@ -16169,7 +16216,7 @@ function _svContributions(res, mine, gid, g) {
             padding:12px 14px;margin-bottom:14px">
          <div style="min-width:0">
            <div style="font-size:0.86rem;font-weight:700">
-             <i class="fa-solid fa-bolt" style="color:#eda5ff;margin-right:6px"></i>Pay automatically
+             <i class="fa-solid fa-bolt" style="color:${SV_GOLD()};margin-right:6px"></i>Pay automatically
            </div>
            <div style="font-size:0.76rem;color:var(--text-muted);line-height:1.5;margin-top:3px">
              ${ap.enabled
@@ -16408,7 +16455,7 @@ function _svPayouts(res, gid, requests) {
      "CONTRIBUTIONS" under "CONTRIBUTIONS". The hub's is the one kept: it
      carries the anchor the deep links and the checklist scroll to, and the
      tab's own translated name. */
-  return `${planned ? `<div style="border:2px solid #eda5ff;border-radius:12px;padding:14px;margin-bottom:10px;background:rgba(237,165,255,0.06)">
+  return `${planned ? `<div style="border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;background:${SV_WASH()}">
         <div style="font-weight:800;font-size:0.95rem">${_esc(planned.label)}</div>
         <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px">
           Planned for ${_esc(String(planned.pay_on).slice(0, 10))}
@@ -16751,7 +16798,7 @@ function _svWithdrawals(res, meIsSignatory, gid, ctx) {
               : Utils.rand(r.amount)}
             <span style="font-size:0.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
                          border:1px solid var(--border);border-radius:999px;padding:1px 7px;margin-left:6px;
-                         color:${r.kind === 'investment' || r.kind === 'mandate' ? '#eda5ff'
+                         color:${r.kind === 'investment' || r.kind === 'mandate' ? SV_GREY()
                            /* Red, alone among the kinds: it is the only one
                               that cannot be undone. */
                            : r.kind === 'dissolve' ? '#ef4444'
@@ -16873,10 +16920,10 @@ function _svWithdrawals(res, meIsSignatory, gid, ctx) {
     </div>
     ${_svFoundingPanel(g, gid)}
     <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:0.8rem;margin-bottom:12px">
-      <span><i class="fa-solid fa-pen-nib" style="color:#eda5ff"></i>
+      <span><i class="fa-solid fa-pen-nib" style="color:${SV_GREY()}"></i>
         ${g.stokvel_quorum ? `<strong>${_esc(String(g.stokvel_quorum))} / ${_esc(String(c.signatories || 0))}</strong> ${_esc(_svT('ap.mustapprove', 'signatories must approve'))}`
                            : _esc(_svT('ap.nomandate', 'No mandate on file yet'))}</span>
-      <span><i class="fa-solid fa-lock" style="color:#eda5ff"></i>
+      <span><i class="fa-solid fa-lock" style="color:${SV_GREY()}"></i>
         ${g.lock_date ? `${_esc(_svT('ap.locked', 'Money locked until'))} <strong>${_esc(String(g.lock_date).slice(0, 10))}</strong>`
                       : _esc(_svT('ap.nolock', 'No lock date set'))}</span>
     </div>
@@ -16999,7 +17046,7 @@ function _svFoundingPanel(g, gid) {
   const me = g || {};
   if (d.adopted) return '';
   const box = (colour, title, body, actions) => `<div style="margin-bottom:12px;padding:12px 14px;
-      border-radius:12px;background:rgba(237,165,255,0.09);border-left:3px solid ${colour}">
+      border-radius:12px;background:${SV_WASH()};border-left:3px solid ${colour}">
       <div style="font-weight:800;font-size:0.86rem;margin-bottom:4px">${title}</div>
       <div style="font-size:0.79rem;color:var(--text-muted);line-height:1.5">${body}</div>
       ${actions ? `<div style="margin-top:9px;display:flex;gap:8px;flex-wrap:wrap">${actions}</div>` : ''}
@@ -17020,7 +17067,7 @@ function _svFoundingPanel(g, gid) {
 
   /* Founding: the rules exist and are not yet in force. */
   const short = d.short_by || 0;
-  return box('#eda5ff',
+  return box(SV_GREY(),
     _esc(_svT('fm.open.t', 'The signing rules are set, and not in force yet')),
     `${_esc(_svT('fm.open.b', 'They take effect once enough signatories have confirmed their own appointment \u2014 nobody can be made a signatory by somebody else.'))}
      <div style="margin-top:6px"><strong>${d.signatories || 0} of ${d.quorum || 0}</strong>
@@ -17135,9 +17182,9 @@ function _svSignatoryNote(gid, rows, ctx) {
     : '';
 
   return `<div style="margin-top:10px;padding:11px 13px;border:1px solid var(--border);
-       border-radius:10px;background:rgba(237,165,255,0.05)">
+       border-radius:10px;background:${SV_WASH()}">
     <div style="font-size:0.78rem;margin-bottom:${can ? '8px' : '4px'}">
-      <i class="fa-solid fa-pen-nib" style="color:#eda5ff;margin-right:6px"></i>${count}${needs}.
+      <i class="fa-solid fa-pen-nib" style="color:${SV_GREY()};margin-right:6px"></i>${count}${needs}.
     </div>
     ${can
       ? `<button class="btn btn--secondary btn--sm" onclick="raiseStokvelMandateChange('${_esc(gid)}')">
@@ -17180,7 +17227,7 @@ function _svMembers(res, gid, canLevy, ctx) {
       <td>${_esc(String(m.role).replace(/^\w/, c => c.toUpperCase()))}</td>
       <td class="text-right">${m.is_signatory
         ? '<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.7rem;font-weight:700;'
-          + 'padding:2px 9px;border-radius:100px;background:rgba(237,165,255,0.16);color:#eda5ff;'
+          + `padding:2px 9px;border-radius:100px;border:1px solid var(--border);color:${SV_GREY()};`
           + 'white-space:nowrap"><i class="fa-solid fa-pen-nib"></i>Signatory</span>'
         : ''}</td>
       <td class="text-right" style="color:var(--text-muted)">${m.status === 'invited' ? 'Invited' : ''}</td>
@@ -17188,7 +17235,7 @@ function _svMembers(res, gid, canLevy, ctx) {
     </tbody></table>
     ${_svSignatoryNote(gid, rows, ctx)}
     ${(window.__SVREL || {}).templates ? `<div style="font-size:0.8rem;margin-top:12px;color:var(--text-muted)">
-      <i class="fa-solid fa-file-signature" style="color:#eda5ff"></i>
+      <i class="fa-solid fa-file-signature" style="color:${SV_GREY()}"></i>
       ${_esc(_svT('mem.templates', 'Templates for your committee:'))}
       <a href="../group-constitution-template.html" target="_blank" rel="noopener">${_esc(_svT('mem.constitution', 'Constitution'))}</a> &middot;
       <a href="../group-investment-policy-template.html" target="_blank" rel="noopener">${_esc(_svT('mem.policy', 'Investment policy'))}</a>

@@ -342,7 +342,16 @@ const call = (port, method, p, body, who) => new Promise(resolve => {
       const to   = CORE.indexOf('async function setFoundingMandate(');
       ok('the panel was found to lift', from > 0 && to > from,
          'a slice that missed it would test nothing while passing');
-      vm.runInContext(CORE.slice(from, to), ctx);
+      /* THE PALETTE TRAVELS WITH THE SLICE. These harnesses lift a range of
+         portal-core out of the file and run it on its own, so anything the
+         lifted code calls but does not contain is undefined — the group
+         screens' colours are SV_GREEN() and friends, defined with the other
+         group constants well above this range. Lifted from the file rather
+         than retyped, so the two cannot drift: the regex takes the one-line
+         definitions as they are written. The real portal loads the whole file
+         and never had this problem. */
+      const PALETTE = (CORE.match(/^function SV_[A-Z]+\(\)\s*\{[^}]*\}/gm) || []).join('\n');
+      vm.runInContext(PALETTE + '\n' + CORE.slice(from, to), ctx);
 
       const noMandate = ctx._svFoundingPanel(
         { my_role: 'chairperson', i_opened_it: true,

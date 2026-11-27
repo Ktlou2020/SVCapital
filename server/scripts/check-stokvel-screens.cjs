@@ -559,6 +559,17 @@ const STUB = {
       ] };
       /* Both live elsewhere in portal-core, outside the slice loaded below. */
       window._poolPastClose = () => false;
+      ${/* THE GROUP SCREENS' COLOURS, same reason — they are defined with
+            the other group constants, above the slice. Lifted out of the
+            file and rewritten onto window rather than retyped here, so a
+            sixth colour or a changed value cannot leave the harness
+            rendering something the portal does not. A function
+            declaration inside this arrow would be scoped to it, which is
+            why they become window assignments. */
+        (CORE.match(/^function (SV_[A-Z]+)\(\)\s*\{\s*return ([^;]+);\s*\}/gm) || [])
+          .map(d => d.replace(/^function (SV_[A-Z]+)\(\)\s*\{\s*return ([^;]+);\s*\}/,
+                              'window.$1 = () => $2;'))
+          .join('\n      ')}
       window.svcWalletSpend = a => Math.round(Number(a) * 101) / 100;
       window.SA_TYPE_META = { stokvel: { icon:'fa-people-group', label:'Stokvel', color:'#22c55e', bg:'#064e1e' } };
       window._esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;')

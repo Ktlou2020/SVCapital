@@ -89,6 +89,31 @@ does not look like scratch.
 ## Purple / Brand Colour
 The single canonical purple across the entire platform is `#eda5ff`. No other purple values are permitted.
 
+**The group screens are a deliberate exception and carry no purple at all.**
+Asked for in a review of the staging stokvel pages: a group's banner should
+read as its own thing, what is approved should read as settled, and what is
+waiting on somebody should read as waiting. The personal portal is unchanged
+and still purple — if the two look different on your screen, that is why, and
+it is not a bug to fix.
+
+Their palette is four named constants at the top of the Stokvels section in
+`js/portal-core.js`, and nothing in those screens writes a colour literal:
+
+| Constant | Value | What it is for |
+| --- | --- | --- |
+| `SV_GREEN` | `#078e07` | The group's own colour: its banner, and anything settled — approved, confirmed, done, verified. |
+| `SV_GOLD` | `#ff9b0c` | A thing waiting on a person: a vote they owe, a payment due, the step in progress, the primary button. |
+| `SV_INK` | `#303030` | Text. |
+| `SV_GREY` | `#656565` | Borders, dividers, and an icon that is punctuation rather than a signal. |
+| `SV_WASH` | `rgba(0,0,0,0.035)` | The faint wash behind a highlighted box, so its border does the speaking. |
+
+A border that was purple becomes `SV_GREY`, not `SV_GREEN`: it was carrying
+the brand, not saying anything, and a green box round everything makes the
+green that DOES mean something worthless.
+
+`check-group-colour.cjs` holds both halves — no purple inside the group
+functions, and no raw hex where a constant belongs.
+
 ## Platform Fee
 Platform fee is 1% of the investment amount, charged **on top of it**. The amount a client enters is what reaches the pool; the wallet pays that amount plus the fee. Enter R500 into a pool with a R500 minimum and R500 reaches the pool, R5,00 is the fee, and R505,00 leaves the wallet.
 
