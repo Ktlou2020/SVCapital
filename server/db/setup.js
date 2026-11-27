@@ -6565,6 +6565,32 @@ async function autoSetup() {
       if (rowCount) console.log('✅ Announced the facility-derived rate.');
     });
 
+    await step("59. Announce that a notice fund's minimum can be changed", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'admin','staff','fa-sliders', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['notice-fund-minimum-editable-2026-11',
+         'A notice fund’s minimum can be changed without touching the database',
+         'The minimum a group has to put into the 30-day notice fund at a time was asked for '
+         + 'once, on the form that creates the fund, and then printed as text for ever. The '
+         + 'panel’s only other control was open and close, and the fund is not reachable from '
+         + 'the generic table editor — so changing the figure meant writing an UPDATE against '
+         + 'the database by hand, on a fund whose every rate change is otherwise logged. The '
+         + 'minimum is now a box on the fund’s row with a Save button beside it, it asks you '
+         + 'to confirm the figure before it saves (R15 000 and R150 000 are one keystroke '
+         + 'apart), and the change is written to the audit log by name, with what it was and '
+         + 'what it became. The notice period is still fixed: a group was told a period and it '
+         + 'is theirs. The minimum governs money not yet in — it does not disturb what a group '
+         + 'already holds or a notice already given, but it does stop a group adding less than '
+         + 'the new figure, and the panel says so.',
+         'Console → Groups (Stokvels) → the 30-day notice fund card → the fund’s row → '
+         + '“Minimum in at a time”. The change shows in Compliance & Audit as '
+         + 'notice_fund.minimum_changed.']);
+      if (rowCount) console.log('✅ Announced the editable notice-fund minimum.');
+    });
+
     await step("58. Correct the handbook: FICA gates withdrawing, not investing", async () => {
       /* THE SEED CANNOT DO THIS. seedStandardCourses inserts the course
          ON CONFLICT (id) DO NOTHING and only writes its modules when that

@@ -23248,7 +23248,7 @@ async function loadNoticeFundAdmin() {
   const live = !!(res && res.live);
   const fund = f => `<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
-        <div><strong>${_esc(f.name)}</strong> <span class="text-muted" style="font-size:0.78rem">${_esc(f.id)} &middot; ${_esc(String(f.notice_days))} days&rsquo; notice &middot; from ${Utils.rand(f.min_deposit)}</span></div>
+        <div><strong>${_esc(f.name)}</strong> <span class="text-muted" style="font-size:0.78rem">${_esc(f.id)} &middot; ${_esc(String(f.notice_days))} days&rsquo; notice</span></div>
         <div style="display:flex;gap:6px;align-items:center">
           <span class="badge">${_esc(f.status)}</span>
           ${f.status !== 'open' ? `<button class="btn btn--secondary btn--sm" onclick="setNoticeFundStatus('${_esc(f.id)}','open')">Open to new money</button>` : ''}
@@ -23278,6 +23278,19 @@ async function loadNoticeFundAdmin() {
              Relabelled from "at price" because price is no longer shown. -->
         <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">At cost / at value</div>
           <strong>${Utils.rand(f.cost)} / ${f.value == null ? '—' : Utils.rand(f.value)}</strong></div>
+      </div>
+      <!-- THE MINIMUM, EDITABLE. It was asked for once on the create form
+           and then printed as text for ever: changing it meant an UPDATE
+           typed against the database by hand. It governs money not yet in,
+           so raising it never disturbs what a group already holds — but it
+           does stop a group topping up below the new figure, which is the
+           part people do not expect, so the row says so. -->
+      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin:4px 0 2px">
+        <div><label class="text-muted" style="font-size:0.75rem;display:block">Minimum in at a time (R)</label>
+          <input type="number" step="0.01" min="0" id="nfMin-${_esc(f.id)}" class="input input--sm"
+                 style="width:150px" value="${_esc(String(Number(f.min_deposit) || 0))}"></div>
+        <button class="btn btn--secondary btn--sm" onclick="setNoticeFundMinimum('${_esc(f.id)}')">Save minimum</button>
+        <span class="text-muted" style="font-size:0.74rem;max-width:460px">Currently ${Utils.rand(f.min_deposit)}. Tested against the amount reaching the fund, so the 1% fee is on top of it. Applies to new money only — it does not touch what a group already holds, and it does stop a group adding less than this.</span>
       </div>
       ${(f.needs_actual || []).length ? `<div style="margin:8px 0;padding:8px 10px;border-radius:8px;border:1px solid #f59e0b;font-size:0.8rem">
         <i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b"></i>
@@ -23420,6 +23433,30 @@ function useFacilityRate(fundId, which, rate, month) {
   sel.value = [...sel.options].find(o => String(o.value).slice(0, 7) === want).value;
   if (inp) { inp.disabled = false; inp.value = String(pct); inp.focus(); }
   Toast.show(`${pct}% filled in. Press Post actual to make it final.`, 'info');
+}
+
+/* Saving the minimum. Confirmed rather than applied straight off: it is a
+   figure a group is held to, and the number typed is easy to get wrong by
+   a factor of ten — R15 000 and R150 000 differ by one keystroke. */
+async function setNoticeFundMinimum(id) {
+  const el = document.getElementById('nfMin-' + id);
+  if (!el) return;
+  const raw = String(el.value || '').trim();
+  const min = parseFloat(raw);
+  if (raw === '' || !Number.isFinite(min) || min < 0) {
+    Toast.show('Enter the minimum as a number, 0 or more.', 'error');
+    return;
+  }
+  if (!confirm(`Set the minimum to ${Utils.rand(min)}?\n\n`
+             + 'Groups adding money to the fund will have to put in at least '
+             + 'this much at a time, on top of which the 1% platform fee is '
+             + 'charged. What any group already holds is unaffected.')) return;
+  try {
+    const res = await API._fetch('PATCH', 'admin/notice-funds/' + id, { min_deposit: min });
+    const saved = res && res.data ? Number(res.data.min_deposit) : min;
+    Toast.show(`Minimum is now ${Utils.rand(saved)}.`, 'success');
+  } catch (err) { Toast.show(err.message || 'Could not change the minimum.', 'error'); }
+  loadNoticeFundAdmin();
 }
 
 async function createNoticeFund() {

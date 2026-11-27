@@ -91,23 +91,99 @@ router.post('/', async (req, res) => {
 /* Open to new money, or closed to it. Closing never touches money already
    in it, or a withdrawal already asked for. Lowering the notice period is
    not offered: groups were told a period, and it is theirs. */
+/* THE MINIMUM WAS WRITE-ONCE, which nobody meant. It is asked for on the
+   create form and then there was no way to change it: this route read
+   `status` and ignored everything else, and notice_funds is not in
+   ALLOWED_TABLES, so the generic editor could not reach it either.
+   Changing a fund's minimum meant an UPDATE typed against production by
+   hand, on a fund whose every rate change is otherwise logged.
+
+   notice_days is still not editable, and that is a decision rather than
+   the same oversight: groups were told a notice period and it is theirs.
+   The minimum governs only money not yet in — what a group already holds,
+   and any notice it has already given, are untouched by a change here. */
 router.patch('/:id', async (req, res) => {
-  const status = String((req.body && req.body.status) || '');
-  if (!['open', 'closed', 'draft'].includes(status)) return res.status(400).json({ error: 'status must be open, closed or draft.' });
+  const b = req.body || {};
+  const hasStatus = b.status !== undefined;
+  const hasMin    = b.min_deposit !== undefined;
+  if (!hasStatus && !hasMin) {
+    return res.status(400).json({ error: 'Send a status, a min_deposit, or both.' });
+  }
+
+  const status = String(b.status || '');
+  if (hasStatus && !['open', 'closed', 'draft'].includes(status)) {
+    return res.status(400).json({ error: 'status must be open, closed or draft.' });
+  }
+
+  /* Rounded the way the create route rounds it, so a fund cannot be made
+     under one rule and then amended under another. */
+  let min = null;
+  if (hasMin) {
+    const raw = parseFloat(b.min_deposit);
+    if (!Number.isFinite(raw) || raw < 0) {
+      return res.status(400).json({ error: 'The minimum cannot be negative.' });
+    }
+    min = Math.round(raw * 100) / 100;
+  }
+
   try {
-    if (status === 'open') {
+    const { rows: [before] } = await pool.query(
+      `SELECT id, name, status, min_deposit FROM notice_funds WHERE id = $1`, [req.params.id]);
+    if (!before) return res.status(404).json({ error: 'No such fund.' });
+
+    if (hasStatus && status === 'open') {
       const p = await noticeFund.priceOn(pool, req.params.id, noticeFund.sastDate(Date.now()));
       if (!p || !p.unit_price) return res.status(400).json({ error: 'Declare this month\u2019s projected rate before opening the fund.' });
       const { rows: [other] } = await pool.query(
         `SELECT id FROM notice_funds WHERE status = 'open' AND id <> $1`, [req.params.id]);
       if (other) return res.status(409).json({ error: `Fund ${other.id} is already open. Close it first: groups are offered one.` });
     }
-    const { rowCount } = await pool.query(
-      `UPDATE notice_funds SET status = $2, updated_at = NOW() WHERE id = $1`, [req.params.id, status]);
-    if (!rowCount) return res.status(404).json({ error: 'No such fund.' });
-    return res.json({ data: { id: req.params.id, status } });
+    const sets = ['updated_at = NOW()'];
+    const args = [req.params.id];
+    if (hasStatus) { args.push(status); sets.push('status = $' + args.length); }
+    if (hasMin)    { args.push(min);    sets.push('min_deposit = $' + args.length); }
+
+    const { rows: [after] } = await pool.query(
+      'UPDATE notice_funds SET ' + sets.join(', ') + ' WHERE id = $1'
+      + ' RETURNING id, name, status, min_deposit', args);
+
+    /* AUDITED BY NAME, like the switch that offers the fund to groups.
+       The minimum decides what a group may put in, so "who changed it,
+       from what, to what, and when" is the first question anybody asks
+       afterwards — and until now the answer was a hand-typed UPDATE and
+       no record at all. Logged only when the value actually moved: a
+       panel that re-saves the same figure should not fill the audit
+       trail with changes that were not changes. */
+    const audit = require('../services/audit');
+    const actor = {
+      actorId: req.user && req.user.id, actorEmail: req.user && req.user.email,
+      actorRole: req.user && req.user.role,
+    };
+    const prevMin = Number(before.min_deposit);
+    if (hasMin && prevMin !== min) {
+      audit.log(Object.assign({}, actor, {
+        action: 'notice_fund.minimum_changed',
+        entityType: 'notice_funds', entityId: before.id,
+        description: before.name + ': minimum changed from R' + prevMin.toFixed(2)
+                   + ' to R' + min.toFixed(2),
+        /* Structured as well as in prose: a figure somebody will want to
+           read back, or compare, should not have to be parsed out of a
+           sentence. */
+        before: { min_deposit: prevMin }, after: { min_deposit: min },
+      })).catch(() => {});
+    }
+    if (hasStatus && before.status !== status) {
+      audit.log(Object.assign({}, actor, {
+        action: 'notice_fund.status_changed',
+        entityType: 'notice_funds', entityId: before.id,
+        description: before.name + ': ' + before.status + ' to ' + status,
+      })).catch(() => {});
+    }
+
+    return res.json({ data: { id: after.id, status: after.status,
+                              min_deposit: Number(after.min_deposit) } });
   } catch (err) {
-    console.error('[notice-funds] status failed:', err.message);
+    console.error('[notice-funds] patch failed:', err.message);
     return res.status(500).json({ error: 'Could not change the fund.' });
   }
 });
